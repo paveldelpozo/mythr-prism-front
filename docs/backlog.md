@@ -114,6 +114,78 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
     - [ ] Carga y recarga controlada.
     - [ ] Estado de error y recovery visual.
 
+- [ ] **Captura y retransmision de aplicaciones externas**
+  - Titulo: Compartir ventana de aplicacion externa en monitor secundario.
+  - Prioridad: `V1` por alto impacto operativo para presentaciones y riesgo tecnico moderado (permisos/ciclo de vida de captura) que conviene abordar despues de estabilizar el flujo base del MVP.
+  - Historia de usuario: como operador, quiero capturar una ventana de aplicacion externa y enviarla a un monitor secundario para mostrar contenido de terceros sin salir de Mythr Prism.
+  - Dependencias: ventana secundaria activa y controlable, pipeline de render por monitor, estado de sesion en UI principal.
+  - Descripcion tecnica:
+    - [ ] Boton `Capturar App` en UI principal que dispare selector nativo con `navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })`.
+    - [ ] Envio del stream a la ventana secundaria activa sin recargar su contexto.
+    - [ ] Render en modo `contain` preservando aspect ratio del origen.
+    - [ ] Control de parada desde UI principal y sincronizacion con parada nativa del navegador (`track.onended`).
+    - [ ] Manejo de cancelacion y errores sin romper reproduccion ni controles existentes.
+  - Notas de implementacion:
+    - `MediaStream` no es serializable por `postMessage`; evitar diseno que dependa de pasarlo entre ventanas de forma directa.
+    - Enfoque A (preferido): iniciar `getDisplayMedia` desde ventana secundaria cuando sea viable, coordinando por mensajes de control.
+    - Enfoque B (avanzado): relay por `canvas`/`WebRTC` local si A no cumple restricciones de permisos o UX.
+  - Criterios de aceptacion:
+    - [ ] Al pulsar `Capturar App`, el navegador abre el selector nativo y permite elegir ventana.
+    - [ ] Al confirmar seleccion, la ventana secundaria activa muestra el stream sin recarga.
+    - [ ] El contenido se visualiza en `contain` sin distorsion y sin recorte no intencional.
+    - [ ] Al detener desde UI principal o al terminar nativamente, la salida vuelve a estado seguro/fallback.
+    - [ ] Si el usuario cancela o hay error de permisos/dispositivo, la app mantiene estado estable y comunica error accionable.
+  - Subtareas:
+    - [ ] Definir arquitectura de control entre ventana principal y secundaria (comandos, estados, retries).
+    - [ ] Implementar accion `Capturar App` y capa de manejo de permisos/errores.
+    - [ ] Implementar reproduccion del stream en ventana secundaria sin recarga.
+    - [ ] Implementar modo de visualizacion `contain` y validacion de aspect ratio.
+    - [ ] Implementar parada manual + escucha de `track.onended` + limpieza de recursos.
+    - [ ] Añadir pruebas manuales guiadas para exito, cancelacion y error de permisos.
+  - DoD:
+    - [ ] Flujo completo validado en al menos 2 navegadores objetivo del proyecto.
+    - [ ] No quedan tracks ni listeners activos al detener o cerrar captura.
+    - [ ] Errores y cancelaciones muestran mensaje util y no bloquean otras funciones del monitor.
+    - [ ] Documentacion minima del flujo y limitaciones agregada en `docs/`.
+  - Riesgos:
+    - Restricciones de permisos por contexto/gesto de usuario pueden limitar inicio remoto de captura.
+    - Diferencias de comportamiento entre navegadores pueden requerir fallback por estrategia B.
+
+- [ ] **Monitor virtual remoto (Cloud Sync)**
+  - Titulo: Vincular dispositivos externos (tablets/moviles) como monitores virtuales via WebSockets.
+  - Prioridad: `V1` por impacto alto en cobertura de uso real (extender salidas sin hardware dedicado) y dependencia de infraestructura cloud/latencia que conviene abordar despues de cerrar flujo base del MVP.
+  - Historia de usuario: como operador, quiero vincular un tablet o movil externo como monitor virtual para sumar una salida adicional remota y controlarla en tiempo real desde Mythr Prism.
+  - Dependencias: pipeline de render por salida, canal de comandos por monitor, definicion de identificador de sesion/sala, entorno cloud con endpoint publico seguro.
+  - Descripcion tecnica:
+    - [ ] Levantar servidor Node.js + Socket.io como puente de senalizacion y transporte bidireccional.
+    - [ ] Generar `RoomID` por sesion/salida y publicar metadatos minimos de estado del monitor virtual.
+    - [ ] Implementar emparejamiento por URL corta + QR y validacion con codigo de 6 digitos.
+    - [ ] Implementar relay de imagenes (frames/comandos de render) desde host hacia cliente remoto.
+    - [ ] Implementar relay de comandos de control/estado desde cliente remoto hacia host (full-duplex).
+  - Subtareas:
+    - [ ] Definir contrato de eventos Socket.io (`join`, `pair`, `frame`, `command`, `heartbeat`, `reconnect`).
+    - [ ] Implementar modulo de creacion/expiracion de `RoomID` y politica de TTL.
+    - [ ] Implementar UI de emparejamiento (URL, QR, ingreso de codigo) en host y cliente remoto.
+    - [ ] Implementar pipeline de envio de imagen con estrategia de compresion y limitacion de fps configurable.
+    - [ ] Implementar canal de comandos remoto (play/pause/next/estado) con confirmacion de entrega.
+    - [ ] Implementar reconexion automatica al mismo `RoomID` con re-sincronizacion de estado.
+    - [ ] Implementar pruebas manuales en red local y red publica con medicion de latencia.
+  - Criterios de aceptacion:
+    - [ ] El flujo de emparejamiento expone QR + codigo de 6 digitos y evita alta sin validacion.
+    - [ ] Tras handshake exitoso, el dispositivo remoto queda dado de alta como monitor virtual utilizable desde la UI principal.
+    - [ ] La latencia extremo a extremo se mantiene por debajo de 200 ms en condicion objetivo definida.
+    - [ ] Ante cortes breves de red, el cliente reconecta automaticamente al mismo `RoomID` y recupera estado operativo.
+    - [ ] El aislamiento por sala evita fuga de frames/comandos entre `RoomID` diferentes.
+  - DoD:
+    - [ ] Flujo completo validado en al menos 1 tablet y 1 movil con navegadores objetivo.
+    - [ ] Telemetria minima registrada para conexion, desconexion, reconexion y latencia.
+    - [ ] Pruebas de aislamiento verifican que no hay cruce de eventos entre salas.
+    - [ ] Documentacion minima de arquitectura, limites y operativa agregada en `docs/`.
+  - Riesgos/dependencias tecnicas:
+    - Estrategia de compresion/envio de imagenes: requiere tuning de codec/calidad/fps para no saturar WebSocket.
+    - Despliegue cloud del puente publico: impacto en costo, seguridad (TLS/origen) y proximidad regional para latencia.
+    - Diferencias de aspect ratio/orientacion en tablet pueden exigir politicas `contain/cover` por salida.
+
 - [ ] **Filtros en caliente**
   - Dependencias: pipeline grafico con parametros runtime.
   - Hecho: se pueden aplicar y ajustar filtros durante reproduccion sin reiniciar salida.
