@@ -2,15 +2,44 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppHeader from './components/AppHeader.vue';
 import MonitorList from './components/MonitorList.vue';
+import PlaylistManager from './components/PlaylistManager.vue';
 import { useMultiMonitorBroadcaster } from './composables/useMultiMonitorBroadcaster';
+import { usePlaylistPlayback } from './composables/usePlaylistPlayback';
 import {
   createDebouncedSessionSaver,
   loadPersistedSession,
   SESSION_SCHEMA_VERSION,
+  type PersistedMonitorStateMap,
   type PersistedSessionV1
 } from './services/persistence';
+import type { MultimediaItem, PlaylistPlaybackState } from './types/playlist';
 
 const persistedSession = loadPersistedSession();
+
+const clampPlaylistIndex = (index: number, total: number): number => {
+  if (total <= 0) {
+    return 0;
+  }
+
+  if (index < 0) {
+    return 0;
+  }
+
+  if (index >= total) {
+    return total - 1;
+  }
+
+  return index;
+};
+
+const normalizePlaybackByPlaylist = (
+  playback: PlaylistPlaybackState,
+  playlistLength: number
+): PlaylistPlaybackState => ({
+  ...playback,
+  currentIndex: clampPlaylistIndex(playback.currentIndex, playlistLength),
+  autoplay: playlistLength > 0 ? playback.autoplay : false
+});
 
 const {
   applyTransform,
@@ -26,22 +55,130 @@ const {
   loadMonitors,
   openWindowForMonitor,
   requestFullscreen,
-  setImageForMonitor
+  setImageForMonitor,
+  setPlaylistItemForMonitor
 } = useMultiMonitorBroadcaster({
   initialMonitorStateById: persistedSession.monitors
 });
 
 const showOnlyProjectable = ref(persistedSession.ui.showOnlyProjectable);
 const panelPreferences = ref(persistedSession.ui.panelPreferences);
+const playlistItems = ref<MultimediaItem[]>(persistedSession.playlist);
+const playlistPlaybackState = ref<PlaylistPlaybackState>(
+  normalizePlaybackByPlaylist(persistedSession.playback, persistedSession.playlist.length)
+);
 const sessionSaver = createDebouncedSessionSaver();
+
+const {
+  feedback: playlistPlaybackFeedback,
+  isPlaying: isPlaylistPlaying,
+  next: playNext,
+  pause: pausePlaylist,
+  previous: playPrevious,
+  start: startPlaylist,
+  stop: stopPlaylist
+} = usePlaylistPlayback({
+  items: playlistItems,
+  playback: playlistPlaybackState,
+  applyItemToMonitor: setPlaylistItemForMonitor,
+  isMonitorReady: (monitorId: string) => Boolean(monitorStates[monitorId]?.isWindowOpen)
+});
+
+const buildPersistablePanelPreferences = (): Record<string, boolean> => {
+  const nextPreferences: Record<string, boolean> = {};
+
+  Object.entries(panelPreferences.value).forEach(([key, enabled]) => {
+    if (typeof key === 'string' && key.length > 0 && typeof enabled === 'boolean') {
+      nextPreferences[key] = enabled;
+    }
+  });
+
+  return nextPreferences;
+};
+
+const buildPersistableMonitorStateMap = (): PersistedMonitorStateMap => {
+  const nextMap: PersistedMonitorStateMap = {};
+
+  Object.entries(persistableMonitorStates.value).forEach(([monitorId, state]) => {
+    if (typeof monitorId !== 'string' || monitorId.length === 0) {
+      return;
+    }
+
+    nextMap[monitorId] = {
+      transform: {
+        rotate: state.transform.rotate,
+        scale: state.transform.scale,
+        translateX: state.transform.translateX,
+        translateY: state.transform.translateY
+      },
+      imageDataUrl: typeof state.imageDataUrl === 'string' ? state.imageDataUrl : null
+    };
+  });
+
+  return nextMap;
+};
+
+const buildPersistablePlaylist = (): MultimediaItem[] =>
+  playlistItems.value
+    .map((item): MultimediaItem | null => {
+      if (
+        typeof item.id !== 'string' ||
+        typeof item.name !== 'string' ||
+        typeof item.source !== 'string'
+      ) {
+        return null;
+      }
+
+      if (item.kind === 'image') {
+        if (typeof item.durationMs !== 'number' || !Number.isFinite(item.durationMs)) {
+          return null;
+        }
+
+        return {
+          id: item.id,
+          kind: 'image',
+          name: item.name,
+          source: item.source,
+          durationMs: item.durationMs
+        };
+      }
+
+      if (
+        typeof item.startAtMs !== 'number' ||
+        !Number.isFinite(item.startAtMs) ||
+        typeof item.muted !== 'boolean' ||
+        (item.endAtMs !== null &&
+          (typeof item.endAtMs !== 'number' || !Number.isFinite(item.endAtMs)))
+      ) {
+        return null;
+      }
+
+      return {
+        id: item.id,
+        kind: 'video',
+        name: item.name,
+        source: item.source,
+        startAtMs: item.startAtMs,
+        endAtMs: item.endAtMs,
+        muted: item.muted
+      };
+    })
+    .filter((item): item is MultimediaItem => item !== null);
 
 const buildSessionSnapshot = (): PersistedSessionV1 => ({
   version: SESSION_SCHEMA_VERSION,
   ui: {
     showOnlyProjectable: showOnlyProjectable.value,
-    panelPreferences: panelPreferences.value
+    panelPreferences: buildPersistablePanelPreferences()
   },
-  monitors: persistableMonitorStates.value
+  monitors: buildPersistableMonitorStateMap(),
+  playlist: buildPersistablePlaylist(),
+  playback: {
+    targetMonitorId: playlistPlaybackState.value.targetMonitorId,
+    currentIndex: Math.max(0, Math.round(playlistPlaybackState.value.currentIndex)),
+    autoplay: playlistPlaybackState.value.autoplay,
+    intervalSeconds: Math.max(1, Math.round(playlistPlaybackState.value.intervalSeconds))
+  }
 });
 
 const visibleMonitors = computed(() => {
@@ -50,6 +187,17 @@ const visibleMonitors = computed(() => {
   }
 
   return monitors.value.filter((monitor) => !monitor.isMasterAppScreen);
+});
+
+const knownMonitorIds = computed(() => new Set(monitors.value.map((monitor) => monitor.id)));
+
+const isTargetMonitorWindowOpen = computed(() => {
+  const targetMonitorId = playlistPlaybackState.value.targetMonitorId;
+  if (!targetMonitorId) {
+    return false;
+  }
+
+  return Boolean(monitorStates[targetMonitorId]?.isWindowOpen);
 });
 
 const uploadImage = (monitorId: string, file: File) => {
@@ -67,13 +215,58 @@ const uploadImage = (monitorId: string, file: File) => {
 };
 
 watch(
-  [showOnlyProjectable, panelPreferences, persistableMonitorStates],
+  [showOnlyProjectable, panelPreferences, persistableMonitorStates, playlistItems, playlistPlaybackState],
   () => {
     sessionSaver.schedule(buildSessionSnapshot());
   },
   {
     deep: true,
     immediate: true
+  }
+);
+
+watch(
+  [() => playlistItems.value.length, () => playlistPlaybackState.value.currentIndex, () => playlistPlaybackState.value.autoplay],
+  () => {
+    const normalized = normalizePlaybackByPlaylist(
+      playlistPlaybackState.value,
+      playlistItems.value.length
+    );
+
+    if (
+      normalized.currentIndex === playlistPlaybackState.value.currentIndex
+      && normalized.autoplay === playlistPlaybackState.value.autoplay
+    ) {
+      return;
+    }
+
+    playlistPlaybackState.value = normalized;
+  },
+  { immediate: true }
+);
+
+watch(
+  [() => playlistPlaybackState.value.targetMonitorId, hasDetectedMonitors, knownMonitorIds],
+  ([targetMonitorId, monitorsDetected, monitorIds]) => {
+    if (!targetMonitorId || !monitorsDetected || monitorIds.has(targetMonitorId)) {
+      return;
+    }
+
+    playlistPlaybackState.value = {
+      ...playlistPlaybackState.value,
+      targetMonitorId: null
+    };
+  }
+);
+
+watch(
+  [() => playlistPlaybackState.value.targetMonitorId, isPlaylistPlaying, isTargetMonitorWindowOpen],
+  ([targetMonitorId, playing, targetWindowOpen]) => {
+    if (!targetMonitorId || !playing || targetWindowOpen) {
+      return;
+    }
+
+    pausePlaylist();
   }
 );
 
@@ -104,6 +297,20 @@ onBeforeUnmount(() => {
 
     <div class="relative mx-auto max-w-7xl space-y-6">
       <AppHeader :has-monitors="hasDetectedMonitors" @close-all="closeAllWindows" />
+
+      <PlaylistManager
+        v-model:items="playlistItems"
+        v-model:playback-state="playlistPlaybackState"
+        :monitors="visibleMonitors"
+        :monitor-states="monitorStates"
+        :playback-feedback="playlistPlaybackFeedback"
+        :is-playing="isPlaylistPlaying"
+        @playback:start="startPlaylist"
+        @playback:pause="pausePlaylist"
+        @playback:next="playNext"
+        @playback:previous="playPrevious"
+        @playback:stop="stopPlaylist"
+      />
 
       <section
         v-if="!isWindowManagementSupported"

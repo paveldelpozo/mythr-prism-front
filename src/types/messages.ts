@@ -1,10 +1,12 @@
 import type { MonitorTransform } from './broadcaster';
+import type { MultimediaItem } from './playlist';
 
 export const MESSAGE_CHANNEL = 'MMIB_V3_CHANNEL';
 
 export type MasterMessageType =
   | 'MASTER_INIT'
   | 'SET_IMAGE'
+  | 'SET_MEDIA'
   | 'SET_TRANSFORM'
   | 'REQUEST_FULLSCREEN'
   | 'PING';
@@ -37,6 +39,7 @@ export interface MasterInitPayload {
 export type MasterToSlaveMessage =
   | MessageEnvelope<'MASTER_INIT', MasterInitPayload>
   | MessageEnvelope<'SET_IMAGE', { imageDataUrl: string | null }>
+  | MessageEnvelope<'SET_MEDIA', { item: MultimediaItem | null }>
   | MessageEnvelope<'SET_TRANSFORM', { transform: MonitorTransform }>
   | MessageEnvelope<'REQUEST_FULLSCREEN', { reason: string }>
   | MessageEnvelope<'PING', { timestamp: number }>;

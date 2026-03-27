@@ -15,6 +15,7 @@ import {
 } from '../types/messages';
 import type { PersistedMonitorStateMap } from '../services/persistence';
 import { cloneSerializable } from '../utils/cloneSerializable';
+import type { MultimediaItem } from '../types/playlist';
 
 type TransformAction =
   | { type: 'rotate'; value: number }
@@ -271,12 +272,18 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     const imageMsg = buildMasterMessage(monitorId, 'SET_IMAGE', {
       imageDataUrl: state.imageDataUrl
     });
+    const mediaMsg = buildMasterMessage(monitorId, 'SET_MEDIA', {
+      item: state.activeMediaItem
+    });
 
     if (transformMsg) {
       sendToSlave(monitorId, transformMsg);
     }
     if (imageMsg) {
       sendToSlave(monitorId, imageMsg);
+    }
+    if (mediaMsg) {
+      sendToSlave(monitorId, mediaMsg);
     }
   };
 
@@ -494,9 +501,22 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
   const setImageForMonitor = (monitorId: string, imageDataUrl: string | null) => {
     const state = getMonitorState(monitorId);
     state.imageDataUrl = imageDataUrl;
+    state.activeMediaItem = null;
 
     const message = buildMasterMessage(monitorId, 'SET_IMAGE', {
       imageDataUrl
+    });
+    if (message) {
+      sendToSlave(monitorId, message);
+    }
+  };
+
+  const setPlaylistItemForMonitor = (monitorId: string, item: MultimediaItem | null) => {
+    const state = getMonitorState(monitorId);
+    state.activeMediaItem = item;
+
+    const message = buildMasterMessage(monitorId, 'SET_MEDIA', {
+      item
     });
     if (message) {
       sendToSlave(monitorId, message);
@@ -543,6 +563,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     loadMonitors,
     openWindowForMonitor,
     requestFullscreen,
-    setImageForMonitor
+    setImageForMonitor,
+    setPlaylistItemForMonitor
   };
 };

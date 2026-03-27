@@ -21,7 +21,7 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 
 | Fase | Progreso |
 | --- | --- |
-| MVP | 0% |
+| MVP | 14% |
 | V1 | 0% |
 | V2 | 0% |
 
@@ -29,14 +29,14 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 
 ## MVP
 
-- [ ] **Playlist multimedia**
+- [x] **Playlist multimedia**
   - Dependencias: reproduccion base por monitor, cola de items.
   - Hecho: se puede crear/editar/ordenar una playlist y ejecutarla en un monitor.
   - Subtareas:
-    - [ ] Modelo de item multimedia (video, imagen).
-    - [ ] UI para alta/edicion/reordenado.
-    - [ ] Motor de reproduccion secuencial con avance manual/automatico.
-    - [ ] Persistencia local de playlist.
+    - [x] Modelo de item multimedia (video, imagen).
+    - [x] UI para alta/edicion/reordenado.
+    - [x] Motor de reproduccion secuencial con avance manual/automatico.
+    - [x] Persistencia local de playlist.
 
 - [ ] **Video sincronizado**
   - Dependencias: playlist multimedia, reloj/timestamp compartido.
@@ -216,11 +216,11 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 
 > Plan operativo inmediato del MVP (orden sugerido de ejecucion).
 
-1. [ ] **[MVP] Playlist multimedia -> Modelo de item multimedia (video, imagen)** _(en curso)_
-2. [ ] **[MVP] Playlist multimedia -> UI para alta/edicion/reordenado** _(pendiente)_
-3. [ ] **[MVP] Playlist multimedia -> Motor de reproduccion secuencial con avance manual/automatico** _(pendiente)_
-4. [ ] **[MVP] Playlist multimedia -> Persistencia local de playlist** _(pendiente)_
-5. [ ] **[MVP] Video sincronizado -> Definir estrategia de sincronizacion (host + clientes)** _(pendiente)_
+1. [x] **[MVP] Playlist multimedia -> Modelo de item multimedia (video, imagen)** _(completado)_
+2. [x] **[MVP] Playlist multimedia -> UI para alta/edicion/reordenado** _(completado)_
+3. [x] **[MVP] Playlist multimedia -> Motor de reproduccion secuencial con avance manual/automatico** _(completado)_
+4. [x] **[MVP] Playlist multimedia -> Persistencia local de playlist** _(completado)_
+5. [ ] **[MVP] Video sincronizado -> Definir estrategia de sincronizacion (host + clientes)** _(en curso)_
 6. [ ] **[MVP] Video sincronizado -> Implementar mensajes de sync (play/pause/seek/time)** _(pendiente)_
 
 ## Notas
@@ -228,3 +228,8 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 - Convencion sugerida para sprint: `- [ ] [FASE] Nombre de tarea -> referencia en seccion original`.
 - Si una tarea se divide, mantener una tarea madre y subtareas hijas para no romper el calculo de progreso.
 - Revisar este backlog al inicio y cierre de cada sprint.
+- 2026-03-27: mejora aplicada en Playlist Manager para cargar imagen local y convertirla a `data:image/...` sin cambiar el estado de tareas del sprint.
+- 2026-03-27: bugfix en persistencia de sesion para filtrar playlist a campos serializables y tolerar `DataCloneError` al clonar snapshots.
+- 2026-03-27: motor de reproduccion secuencial implementado con monitor objetivo, controles Start/Pause/Next/Previous/Stop, avance automatico y estado minimo de playback persistido en `localStorage`.
+- 2026-03-27: persistencia robusta de playlist/playback completada con hidratacion defensiva (indice/autoplay), migracion minima de claves legacy de playback y saneamiento de monitor objetivo tras redeteccion.
+- 2026-03-27: bugfix de reactividad en `App.vue` para monitor objetivo, separando watchers de validacion/pausa y eliminando dependencia `deep` sobre `monitorStates` que provocaba ciclo recursivo al actualizar playback.

@@ -1,4 +1,5 @@
 import { DEFAULT_TRANSFORM, type MonitorTransform } from '../types/broadcaster';
+import { isMultimediaItem, type MultimediaItem, type PlaylistPlaybackState } from '../types/playlist';
 import { cloneSerializable } from '../utils/cloneSerializable';
 
 export const SESSION_STORAGE_KEY = 'mythr-prism.session';
@@ -22,7 +23,27 @@ export interface PersistedSessionV1 {
   version: typeof SESSION_SCHEMA_VERSION;
   ui: PersistedUiState;
   monitors: PersistedMonitorStateMap;
+  playlist: MultimediaItem[];
+  playback: PlaylistPlaybackState;
 }
+
+const DEFAULT_PLAYBACK_INTERVAL_SECONDS = 5;
+
+const clampIndex = (index: number, total: number): number => {
+  if (total <= 0) {
+    return 0;
+  }
+
+  if (index < 0) {
+    return 0;
+  }
+
+  if (index >= total) {
+    return total - 1;
+  }
+
+  return index;
+};
 
 const createDefaultSession = (): PersistedSessionV1 => ({
   version: SESSION_SCHEMA_VERSION,
@@ -30,11 +51,41 @@ const createDefaultSession = (): PersistedSessionV1 => ({
     showOnlyProjectable: true,
     panelPreferences: {}
   },
-  monitors: {}
+  monitors: {},
+  playlist: [],
+  playback: {
+    targetMonitorId: null,
+    currentIndex: 0,
+    autoplay: false,
+    intervalSeconds: DEFAULT_PLAYBACK_INTERVAL_SECONDS
+  }
 });
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+};
+
+const toNonEmptyString = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const toFiniteNumberOrNull = (value: unknown): number | null => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return value;
+};
 
 const toFiniteNumber = (value: unknown, fallback: number): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -42,6 +93,11 @@ const toFiniteNumber = (value: unknown, fallback: number): number => {
   }
 
   return value;
+};
+
+const toFiniteInteger = (value: unknown, fallback: number): number => {
+  const safeNumber = toFiniteNumber(value, fallback);
+  return Math.round(safeNumber);
 };
 
 const sanitizeTransform = (value: unknown): MonitorTransform => {
@@ -126,15 +182,150 @@ const sanitizeUiState = (value: unknown): PersistedUiState => {
   };
 };
 
+const sanitizePlaylistItem = (value: unknown): MultimediaItem | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const id = toNonEmptyString(value.id);
+  const name = toNonEmptyString(value.name);
+  const source = toNonEmptyString(value.source);
+  const kind = value.kind === 'image' || value.kind === 'video' ? value.kind : null;
+
+  if (!id || !name || !source || !kind) {
+    return null;
+  }
+
+  if (kind === 'image') {
+    const durationMs = toFiniteNumberOrNull(value.durationMs);
+    if (durationMs === null || durationMs <= 0) {
+      return null;
+    }
+
+    return {
+      id,
+      kind: 'image',
+      name,
+      source,
+      durationMs
+    };
+  }
+
+  const startAtMs = toFiniteNumberOrNull(value.startAtMs);
+  if (startAtMs === null || startAtMs < 0) {
+    return null;
+  }
+
+  const endAtMsRaw = value.endAtMs;
+  const endAtMs = endAtMsRaw === null ? null : toFiniteNumberOrNull(endAtMsRaw);
+  if (endAtMsRaw !== null && (endAtMs === null || endAtMs < startAtMs)) {
+    return null;
+  }
+
+  if (typeof value.muted !== 'boolean') {
+    return null;
+  }
+
+  return {
+    id,
+    kind: 'video',
+    name,
+    source,
+    startAtMs,
+    endAtMs,
+    muted: value.muted
+  };
+};
+
+const sanitizePlaylist = (value: unknown): MultimediaItem[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const playlist: MultimediaItem[] = [];
+
+  value.forEach((item) => {
+    const sanitized = sanitizePlaylistItem(item);
+    if (sanitized && isMultimediaItem(sanitized)) {
+      playlist.push(sanitized);
+    }
+  });
+
+  return playlist;
+};
+
+const sanitizePlaybackState = (
+  value: unknown,
+  playlistLength: number
+): PlaylistPlaybackState => {
+  const fallback = createDefaultSession().playback;
+
+  if (!isRecord(value)) {
+    return fallback;
+  }
+
+  const intervalSeconds = Math.max(
+    1,
+    toFiniteInteger(value.intervalSeconds, fallback.intervalSeconds)
+  );
+
+  const currentIndex = clampIndex(
+    Math.max(0, toFiniteInteger(value.currentIndex, fallback.currentIndex)),
+    playlistLength
+  );
+
+  return {
+    targetMonitorId:
+      typeof value.targetMonitorId === 'string' && value.targetMonitorId.trim().length > 0
+        ? value.targetMonitorId
+        : null,
+    currentIndex,
+    autoplay:
+      playlistLength > 0 && typeof value.autoplay === 'boolean' ? value.autoplay : fallback.autoplay,
+    intervalSeconds
+  };
+};
+
+const extractLegacyPlaybackState = (value: Record<string, unknown>): unknown => {
+  if (isRecord(value.playback)) {
+    return value.playback;
+  }
+
+  if (isRecord(value.playlistPlayback)) {
+    return value.playlistPlayback;
+  }
+
+  if (
+    'targetMonitorId' in value
+    || 'targetScreenId' in value
+    || 'currentIndex' in value
+    || 'autoplay' in value
+    || 'intervalSeconds' in value
+  ) {
+    return {
+      targetMonitorId: value.targetMonitorId ?? value.targetScreenId,
+      currentIndex: value.currentIndex,
+      autoplay: value.autoplay,
+      intervalSeconds: value.intervalSeconds
+    };
+  }
+
+  return null;
+};
+
 const parseLegacySession = (value: Record<string, unknown>): PersistedSessionV1 | null => {
   const hasModernKeys = 'ui' in value || 'monitors' in value;
   const hasLegacyKeys = 'showOnlyProjectable' in value || 'monitorStates' in value;
 
   if (hasModernKeys) {
+    const playlist = sanitizePlaylist(value.playlist);
+
     return {
       version: SESSION_SCHEMA_VERSION,
       ui: sanitizeUiState(value.ui),
-      monitors: sanitizeMonitorStateMap(value.monitors)
+      monitors: sanitizeMonitorStateMap(value.monitors),
+      playlist,
+      playback: sanitizePlaybackState(extractLegacyPlaybackState(value), playlist.length)
     };
   }
 
@@ -142,13 +333,17 @@ const parseLegacySession = (value: Record<string, unknown>): PersistedSessionV1 
     return null;
   }
 
+  const playlist = sanitizePlaylist(value.playlist);
+
   return {
     version: SESSION_SCHEMA_VERSION,
     ui: sanitizeUiState({
       showOnlyProjectable: value.showOnlyProjectable,
       panelPreferences: {}
     }),
-    monitors: sanitizeMonitorStateMap(value.monitorStates)
+    monitors: sanitizeMonitorStateMap(value.monitorStates),
+    playlist,
+    playback: sanitizePlaybackState(extractLegacyPlaybackState(value), playlist.length)
   };
 };
 
@@ -158,10 +353,14 @@ const sanitizePersistedSession = (value: unknown): PersistedSessionV1 => {
   }
 
   if (value.version === SESSION_SCHEMA_VERSION) {
+    const playlist = sanitizePlaylist(value.playlist);
+
     return {
       version: SESSION_SCHEMA_VERSION,
       ui: sanitizeUiState(value.ui),
-      monitors: sanitizeMonitorStateMap(value.monitors)
+      monitors: sanitizeMonitorStateMap(value.monitors),
+      playlist,
+      playback: sanitizePlaybackState(extractLegacyPlaybackState(value), playlist.length)
     };
   }
 

@@ -51,6 +51,13 @@ export const createSlaveWindowHtml = ({
         object-fit: contain;
         display: none;
       }
+      #video {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        display: none;
+        background: #000;
+      }
       #empty {
         font-size: 14px;
         letter-spacing: 0.08em;
@@ -106,6 +113,7 @@ export const createSlaveWindowHtml = ({
     <div id="viewport">
       <div id="wrapper">
         <img id="image" alt="Imagen transmitida" />
+        <video id="video" autoplay playsinline></video>
         <p id="empty">Esperando imagen...</p>
       </div>
     </div>
@@ -130,7 +138,84 @@ export const createSlaveWindowHtml = ({
         const button = document.getElementById('fullscreenButton');
         const wrapper = document.getElementById('wrapper');
         const image = document.getElementById('image');
+        const video = document.getElementById('video');
         const empty = document.getElementById('empty');
+        let clipEndAtSeconds = null;
+
+        const onVideoLoadedMetadata = () => {
+          if (!video.dataset.startAtSeconds) {
+            return;
+          }
+
+          const startAtSeconds = Number(video.dataset.startAtSeconds);
+          if (!Number.isFinite(startAtSeconds) || startAtSeconds < 0) {
+            return;
+          }
+
+          try {
+            video.currentTime = startAtSeconds;
+          } catch {
+            return;
+          }
+        };
+
+        const onVideoTimeUpdate = () => {
+          if (clipEndAtSeconds === null) {
+            return;
+          }
+
+          if (video.currentTime < clipEndAtSeconds) {
+            return;
+          }
+
+          video.pause();
+        };
+
+        const clearViewportMedia = () => {
+          image.src = '';
+          image.style.display = 'none';
+
+          video.pause();
+          video.removeAttribute('src');
+          video.load();
+          video.style.display = 'none';
+          video.dataset.startAtSeconds = '';
+          clipEndAtSeconds = null;
+
+          empty.style.display = 'block';
+          empty.textContent = 'Esperando contenido...';
+        };
+
+        const showImage = (source) => {
+          clearViewportMedia();
+          image.src = source;
+          image.style.display = 'block';
+          empty.style.display = 'none';
+        };
+
+        const showVideo = (item) => {
+          clearViewportMedia();
+
+          const startAtSeconds = Number(item.startAtMs) / 1000;
+          const endAtSeconds = item.endAtMs === null ? null : Number(item.endAtMs) / 1000;
+
+          video.dataset.startAtSeconds = Number.isFinite(startAtSeconds) && startAtSeconds >= 0
+            ? String(startAtSeconds)
+            : '0';
+          clipEndAtSeconds = Number.isFinite(endAtSeconds) && endAtSeconds !== null && endAtSeconds >= 0
+            ? endAtSeconds
+            : null;
+
+          video.muted = Boolean(item.muted);
+          video.src = item.source;
+          video.style.display = 'block';
+          empty.style.display = 'none';
+
+          void video.play().catch(() => {
+            empty.style.display = 'block';
+            empty.textContent = 'No se pudo reproducir el video en esta ventana.';
+          });
+        };
 
         const postToMaster = (type, payload) => {
           if (!window.opener) {
@@ -192,14 +277,31 @@ export const createSlaveWindowHtml = ({
           if (message.type === 'SET_IMAGE') {
             const imageDataUrl = message.payload.imageDataUrl;
             if (typeof imageDataUrl === 'string' && imageDataUrl.length > 0) {
-              image.src = imageDataUrl;
-              image.style.display = 'block';
-              empty.style.display = 'none';
+              showImage(imageDataUrl);
             } else {
-              image.src = '';
-              image.style.display = 'none';
-              empty.style.display = 'block';
+              clearViewportMedia();
             }
+          }
+
+          if (message.type === 'SET_MEDIA') {
+            const item = message.payload.item;
+
+            if (!item || typeof item !== 'object') {
+              clearViewportMedia();
+              return;
+            }
+
+            if (item.kind === 'image' && typeof item.source === 'string' && item.source.length > 0) {
+              showImage(item.source);
+              return;
+            }
+
+            if (item.kind === 'video' && typeof item.source === 'string' && item.source.length > 0) {
+              showVideo(item);
+              return;
+            }
+
+            clearViewportMedia();
           }
 
           if (message.type === 'SET_TRANSFORM') {
@@ -218,6 +320,8 @@ export const createSlaveWindowHtml = ({
 
         document.addEventListener('fullscreenchange', () => reportFullscreenStatus('Cambio de fullscreen'));
         window.addEventListener('beforeunload', () => postToMaster('SLAVE_CLOSING', { timestamp: Date.now() }));
+        video.addEventListener('loadedmetadata', onVideoLoadedMetadata);
+        video.addEventListener('timeupdate', onVideoTimeUpdate);
 
         postToMaster('SLAVE_READY', { timestamp: Date.now() });
         reportFullscreenStatus('Ventana inicializada');

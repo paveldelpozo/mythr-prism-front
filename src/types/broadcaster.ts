@@ -1,3 +1,5 @@
+import type { MultimediaItem } from './playlist';
+
 export interface MonitorTransform {
   rotate: number;
   scale: number;
@@ -24,6 +26,7 @@ export interface MonitorDescriptor {
 export interface MonitorRuntimeState {
   transform: MonitorTransform;
   imageDataUrl: string | null;
+  activeMediaItem: MultimediaItem | null;
   isWindowOpen: boolean;
   isSlaveReady: boolean;
   isFullscreen: boolean;
@@ -43,6 +46,7 @@ export const DEFAULT_TRANSFORM: MonitorTransform = {
 export const createDefaultMonitorState = (): MonitorRuntimeState => ({
   transform: { ...DEFAULT_TRANSFORM },
   imageDataUrl: null,
+  activeMediaItem: null,
   isWindowOpen: false,
   isSlaveReady: false,
   isFullscreen: false,
