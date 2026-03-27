@@ -51,6 +51,7 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
   - Dependencias: modelo de escenas/layout actual.
   - Hecho: se puede guardar un layout nombrado y restaurarlo sin perdida de configuracion.
   - Subtareas:
+    - [x] Base de persistencia de sesion/config en `localStorage` (schema versionado + hidratacion segura).
     - [ ] Esquema de serializacion de layout.
     - [ ] Acciones guardar/cargar desde UI.
     - [ ] Validacion de compatibilidad entre versiones.
@@ -141,9 +142,14 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 
 ## Sprint actual
 
-> Sprint vacio inicialmente. Mover aqui tareas activas de las fases sin borrarlas de su origen (usar referencia).
+> Plan operativo inmediato del MVP (orden sugerido de ejecucion).
 
-- _Sin tareas activas_
+1. [ ] **[MVP] Playlist multimedia -> Modelo de item multimedia (video, imagen)** _(en curso)_
+2. [ ] **[MVP] Playlist multimedia -> UI para alta/edicion/reordenado** _(pendiente)_
+3. [ ] **[MVP] Playlist multimedia -> Motor de reproduccion secuencial con avance manual/automatico** _(pendiente)_
+4. [ ] **[MVP] Playlist multimedia -> Persistencia local de playlist** _(pendiente)_
+5. [ ] **[MVP] Video sincronizado -> Definir estrategia de sincronizacion (host + clientes)** _(pendiente)_
+6. [ ] **[MVP] Video sincronizado -> Implementar mensajes de sync (play/pause/seek/time)** _(pendiente)_
 
 ## Notas
 

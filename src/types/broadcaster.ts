@@ -17,6 +17,7 @@ export interface MonitorDescriptor {
   availWidth: number;
   availHeight: number;
   isPrimary: boolean;
+  isMasterAppScreen: boolean;
   raw: ScreenDetailed;
 }
 

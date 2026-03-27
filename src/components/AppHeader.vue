@@ -11,8 +11,8 @@ const emit = defineEmits<{
 <template>
   <header class="glass-panel flex flex-wrap items-center justify-between gap-4 p-5">
     <div>
-      <p class="text-xs uppercase tracking-[0.24em] text-indigo-300/80">Multi-Monitor Image Broadcaster</p>
-      <h1 class="mt-1 text-2xl font-black text-slate-100 md:text-3xl">Control Center V3</h1>
+      <p class="text-xs uppercase tracking-[0.24em] text-indigo-300/80">Mythr Prism</p>
+      <h1 class="mt-1 text-2xl font-black text-slate-100 md:text-3xl">Panel de Control Multi-Monitor</h1>
     </div>
 
     <button

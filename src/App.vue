@@ -1,7 +1,16 @@
 <script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppHeader from './components/AppHeader.vue';
 import MonitorList from './components/MonitorList.vue';
 import { useMultiMonitorBroadcaster } from './composables/useMultiMonitorBroadcaster';
+import {
+  createDebouncedSessionSaver,
+  loadPersistedSession,
+  SESSION_SCHEMA_VERSION,
+  type PersistedSessionV1
+} from './services/persistence';
+
+const persistedSession = loadPersistedSession();
 
 const {
   applyTransform,
@@ -13,11 +22,35 @@ const {
   isWindowManagementSupported,
   monitorStates,
   monitors,
+  persistableMonitorStates,
   loadMonitors,
   openWindowForMonitor,
   requestFullscreen,
   setImageForMonitor
-} = useMultiMonitorBroadcaster();
+} = useMultiMonitorBroadcaster({
+  initialMonitorStateById: persistedSession.monitors
+});
+
+const showOnlyProjectable = ref(persistedSession.ui.showOnlyProjectable);
+const panelPreferences = ref(persistedSession.ui.panelPreferences);
+const sessionSaver = createDebouncedSessionSaver();
+
+const buildSessionSnapshot = (): PersistedSessionV1 => ({
+  version: SESSION_SCHEMA_VERSION,
+  ui: {
+    showOnlyProjectable: showOnlyProjectable.value,
+    panelPreferences: panelPreferences.value
+  },
+  monitors: persistableMonitorStates.value
+});
+
+const visibleMonitors = computed(() => {
+  if (!showOnlyProjectable.value) {
+    return monitors.value;
+  }
+
+  return monitors.value.filter((monitor) => !monitor.isMasterAppScreen);
+});
 
 const uploadImage = (monitorId: string, file: File) => {
   const reader = new FileReader();
@@ -32,6 +65,36 @@ const uploadImage = (monitorId: string, file: File) => {
   };
   reader.readAsDataURL(file);
 };
+
+watch(
+  [showOnlyProjectable, panelPreferences, persistableMonitorStates],
+  () => {
+    sessionSaver.schedule(buildSessionSnapshot());
+  },
+  {
+    deep: true,
+    immediate: true
+  }
+);
+
+const flushSessionSaver = () => {
+  sessionSaver.flush();
+};
+
+onMounted(() => {
+  window.addEventListener('beforeunload', flushSessionSaver);
+
+  if (!isWindowManagementSupported) {
+    return;
+  }
+
+  void loadMonitors();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', flushSessionSaver);
+  flushSessionSaver();
+});
 </script>
 
 <template>
@@ -73,8 +136,11 @@ const uploadImage = (monitorId: string, file: File) => {
 
       <MonitorList
         v-else
-        :monitors="monitors"
+        :monitors="visibleMonitors"
         :states="monitorStates"
+        :show-only-projectable="showOnlyProjectable"
+        :total-monitors="monitors.length"
+        @update:show-only-projectable="showOnlyProjectable = $event"
         @open-window="openWindowForMonitor"
         @close-window="closeWindow"
         @request-fullscreen="requestFullscreen"

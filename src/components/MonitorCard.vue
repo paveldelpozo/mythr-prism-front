@@ -33,12 +33,20 @@ const emit = defineEmits<{
         </p>
       </div>
 
-      <span
-        class="rounded-full px-3 py-1 text-[11px] font-semibold"
-        :class="monitor.isPrimary ? 'bg-emerald-500/20 text-emerald-200' : 'bg-slate-700/40 text-slate-200'"
-      >
-        {{ monitor.isPrimary ? 'Principal' : 'Externo' }}
-      </span>
+      <div class="flex flex-col items-end gap-2">
+        <span
+          class="rounded-full px-3 py-1 text-[11px] font-semibold"
+          :class="monitor.isPrimary ? 'bg-emerald-500/20 text-emerald-200' : 'bg-slate-700/40 text-slate-200'"
+        >
+          {{ monitor.isPrimary ? 'Principal' : 'Externo' }}
+        </span>
+        <span
+          v-if="monitor.isMasterAppScreen"
+          class="rounded-full bg-indigo-500/25 px-3 py-1 text-[11px] font-semibold text-indigo-100"
+        >
+          Ventana principal (esta app)
+        </span>
+      </div>
     </header>
 
     <div class="mb-4 rounded-xl border border-slate-700/70 bg-slate-950/40 p-3">

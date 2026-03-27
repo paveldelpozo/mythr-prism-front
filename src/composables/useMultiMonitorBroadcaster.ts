@@ -13,6 +13,7 @@ import {
   MESSAGE_CHANNEL,
   type SlaveToMasterMessage
 } from '../types/messages';
+import type { PersistedMonitorStateMap } from '../services/persistence';
 import { cloneSerializable } from '../utils/cloneSerializable';
 
 type TransformAction =
@@ -27,13 +28,21 @@ interface WindowRegistryEntry {
   instanceToken: string;
 }
 
+interface UseMultiMonitorBroadcasterOptions {
+  initialMonitorStateById?: PersistedMonitorStateMap;
+}
+
 const MIN_SCALE = 0.05;
 const LIFE_CHECK_INTERVAL_MS = 1000;
 
 const toMonitorId = (screen: ScreenDetailed, index: number): string =>
   `${index}-${screen.left}-${screen.top}-${screen.width}x${screen.height}`;
 
-const createDescriptor = (screen: ScreenDetailed, index: number): MonitorDescriptor => ({
+const createDescriptor = (
+  screen: ScreenDetailed,
+  index: number,
+  isMasterAppScreen: boolean
+): MonitorDescriptor => ({
   id: toMonitorId(screen, index),
   label: screen.label?.trim() || `Monitor ${index + 1}`,
   width: screen.width,
@@ -45,16 +54,53 @@ const createDescriptor = (screen: ScreenDetailed, index: number): MonitorDescrip
   availWidth: screen.availWidth,
   availHeight: screen.availHeight,
   isPrimary: screen.isPrimary,
+  isMasterAppScreen,
   raw: screen
 });
 
 const createInstanceToken = (monitorId: string): string =>
   `${monitorId}-${crypto.randomUUID()}`;
 
-export const useMultiMonitorBroadcaster = () => {
+const matchesDetailedScreen = (screen: ScreenDetailed, target: ScreenDetailed): boolean => {
+  if (screen === target) {
+    return true;
+  }
+
+  return (
+    screen.left === target.left
+    && screen.top === target.top
+    && screen.width === target.width
+    && screen.height === target.height
+  );
+};
+
+const matchesFallbackScreen = (screen: ScreenDetailed, target: Screen): boolean => {
+  const targetWithPlacement = target as Partial<ScreenDetailed>;
+  const hasPlacementCoordinates =
+    typeof targetWithPlacement.left === 'number' && typeof targetWithPlacement.top === 'number';
+
+  if (hasPlacementCoordinates) {
+    return (
+      screen.left === targetWithPlacement.left
+      && screen.top === targetWithPlacement.top
+      && screen.width === target.width
+      && screen.height === target.height
+    );
+  }
+
+  return (
+    screen.width === target.width
+    && screen.height === target.height
+    && screen.availWidth === target.availWidth
+    && screen.availHeight === target.availHeight
+  );
+};
+
+export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOptions = {}) => {
   const monitors = ref<MonitorDescriptor[]>([]);
   const monitorStates = reactive<MonitorStateMap>({});
   const windowsRegistry = new Map<string, WindowRegistryEntry>();
+  const initialMonitorStateById = options.initialMonitorStateById ?? {};
 
   const isLoadingMonitors = ref(false);
   const globalError = ref<string | null>(null);
@@ -64,12 +110,41 @@ export const useMultiMonitorBroadcaster = () => {
   let screenDetailsRef: ScreenDetails | null = null;
   let lifecycleIntervalId: number | null = null;
 
+  const applyPersistedState = (monitorId: string) => {
+    const persistedState = initialMonitorStateById[monitorId];
+    if (!persistedState) {
+      return;
+    }
+
+    const state = monitorStates[monitorId];
+    if (!state) {
+      return;
+    }
+
+    state.transform = { ...persistedState.transform };
+    state.imageDataUrl = persistedState.imageDataUrl;
+  };
+
   const getMonitorState = (monitorId: string) => {
     if (!monitorStates[monitorId]) {
       monitorStates[monitorId] = createDefaultMonitorState();
+      applyPersistedState(monitorId);
     }
     return monitorStates[monitorId];
   };
+
+  const persistableMonitorStates = computed<PersistedMonitorStateMap>(() => {
+    const serializableStates: PersistedMonitorStateMap = {};
+
+    Object.entries(monitorStates).forEach(([monitorId, state]) => {
+      serializableStates[monitorId] = {
+        transform: { ...state.transform },
+        imageDataUrl: state.imageDataUrl
+      };
+    });
+
+    return serializableStates;
+  });
 
   const setMonitorError = (monitorId: string, message: string | null) => {
     const state = getMonitorState(monitorId);
@@ -254,12 +329,26 @@ export const useMultiMonitorBroadcaster = () => {
       return;
     }
 
-    const nextMonitors = screenDetailsRef.screens.map(createDescriptor);
+    const screens = screenDetailsRef.screens;
+    const currentScreen = screenDetailsRef.currentScreen;
+    const currentScreenIndex = currentScreen
+      ? screens.findIndex((screen) => matchesDetailedScreen(screen, currentScreen))
+      : -1;
+    const fallbackScreenIndex = screens.findIndex((screen) => matchesFallbackScreen(screen, window.screen));
+    const masterScreenIndex = currentScreenIndex >= 0 ? currentScreenIndex : fallbackScreenIndex;
+
+    const nextMonitors = screens.map((screen, index) =>
+      createDescriptor(screen, index, index === masterScreenIndex)
+    );
     monitors.value = nextMonitors;
     syncMonitorStateShape(nextMonitors);
   };
 
   const loadMonitors = async () => {
+    if (isLoadingMonitors.value) {
+      return;
+    }
+
     globalError.value = null;
 
     if (!isWindowManagementSupported) {
@@ -268,17 +357,24 @@ export const useMultiMonitorBroadcaster = () => {
       return;
     }
 
+    const getScreenDetails = window.getScreenDetails;
+    if (!getScreenDetails) {
+      globalError.value = 'La API Window Management no esta disponible en este navegador.';
+      return;
+    }
+
     isLoadingMonitors.value = true;
     try {
       screenDetailsRef?.removeEventListener('screenschange', refreshMonitorList);
       screenDetailsRef?.removeEventListener('currentscreenchange', refreshMonitorList);
 
-      screenDetailsRef = await window.getScreenDetails?.();
-
-      if (!screenDetailsRef) {
+      const nextScreenDetails = await getScreenDetails();
+      if (!nextScreenDetails) {
         globalError.value = 'No se pudo obtener detalle de pantallas.';
         return;
       }
+
+      screenDetailsRef = nextScreenDetails;
 
       screenDetailsRef.addEventListener('screenschange', refreshMonitorList);
       screenDetailsRef.addEventListener('currentscreenchange', refreshMonitorList);
@@ -439,6 +535,7 @@ export const useMultiMonitorBroadcaster = () => {
     isLoadingMonitors,
     isWindowManagementSupported,
     monitorStates,
+    persistableMonitorStates,
     monitors,
     applyTransform,
     closeAllWindows,
