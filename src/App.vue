@@ -96,7 +96,7 @@ const buildPersistablePanelPreferences = (): Record<string, boolean> => {
   const nextPreferences: Record<string, boolean> = {};
 
   Object.entries(panelPreferences.value).forEach(([key, enabled]) => {
-    if (typeof key === 'string' && key.length > 0 && typeof enabled === 'boolean') {
+    if (key.length > 0 && typeof enabled === 'boolean') {
       nextPreferences[key] = enabled;
     }
   });
@@ -108,7 +108,7 @@ const buildPersistableMonitorStateMap = (): PersistedMonitorStateMap => {
   const nextMap: PersistedMonitorStateMap = {};
 
   Object.entries(persistableMonitorStates.value).forEach(([monitorId, state]) => {
-    if (typeof monitorId !== 'string' || monitorId.length === 0) {
+    if (monitorId.length === 0) {
       return;
     }
 

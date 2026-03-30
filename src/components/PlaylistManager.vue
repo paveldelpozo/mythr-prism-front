@@ -591,8 +591,7 @@ const onNewImageFileChange = async (event: Event) => {
     newItemSource.value = await toImageDataSource(file);
     newImageFileFeedback.value = 'Imagen convertida a data URI correctamente.';
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'No se pudo procesar la imagen.';
-    newImageFileFeedback.value = message;
+    newImageFileFeedback.value = error instanceof Error ? error.message : 'No se pudo procesar la imagen.';
   } finally {
     target.value = '';
   }
@@ -1061,21 +1060,21 @@ onBeforeUnmount(() => {
               :alt="`Thumbnail de ${item.name}`"
               class="h-full w-full object-cover"
             />
-            <p
+            <span
               v-else-if="getItemThumbnail(item).status === 'loading'"
               :data-testid="`item-thumbnail-loading-${item.id}`"
               class="px-2 text-center text-[11px] text-slate-400"
             >
               {{ getItemThumbnail(item).message }}
-            </p>
-            <div
+            </span>
+            <span
               v-else
               :data-testid="`item-thumbnail-fallback-${item.id}`"
               class="flex flex-col items-center gap-1 px-2 text-center text-[11px] text-amber-200"
             >
               <ExclamationTriangleIcon aria-hidden="true" class="h-4 w-4" />
               <span>{{ getItemThumbnail(item).message }}</span>
-            </div>
+            </span>
           </button>
 
           <div class="min-w-0 flex-1">
