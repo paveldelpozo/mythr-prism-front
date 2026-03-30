@@ -1,6 +1,6 @@
 # Backlog y seguimiento del proyecto Mythr Prism
 
-Ultima actualizacion: 2026-03-27
+Ultima actualizacion: 2026-03-30
 
 ## Resumen
 
@@ -21,7 +21,7 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 
 | Fase | Progreso |
 | --- | --- |
-| MVP | 14% |
+| MVP | 7% |
 | V1 | 0% |
 | V2 | 0% |
 
@@ -37,6 +37,78 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
     - [x] UI para alta/edicion/reordenado.
     - [x] Motor de reproduccion secuencial con avance manual/automatico.
     - [x] Persistencia local de playlist.
+
+- [ ] **Cerrar todas las ventanas (habilitacion por estado)**
+  - Prioridad: `P1`.
+  - Objetivo: evitar acciones vacias y mejorar control operativo mostrando el boton solo habilitado cuando exista al menos una ventana abierta.
+  - Dependencias/riesgos: depende de fuente de verdad confiable para ventanas activas; riesgo de estado desincronizado tras cierre manual del navegador.
+  - Criterio de aceptacion: boton `Cerrar todas las ventanas` deshabilitado con 0 ventanas abiertas y habilitado automaticamente con >=1.
+  - DoD: comportamiento validado en flujo abrir/cerrar/reabrir ventanas y sin regresion en comandos de cierre individuales.
+  - Subtareas:
+    - [ ] Unificar criterio de "ventana abierta" en estado serializable de sesion.
+    - [ ] Conectar estado derivado al boton global de cierre.
+    - [ ] Sincronizar cambios por cierre manual de ventanas secundarias.
+    - [ ] Agregar prueba de regresion de habilitacion/deshabilitacion.
+
+- [ ] **Reorganizar interfaz principal (Monitores/Playlist)**
+  - Prioridad: `P2`.
+  - Objetivo: separar responsabilidades principales en una estructura simple (pestanas o equivalente) para reducir saturacion cognitiva.
+  - Dependencias/riesgos: depende de definir layout responsive base; riesgo de aumentar pasos para acciones frecuentes si el flujo no queda directo.
+  - Criterio de aceptacion: Monitores y Playlist quedan en secciones separadas, navegables en desktop y mobile sin perdida de funciones actuales.
+  - DoD: flujo principal (abrir monitor, seleccionar contenido, controlar playback) se completa sin buscar controles en paneles no relacionados.
+  - Subtareas:
+    - [ ] Definir estructura IA minima (tabs o switch de vistas) y reglas responsive.
+    - [ ] Mover controles de monitores a su seccion dedicada.
+    - [ ] Mover gestion de playlist a su seccion dedicada.
+    - [ ] Verificar accesos rapidos para acciones criticas entre secciones.
+
+- [ ] **Formularios complejos en dialogos modales**
+  - Prioridad: `P3`.
+  - Objetivo: reducir carga visual trasladando formularios de alta/edicion compleja a modales enfocados por contexto.
+  - Dependencias/riesgos: depende de la reorganizacion de interfaz principal; riesgo de perder contexto del item editado si el modal no refleja estado previo.
+  - Criterio de aceptacion: formularios extensos ya no ocupan panel permanente y se abren/cerran via modal con foco y escape controlados.
+  - DoD: formularios preservan validaciones actuales, accesibilidad basica (foco inicial/retorno) y no bloquean operacion general.
+  - Subtareas:
+    - [ ] Inventariar formularios complejos candidatos (playlist, monitor, ajustes).
+    - [ ] Definir patron unico de modal con props/emits tipados.
+    - [ ] Migrar formulario de mayor impacto al nuevo patron.
+    - [ ] Validar cierre seguro con cambios sin guardar (confirmacion o descarte explicito).
+
+- [ ] **Rediseno UI + reordenado playlist por drag and drop**
+  - Prioridad: `P4`.
+  - Objetivo: mejorar percepcion de calidad (limpia/amigable/atractiva) e incorporar drag and drop sin eliminar botones subir/bajar.
+  - Dependencias/riesgos: depende de estructura de interfaz definida; riesgo de inconsistencias de UX entre desktop y tactil.
+  - Criterio de aceptacion: interfaz adopta lineamientos visuales unificados y la playlist permite reordenado por arrastre, manteniendo metodo actual por botones.
+  - DoD: drag and drop funciona con feedback visual, persiste orden correcto y convive con accesibilidad por controles alternativos.
+  - Subtareas:
+    - [ ] Definir lineamientos visuales MVP (tipografia, espaciado, jerarquia y feedback).
+    - [ ] Aplicar rediseno incremental en vistas de Monitores y Playlist.
+    - [ ] Integrar interaccion drag and drop en lista de playlist.
+    - [ ] Mantener y validar botones subir/bajar como fallback accesible.
+
+- [ ] **Previsualizacion de items de playlist (incluye video)**
+  - Prioridad: `P5`.
+  - Objetivo: mostrar preview por item para mejorar identificacion rapida de contenido antes de reproducir.
+  - Dependencias/riesgos: depende de normalizacion de origen de media; riesgo CORS/decodificacion en videos remotos y costo de CPU por captura de fotograma.
+  - Criterio de aceptacion: cada item de playlist muestra miniatura; en video se intenta capturar frame y, si falla, se usa fallback visual consistente.
+  - DoD: no se bloquea la UI al generar thumbnails y se reportan fallos de preview sin romper playback.
+  - Subtareas:
+    - [ ] Implementar pipeline de preview para imagenes con cache local.
+    - [ ] Implementar intento de captura de frame para videos (con timeout y fallback).
+    - [ ] Definir placeholders para estados `loading`, `error`, `cors-blocked`.
+    - [ ] Limitar concurrencia/frecuencia para evitar picos de consumo.
+
+- [ ] **Playlist multi-destino (una playlist en multiples pantallas)**
+  - Prioridad: `P6`.
+  - Objetivo: permitir asignar una misma playlist a mas de una salida externa de forma simultanea y controlada.
+  - Dependencias/riesgos: depende de contrato de comandos master-slave y modelo de playback; riesgo de conflictos de estado (play/pause/seek) entre destinos.
+  - Criterio de aceptacion: operador puede asignar N monitores a una playlist y ejecutar controles coherentes por grupo sin romper flujo de monitor unico.
+  - DoD: modelo de estado soporta multi-destino serializable, comandos tipados por grupo y validacion de regresion en modo monitor unico.
+  - Subtareas:
+    - [ ] Redefinir modelo de asignacion playlist->monitor para soportar 1:N.
+    - [ ] Definir estrategia de comandos (broadcast por grupo + ack/errores por monitor).
+    - [ ] Adaptar UI para seleccionar multiples destinos con feedback claro.
+    - [ ] Definir pruebas de sincronizacion basica y manejo de fallos parciales.
 
 - [ ] **Video sincronizado**
   - Dependencias: playlist multimedia, reloj/timestamp compartido.
@@ -222,6 +294,12 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 4. [x] **[MVP] Playlist multimedia -> Persistencia local de playlist** _(completado)_
 5. [ ] **[MVP] Video sincronizado -> Definir estrategia de sincronizacion (host + clientes)** _(en curso)_
 6. [ ] **[MVP] Video sincronizado -> Implementar mensajes de sync (play/pause/seek/time)** _(pendiente)_
+7. [ ] **[MVP][P1] Cerrar todas las ventanas -> Unificar criterio de "ventana abierta" + habilitacion de boton global** _(proximo)_
+8. [ ] **[MVP][P2] Reorganizar interfaz principal -> Definir IA de Monitores/Playlist y reglas responsive** _(proximo)_
+9. [ ] **[MVP][P3] Formularios complejos en dialogos -> Migrar primer formulario de alto impacto** _(proximo)_
+10. [ ] **[MVP][P4] Rediseno UI + drag and drop -> Definir lineamientos MVP e integrar DnD con fallback subir/bajar** _(proximo)_
+11. [ ] **[MVP][P5] Previsualizacion playlist -> Implementar pipeline imagen/video con fallback** _(proximo)_
+12. [ ] **[MVP][P6] Playlist multi-destino -> Disenar modelo 1:N y comandos de grupo** _(proximo)_
 
 ## Notas
 
@@ -233,3 +311,4 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 - 2026-03-27: motor de reproduccion secuencial implementado con monitor objetivo, controles Start/Pause/Next/Previous/Stop, avance automatico y estado minimo de playback persistido en `localStorage`.
 - 2026-03-27: persistencia robusta de playlist/playback completada con hidratacion defensiva (indice/autoplay), migracion minima de claves legacy de playback y saneamiento de monitor objetivo tras redeteccion.
 - 2026-03-27: bugfix de reactividad en `App.vue` para monitor objetivo, separando watchers de validacion/pausa y eliminando dependencia `deep` sobre `monitorStates` que provocaba ciclo recursivo al actualizar playback.
+- 2026-03-30: se incorporan 6 iniciativas MVP adicionales (P1..P6) para UX/operacion y se ajusta secuencia del sprint sin marcar nuevos completados.
