@@ -100,6 +100,10 @@ Todo entregable de agente debe incluir, de forma breve y verificable:
 ### UX operativa (modales y datos largos)
 
 - Todo modal debe renderizarse en overlay fijo (`fixed/inset-0`) para no desplazarse con el contenido de fondo.
+- Convencion global obligatoria de modal: abrir centrado en viewport, no exceder limites visibles (`max-h`/`max-w` relativos a pantalla) y usar scroll interno cuando el contenido sea mayor al espacio disponible.
+- Estructura base obligatoria en modales: `header` + `body` scrolleable + `footer` de acciones; `header` y `footer` deben permanecer visibles (`sticky top-0` / `sticky bottom-0`) mientras se desplaza el cuerpo.
+- Todo dialogo debe incluir boton/icono de cierre en el extremo derecho del `header`, con `aria-label` explicito y accion de cierre equivalente a `Escape`.
+- Evitar boton de "Cerrar" redundante en `footer`: usar acciones de contexto (`Guardar`/`Cancelar` cuando aplique) y dejar el cierre generico en el `header`.
 - Al abrir cualquier modal, bloquear scroll del `body`; al cerrar o desmontar, restaurar de forma segura el estado original.
 - Cadenas largas en UI (URLs/data URI) deben truncarse solo visualmente y exponer valor completo via `title` u otro mecanismo de inspeccion.
 - Botones que disparan dialogos deben usar texto orientado a accion y no explicitar "modal" en su label.

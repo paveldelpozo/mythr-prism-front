@@ -7,6 +7,10 @@ Ultima actualizacion: 2026-03-30
 Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para proyeccion/control de contenido multi-monitor.
 
 Nota UX (2026-03-30): en Playlist se reforzo comportamiento operativo de modales con overlay fijo + bloqueo de scroll de fondo, y se aplico truncado visual de `source` largos (incluye data URI) manteniendo valor completo por `title`.
+Nota UX (2026-03-30): en los dialogos actuales de Playlist (preview/alta/edicion) se estandarizo boton de cierre en header (derecha, con `aria-label`), se elimino cierre redundante en footer de preview y se mantuvieron acciones de formulario (`Guardar/Cancelar`) sin duplicar cierre generico.
+Nota Bugfix (2026-03-30): los modales de Playlist (preview/alta/edicion) ahora se renderizan con `Teleport` a `body` para evitar desplazamientos del backdrop/dialogo causados por contextos de posicionamiento en contenedores con efectos visuales; se agregaron pruebas de regresion de anclaje a viewport.
+Nota UX (2026-03-30): se aplico una convencion global para modales activos de Playlist (alta, edicion, preview): centrados en viewport, con `max-h/max-w` relativos a pantalla, `body` con scroll interno y `header/footer` sticky siempre visibles.
+Nota UX (2026-03-30): la thumbnail de cada item en Playlist ahora abre un modal de vista ampliada con cierre por boton/Escape/click fuera, metadata del item y fallback claro cuando la preview no esta disponible.
 Nota UX (2026-03-30): se limpiaron textos de botones de apertura de dialogo (sin mencionar "modal") y se unifico el estilo de checkboxes inline con un componente reutilizable accesible (`AppCheckbox`).
 Nota UX (2026-03-30): en cada item de playlist los controles `Subir`, `Bajar`, `Editar` y `Eliminar` se mostraron en una sola fila con `flex-nowrap`; en pantallas estrechas el bloque de acciones usa `overflow-x-auto` para evitar salto de linea.
 Nota UX (2026-03-30): se introdujo iconografia consistente con Heroicons en botones y cabeceras de dialogos (icono + texto, iconos decorativos con `aria-hidden="true"`) para mejorar legibilidad operativa sin saturar la interfaz.
@@ -28,7 +32,7 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 
 | Fase | Progreso |
 | --- | --- |
-| MVP | 33% |
+| MVP | 42% |
 | V1 | 0% |
 | V2 | 0% |
 
@@ -94,18 +98,18 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
     - [x] Integrar interaccion drag and drop en lista de playlist.
     - [x] Mantener y validar botones subir/bajar como fallback accesible.
 
-- [ ] **Previsualizacion de items de playlist (incluye video)**
+- [x] **Previsualizacion de items de playlist (incluye video)**
   - Prioridad: `P5`.
-  - Estado: `in-progress`.
+  - Estado: `completed`.
   - Objetivo: mostrar preview por item para mejorar identificacion rapida de contenido antes de reproducir.
   - Dependencias/riesgos: depende de normalizacion de origen de media; riesgo CORS/decodificacion en videos remotos y costo de CPU por captura de fotograma.
   - Criterio de aceptacion: cada item de playlist muestra miniatura; en video se intenta capturar frame y, si falla, se usa fallback visual consistente.
   - DoD: no se bloquea la UI al generar thumbnails y se reportan fallos de preview sin romper playback.
   - Subtareas:
-    - [ ] Implementar pipeline de preview para imagenes con cache local.
-    - [ ] Implementar intento de captura de frame para videos (con timeout y fallback).
-    - [ ] Definir placeholders para estados `loading`, `error`, `cors-blocked`.
-    - [ ] Limitar concurrencia/frecuencia para evitar picos de consumo.
+    - [x] Implementar pipeline de preview para imagenes con cache local.
+    - [x] Implementar intento de captura de frame para videos (con timeout y fallback).
+    - [x] Definir placeholders para estados `loading`, `error`, `cors-blocked`.
+    - [x] Limitar concurrencia/frecuencia para evitar picos de consumo.
 
 - [ ] **Playlist multi-destino (una playlist en multiples pantallas)**
   - Prioridad: `P6`.
@@ -307,8 +311,8 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 8. [x] **[MVP][P2] Reorganizar interfaz principal -> Definir IA de Monitores/Playlist y reglas responsive** _(completado)_
 9. [x] **[MVP][P3] Formularios complejos en dialogos -> Migrar primer formulario de alto impacto** _(completado)_
 10. [ ] **[MVP][P4] Rediseno UI + drag and drop -> Definir lineamientos MVP e integrar DnD con fallback subir/bajar** _(en curso)_
-11. [ ] **[MVP][P5] Previsualizacion playlist -> Implementar pipeline imagen/video con fallback** _(proximo)_
-12. [ ] **[MVP][P6] Playlist multi-destino -> Disenar modelo 1:N y comandos de grupo** _(proximo)_
+11. [x] **[MVP][P5] Previsualizacion playlist -> Implementar pipeline imagen/video con fallback** _(completado)_
+12. [ ] **[MVP][P6] Playlist multi-destino -> Disenar modelo 1:N y comandos de grupo** _(en curso)_
 
 ## Notas
 
