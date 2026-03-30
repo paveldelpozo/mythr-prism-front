@@ -75,6 +75,7 @@ const {
   loadMonitors,
   openWindowForMonitor,
   requestFullscreen,
+  sendVideoSyncCommand,
   setImageForMonitor,
   setPlaylistItemForMonitor
 } = useMultiMonitorBroadcaster({
@@ -103,7 +104,8 @@ const {
   items: playlistItems,
   playback: playlistPlaybackState,
   applyItemToMonitor: setPlaylistItemForMonitor,
-  isMonitorReady: (monitorId: string) => Boolean(monitorStates[monitorId]?.isWindowOpen)
+  isMonitorReady: (monitorId: string) => Boolean(monitorStates[monitorId]?.isWindowOpen),
+  sendVideoSyncCommand
 });
 
 const buildPersistablePanelPreferences = (): Record<string, boolean> => {
@@ -230,15 +232,13 @@ const openSlaveWindowsCount = computed(() =>
 
 const canCloseAllWindows = computed(() => openSlaveWindowsCount.value > 0);
 
-const openSlaveMonitorIds = computed(() =>
-  Object.entries(monitorStates)
-    .filter(([, state]) => state.isWindowOpen)
-    .map(([monitorId]) => monitorId)
+const openSelectedSlaveMonitorIds = computed(() =>
+  selectedTargetMonitorIds.value.filter((monitorId) => Boolean(monitorStates[monitorId]?.isWindowOpen))
 );
 
 const videoSyncPlan = computed(() =>
   buildVideoSyncPlan({
-    openMonitorIds: openSlaveMonitorIds.value,
+    openMonitorIds: openSelectedSlaveMonitorIds.value,
     preferredHostMonitorId: selectedTargetMonitorIds.value[0] ?? null
   })
 );

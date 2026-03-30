@@ -83,6 +83,7 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
     loadMonitors: vi.fn(async () => undefined),
     openWindowForMonitor: vi.fn(),
     requestFullscreen: vi.fn(),
+    sendVideoSyncCommand: vi.fn(() => true),
     setImageForMonitor: vi.fn(),
     setPlaylistItemForMonitor: vi.fn()
   })

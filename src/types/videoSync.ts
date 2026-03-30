@@ -4,6 +4,11 @@ export interface VideoSyncStrategyConfig {
   resyncIntervalMs: number;
 }
 
+export interface VideoSyncAnchor {
+  anchorWallClockMs: number;
+  anchorMediaTimeMs: number;
+}
+
 export interface VideoSyncPlan {
   strategy: VideoSyncStrategyConfig;
   hostMonitorId: string | null;
@@ -129,4 +134,32 @@ export const buildVideoSyncPlan = ({
     canSynchronize: clientMonitorIds.length > 0,
     reason: clientMonitorIds.length > 0 ? 'ok' : 'single-open-monitor'
   };
+};
+
+export const resolveExpectedVideoTimeMs = (
+  anchor: VideoSyncAnchor,
+  nowMs: number = Date.now()
+): number => {
+  if (!Number.isFinite(anchor.anchorWallClockMs) || !Number.isFinite(anchor.anchorMediaTimeMs)) {
+    return 0;
+  }
+
+  const elapsedMs = Math.max(0, nowMs - anchor.anchorWallClockMs);
+  return Math.max(0, anchor.anchorMediaTimeMs + elapsedMs);
+};
+
+export const shouldResyncVideoDrift = (
+  expectedMediaTimeMs: number,
+  actualMediaTimeMs: number,
+  toleranceMs: number
+): boolean => {
+  if (
+    !Number.isFinite(expectedMediaTimeMs) ||
+    !Number.isFinite(actualMediaTimeMs) ||
+    !Number.isFinite(toleranceMs)
+  ) {
+    return true;
+  }
+
+  return Math.abs(expectedMediaTimeMs - actualMediaTimeMs) > Math.max(0, toleranceMs);
 };

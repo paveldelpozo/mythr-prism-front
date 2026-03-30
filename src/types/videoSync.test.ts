@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildVideoSyncPlan,
   DEFAULT_VIDEO_SYNC_STRATEGY,
-  sanitizeVideoSyncStrategy
+  resolveExpectedVideoTimeMs,
+  sanitizeVideoSyncStrategy,
+  shouldResyncVideoDrift
 } from './videoSync';
 
 describe('types/videoSync', () => {
@@ -56,5 +58,22 @@ describe('types/videoSync', () => {
   it('mantiene defaults cuando no recibe overrides', () => {
     const strategy = sanitizeVideoSyncStrategy(undefined);
     expect(strategy).toEqual(DEFAULT_VIDEO_SYNC_STRATEGY);
+  });
+
+  it('calcula tiempo esperado desde anchor wallclock+media', () => {
+    const expected = resolveExpectedVideoTimeMs(
+      {
+        anchorWallClockMs: 1000,
+        anchorMediaTimeMs: 2500
+      },
+      1800
+    );
+
+    expect(expected).toBe(3300);
+  });
+
+  it('detecta drift fuera de tolerancia para disparar resync', () => {
+    expect(shouldResyncVideoDrift(5000, 4920, 100)).toBe(false);
+    expect(shouldResyncVideoDrift(5000, 4700, 100)).toBe(true);
   });
 });

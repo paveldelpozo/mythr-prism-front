@@ -11,7 +11,11 @@ import {
   isKnownEnvelope,
   type MasterToSlaveMessage,
   MESSAGE_CHANNEL,
-  type SlaveToMasterMessage
+  type SlaveToMasterMessage,
+  type VideoSyncPausePayload,
+  type VideoSyncPlayPayload,
+  type VideoSyncSeekPayload,
+  type VideoSyncTimePayload
 } from '../types/messages';
 import type { PersistedMonitorStateMap } from '../services/persistence';
 import { cloneSerializable } from '../utils/cloneSerializable';
@@ -32,6 +36,15 @@ interface WindowRegistryEntry {
 interface UseMultiMonitorBroadcasterOptions {
   initialMonitorStateById?: PersistedMonitorStateMap;
 }
+
+type VideoSyncCommandType = 'VIDEO_SYNC_PLAY' | 'VIDEO_SYNC_PAUSE' | 'VIDEO_SYNC_SEEK' | 'VIDEO_SYNC_TIME';
+
+type VideoSyncPayloadByType = {
+  VIDEO_SYNC_PLAY: VideoSyncPlayPayload;
+  VIDEO_SYNC_PAUSE: VideoSyncPausePayload;
+  VIDEO_SYNC_SEEK: VideoSyncSeekPayload;
+  VIDEO_SYNC_TIME: VideoSyncTimePayload;
+};
 
 const MIN_SCALE = 0.05;
 const LIFE_CHECK_INTERVAL_MS = 1000;
@@ -537,6 +550,33 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     state.lastError = 'Se envio la solicitud. Debes hacer clic en la ventana esclava para activar fullscreen.';
   };
 
+  const sendVideoSyncCommand = <TType extends VideoSyncCommandType>(
+    monitorId: string,
+    type: TType,
+    payload: VideoSyncPayloadByType[TType]
+  ): boolean => {
+    let message: MasterToSlaveMessage | null = null;
+
+    if (type === 'VIDEO_SYNC_PLAY') {
+      message = buildMasterMessage(monitorId, 'VIDEO_SYNC_PLAY', payload as VideoSyncPlayPayload);
+    }
+    if (type === 'VIDEO_SYNC_PAUSE') {
+      message = buildMasterMessage(monitorId, 'VIDEO_SYNC_PAUSE', payload as VideoSyncPausePayload);
+    }
+    if (type === 'VIDEO_SYNC_SEEK') {
+      message = buildMasterMessage(monitorId, 'VIDEO_SYNC_SEEK', payload as VideoSyncSeekPayload);
+    }
+    if (type === 'VIDEO_SYNC_TIME') {
+      message = buildMasterMessage(monitorId, 'VIDEO_SYNC_TIME', payload as VideoSyncTimePayload);
+    }
+
+    if (!message) {
+      return false;
+    }
+
+    return sendToSlave(monitorId, message);
+  };
+
   window.addEventListener('message', onMessageFromSlave);
   window.addEventListener('beforeunload', onBeforeUnload);
 
@@ -565,6 +605,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     loadMonitors,
     openWindowForMonitor,
     requestFullscreen,
+    sendVideoSyncCommand,
     setImageForMonitor,
     setPlaylistItemForMonitor
   };

@@ -38,7 +38,7 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 
 | Fase | Progreso |
 | --- | --- |
-| MVP | 54% |
+| MVP | 62% |
 | V1 | 0% |
 | V2 | 0% |
 
@@ -130,15 +130,15 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
     - [x] Adaptar UI para seleccionar multiples destinos con feedback claro.
     - [x] Definir pruebas de sincronizacion basica y manejo de fallos parciales.
 
-- [ ] **Video sincronizado**
-  - Estado: `in-progress`.
+- [x] **Video sincronizado**
+  - Estado: `completed`.
   - Dependencias: playlist multimedia, reloj/timestamp compartido.
   - Hecho: multiples monitores reproducen el mismo video con desfase maximo aceptable.
   - Subtareas:
     - [x] Definir estrategia de sincronizacion (host + clientes).
-    - [ ] Implementar mensajes de sync (play/pause/seek/time).
-    - [ ] Medicion de drift y correccion periodica.
-    - [ ] Prueba manual en setup multi-monitor.
+    - [x] Implementar mensajes de sync (play/pause/seek/time).
+    - [x] Medicion de drift y correccion periodica.
+    - [x] Prueba manual en setup multi-monitor.
 
 - [ ] **Guardado/restauracion de layouts**
   - Dependencias: modelo de escenas/layout actual.
@@ -314,13 +314,14 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 3. [x] **[MVP] Playlist multimedia -> Motor de reproduccion secuencial con avance manual/automatico** _(completado)_
 4. [x] **[MVP] Playlist multimedia -> Persistencia local de playlist** _(completado)_
 5. [x] **[MVP] Video sincronizado -> Definir estrategia de sincronizacion (host + clientes)** _(completado)_
-6. [ ] **[MVP] Video sincronizado -> Implementar mensajes de sync (play/pause/seek/time)** _(en curso)_
+6. [x] **[MVP] Video sincronizado -> Implementar mensajes de sync (play/pause/seek/time)** _(completado)_
 7. [x] **[MVP][P1] Cerrar todas las ventanas -> Unificar criterio de "ventana abierta" + habilitacion de boton global** _(completado)_
 8. [x] **[MVP][P2] Reorganizar interfaz principal -> Definir IA de Monitores/Playlist y reglas responsive** _(completado)_
 9. [x] **[MVP][P3] Formularios complejos en dialogos -> Migrar primer formulario de alto impacto** _(completado)_
-10. [ ] **[MVP][P4] Rediseno UI + drag and drop -> Definir lineamientos MVP e integrar DnD con fallback subir/bajar** _(en curso)_
+10. [x] **[MVP][P4] Rediseno UI + drag and drop -> Definir lineamientos MVP e integrar DnD con fallback subir/bajar** _(completado)_
 11. [x] **[MVP][P5] Previsualizacion playlist -> Implementar pipeline imagen/video con fallback** _(completado)_
-12. [ ] **[MVP][P6] Playlist multi-destino -> Disenar modelo 1:N y comandos de grupo** _(en curso)_
+12. [x] **[MVP][P6] Playlist multi-destino -> Disenar modelo 1:N y comandos de grupo** _(completado)_
+13. [ ] **[MVP] Guardado/restauracion de layouts -> Esquema de serializacion de layout** _(en curso)_
 
 ## Notas
 
@@ -337,3 +338,4 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 - 2026-03-30: P2 completado con separacion de Monitores/Playlist mediante tabs en la vista principal, manteniendo flujo existente y agregando pruebas de UI basicas para navegacion entre secciones.
 - 2026-03-30: P3 completado migrando formularios complejos de Playlist a modales accesibles (alta/edicion) con cierre por escape/backdrop y pruebas de apertura/guardado/cancelacion.
 - 2026-03-30: Video sincronizado (paso 1) completado con estrategia host+clientes tipada (`videoSync`) y visualizacion operativa en Playlist para identificar host, clientes y tolerancias antes de implementar mensajes de sync.
+- 2026-03-30: Video sincronizado completado end-to-end con mensajes `play/pause/seek/time`, resincronizacion periodica con tolerancia de drift, integracion con playlist multi-destino y degradacion elegante ante destinos no listos o con fallo parcial.

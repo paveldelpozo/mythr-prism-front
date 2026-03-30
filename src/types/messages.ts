@@ -7,6 +7,10 @@ export type MasterMessageType =
   | 'MASTER_INIT'
   | 'SET_IMAGE'
   | 'SET_MEDIA'
+  | 'VIDEO_SYNC_PLAY'
+  | 'VIDEO_SYNC_PAUSE'
+  | 'VIDEO_SYNC_SEEK'
+  | 'VIDEO_SYNC_TIME'
   | 'SET_TRANSFORM'
   | 'REQUEST_FULLSCREEN'
   | 'PING';
@@ -36,10 +40,34 @@ export interface MasterInitPayload {
   monitorLabel: string;
 }
 
+export interface VideoSyncPlayPayload {
+  scheduledAtMs: number;
+  mediaTimeMs: number;
+}
+
+export interface VideoSyncPausePayload {
+  scheduledAtMs: number;
+}
+
+export interface VideoSyncSeekPayload {
+  scheduledAtMs: number;
+  mediaTimeMs: number;
+}
+
+export interface VideoSyncTimePayload {
+  anchorWallClockMs: number;
+  anchorMediaTimeMs: number;
+  driftToleranceMs: number;
+}
+
 export type MasterToSlaveMessage =
   | MessageEnvelope<'MASTER_INIT', MasterInitPayload>
   | MessageEnvelope<'SET_IMAGE', { imageDataUrl: string | null }>
   | MessageEnvelope<'SET_MEDIA', { item: MultimediaItem | null }>
+  | MessageEnvelope<'VIDEO_SYNC_PLAY', VideoSyncPlayPayload>
+  | MessageEnvelope<'VIDEO_SYNC_PAUSE', VideoSyncPausePayload>
+  | MessageEnvelope<'VIDEO_SYNC_SEEK', VideoSyncSeekPayload>
+  | MessageEnvelope<'VIDEO_SYNC_TIME', VideoSyncTimePayload>
   | MessageEnvelope<'SET_TRANSFORM', { transform: MonitorTransform }>
   | MessageEnvelope<'REQUEST_FULLSCREEN', { reason: string }>
   | MessageEnvelope<'PING', { timestamp: number }>;

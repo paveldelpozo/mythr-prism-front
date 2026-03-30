@@ -7,8 +7,10 @@ import {
   type PersistedSessionV1
 } from './persistence';
 
+const storage = window.localStorage;
+
 const readStoredSession = (): PersistedSessionV1 => {
-  const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+  const raw = storage.getItem(SESSION_STORAGE_KEY);
   if (!raw) {
     throw new Error('No se encontro sesion en storage.');
   }
@@ -18,7 +20,7 @@ const readStoredSession = (): PersistedSessionV1 => {
 
 describe('services/persistence', () => {
   beforeEach(() => {
-    localStorage.clear();
+    storage.clear();
   });
 
   it('sanea payload persistido y aplica clamps defensivos', () => {
@@ -68,7 +70,7 @@ describe('services/persistence', () => {
       }
     };
 
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(persisted));
+    storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(persisted));
 
     const loaded = loadPersistedSession();
 
@@ -83,13 +85,13 @@ describe('services/persistence', () => {
   });
 
   it('hidrata con fallback seguro y limpia storage corrupto', () => {
-    localStorage.setItem(SESSION_STORAGE_KEY, '{not-json');
+    storage.setItem(SESSION_STORAGE_KEY, '{not-json');
 
     const loaded = loadPersistedSession();
 
     expect(loaded.version).toBe(SESSION_SCHEMA_VERSION);
     expect(loaded.ui.showOnlyProjectable).toBe(true);
-    expect(localStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+    expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
   });
 
   it('mantiene compatibilidad backward/legacy', () => {
@@ -123,7 +125,7 @@ describe('services/persistence', () => {
       intervalSeconds: 3
     };
 
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(legacy));
+    storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(legacy));
 
     const loaded = loadPersistedSession();
 
@@ -159,7 +161,7 @@ describe('services/persistence', () => {
       }
     };
 
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(persisted));
+    storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(persisted));
 
     const loaded = loadPersistedSession();
 
@@ -183,7 +185,7 @@ describe('services/persistence', () => {
       }
     };
 
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(persisted));
+    storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(persisted));
 
     const loaded = loadPersistedSession();
 

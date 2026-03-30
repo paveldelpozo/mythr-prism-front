@@ -77,6 +77,47 @@ Object.defineProperty(globalThis, 'FileReader', {
   value: MockFileReader
 });
 
+const storageData = new Map<string, string>();
+
+const memoryLocalStorage: Storage = {
+  get length() {
+    return storageData.size;
+  },
+  clear() {
+    storageData.clear();
+  },
+  getItem(key: string) {
+    return storageData.get(key) ?? null;
+  },
+  key(index: number) {
+    const keys = Array.from(storageData.keys());
+    return keys[index] ?? null;
+  },
+  removeItem(key: string) {
+    storageData.delete(key);
+  },
+  setItem(key: string, value: string) {
+    storageData.set(String(key), String(value));
+  }
+};
+
+Object.defineProperty(globalThis, 'localStorage', {
+  configurable: true,
+  writable: true,
+  value: memoryLocalStorage
+});
+
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    writable: true,
+    value: memoryLocalStorage
+  });
+}
+
 afterEach(() => {
-  localStorage.clear();
+  const storage = typeof window !== 'undefined' ? window.localStorage : null;
+  if (storage && typeof storage.clear === 'function') {
+    storage.clear();
+  }
 });

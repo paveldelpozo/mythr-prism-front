@@ -141,6 +141,7 @@ export const createSlaveWindowHtml = ({
         const video = document.getElementById('video');
         const empty = document.getElementById('empty');
         let clipEndAtSeconds = null;
+        let syncActionTimeoutId = null;
 
         const onVideoLoadedMetadata = () => {
           if (!video.dataset.startAtSeconds) {
@@ -172,6 +173,11 @@ export const createSlaveWindowHtml = ({
         };
 
         const clearViewportMedia = () => {
+          if (syncActionTimeoutId !== null) {
+            window.clearTimeout(syncActionTimeoutId);
+            syncActionTimeoutId = null;
+          }
+
           image.src = '';
           image.style.display = 'none';
 
@@ -184,6 +190,47 @@ export const createSlaveWindowHtml = ({
 
           empty.style.display = 'block';
           empty.textContent = 'Esperando contenido...';
+        };
+
+        const toFiniteNumber = (value, fallback) => {
+          const parsed = Number(value);
+          if (!Number.isFinite(parsed)) {
+            return fallback;
+          }
+
+          return parsed;
+        };
+
+        const hasActiveVideo = () => video.style.display !== 'none' && typeof video.src === 'string' && video.src.length > 0;
+
+        const runAt = (scheduledAtMs, action) => {
+          if (syncActionTimeoutId !== null) {
+            window.clearTimeout(syncActionTimeoutId);
+            syncActionTimeoutId = null;
+          }
+
+          const now = Date.now();
+          const safeScheduledAtMs = toFiniteNumber(scheduledAtMs, now);
+          const delayMs = Math.max(0, safeScheduledAtMs - now);
+          syncActionTimeoutId = window.setTimeout(() => {
+            syncActionTimeoutId = null;
+            action();
+          }, delayMs);
+        };
+
+        const applyVideoTimeMs = (mediaTimeMs) => {
+          if (!hasActiveVideo()) {
+            return;
+          }
+
+          const seconds = Math.max(0, toFiniteNumber(mediaTimeMs, 0) / 1000);
+
+          try {
+            video.currentTime = seconds;
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'No se pudo aplicar tiempo de video.';
+            postToMaster('SLAVE_ERROR', { message });
+          }
         };
 
         const showImage = (source) => {
@@ -302,6 +349,57 @@ export const createSlaveWindowHtml = ({
             }
 
             clearViewportMedia();
+          }
+
+          if (message.type === 'VIDEO_SYNC_SEEK') {
+            const payload = message.payload;
+            runAt(payload.scheduledAtMs, () => {
+              applyVideoTimeMs(payload.mediaTimeMs);
+            });
+          }
+
+          if (message.type === 'VIDEO_SYNC_PLAY') {
+            const payload = message.payload;
+            runAt(payload.scheduledAtMs, () => {
+              applyVideoTimeMs(payload.mediaTimeMs);
+              void video.play().catch(() => {
+                postToMaster('SLAVE_ERROR', {
+                  message: 'No se pudo ejecutar PLAY sincronizado en la ventana esclava.'
+                });
+              });
+            });
+          }
+
+          if (message.type === 'VIDEO_SYNC_PAUSE') {
+            const payload = message.payload;
+            runAt(payload.scheduledAtMs, () => {
+              if (!hasActiveVideo()) {
+                return;
+              }
+
+              video.pause();
+            });
+          }
+
+          if (message.type === 'VIDEO_SYNC_TIME') {
+            const payload = message.payload;
+
+            if (!hasActiveVideo()) {
+              return;
+            }
+
+            const anchorWallClockMs = toFiniteNumber(payload.anchorWallClockMs, Date.now());
+            const anchorMediaTimeMs = Math.max(0, toFiniteNumber(payload.anchorMediaTimeMs, 0));
+            const driftToleranceMs = Math.max(0, toFiniteNumber(payload.driftToleranceMs, 0));
+            const expectedMediaTimeMs = anchorMediaTimeMs + Math.max(0, Date.now() - anchorWallClockMs);
+            const currentMediaTimeMs = Math.max(0, video.currentTime * 1000);
+            const driftMs = Math.abs(expectedMediaTimeMs - currentMediaTimeMs);
+
+            if (driftMs <= driftToleranceMs) {
+              return;
+            }
+
+            applyVideoTimeMs(expectedMediaTimeMs);
           }
 
           if (message.type === 'SET_TRANSFORM') {

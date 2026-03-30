@@ -9,6 +9,7 @@ interface HarnessResult {
   items: Ref<MultimediaItem[]>;
   playback: Ref<PlaylistPlaybackState>;
   applied: Array<{ monitorId: string; item: MultimediaItem | null }>;
+  syncCommands: Array<{ monitorId: string; type: string; payload: unknown }>;
 }
 
 const createHarness = (
@@ -17,11 +18,13 @@ const createHarness = (
   options?: {
     readyMonitorIds?: string[];
     failMonitorIds?: string[];
+    failSyncMonitorIds?: string[];
   }
 ): HarnessResult => {
   const items = ref<MultimediaItem[]>(seedItems);
   const readyMonitorIdSet = new Set(options?.readyMonitorIds ?? ['m1']);
   const failMonitorIdSet = new Set(options?.failMonitorIds ?? []);
+  const failSyncMonitorIdSet = new Set(options?.failSyncMonitorIds ?? []);
   const playback = ref<PlaylistPlaybackState>({
     targetMonitorIds: ['m1'],
     currentIndex: 0,
@@ -30,6 +33,7 @@ const createHarness = (
     ...seedPlayback
   });
   const applied: Array<{ monitorId: string; item: MultimediaItem | null }> = [];
+  const syncCommands: Array<{ monitorId: string; type: string; payload: unknown }> = [];
   let api!: ReturnType<typeof usePlaylistPlayback>;
 
   const Host = defineComponent({
@@ -41,7 +45,11 @@ const createHarness = (
           applied.push({ monitorId, item });
           return !failMonitorIdSet.has(monitorId);
         },
-        isMonitorReady: (monitorId) => readyMonitorIdSet.has(monitorId)
+        isMonitorReady: (monitorId) => readyMonitorIdSet.has(monitorId),
+        sendVideoSyncCommand: (monitorId, type, payload) => {
+          syncCommands.push({ monitorId, type, payload });
+          return !failSyncMonitorIdSet.has(monitorId);
+        }
       });
 
       return () => null;
@@ -50,7 +58,7 @@ const createHarness = (
 
   mount(Host);
 
-  return { api, items, playback, applied };
+  return { api, items, playback, applied, syncCommands };
 };
 
 const imageItem = (id: string, durationMs = 1500): MultimediaItem => ({
@@ -59,6 +67,16 @@ const imageItem = (id: string, durationMs = 1500): MultimediaItem => ({
   name: `Image ${id}`,
   source: `data:image/png;base64,${id}`,
   durationMs
+});
+
+const videoItem = (id: string, startAtMs = 3000): MultimediaItem => ({
+  id,
+  kind: 'video',
+  name: `Video ${id}`,
+  source: `https://cdn/${id}.mp4`,
+  startAtMs,
+  endAtMs: null,
+  muted: true
 });
 
 describe('composables/usePlaylistPlayback', () => {
@@ -155,5 +173,79 @@ describe('composables/usePlaylistPlayback', () => {
     await nextTick();
 
     expect(playback.value.currentIndex).toBe(0);
+  });
+
+  it('construye y envia comandos sync (seek/play/time) para video multi-destino', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-30T10:00:00.000Z'));
+
+    try {
+      const { api, syncCommands } = createHarness(
+        [videoItem('v1', 2500)],
+        { targetMonitorIds: ['m1', 'm2'] },
+        { readyMonitorIds: ['m1', 'm2'] }
+      );
+
+      api.start();
+
+      const seekCommands = syncCommands.filter((entry) => entry.type === 'VIDEO_SYNC_SEEK');
+      const playCommands = syncCommands.filter((entry) => entry.type === 'VIDEO_SYNC_PLAY');
+      expect(seekCommands).toHaveLength(2);
+      expect(playCommands).toHaveLength(2);
+      expect(
+        seekCommands.every((entry) => (entry.payload as { mediaTimeMs: number }).mediaTimeMs === 2500)
+      ).toBe(true);
+      expect(
+        playCommands.every((entry) => (entry.payload as { mediaTimeMs: number }).mediaTimeMs === 2500)
+      ).toBe(true);
+
+      vi.advanceTimersByTime(4000);
+
+      const timeCommands = syncCommands.filter((entry) => entry.type === 'VIDEO_SYNC_TIME');
+      expect(timeCommands.length).toBeGreaterThanOrEqual(1);
+      expect(timeCommands.every((entry) => entry.monitorId === 'm2')).toBe(true);
+      expect(api.feedback.value).toContain('Sync video host+clientes activo');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('aplica pausa sincronizada a multiples destinos de video', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-30T10:00:00.000Z'));
+
+    try {
+      const { api, syncCommands } = createHarness(
+        [videoItem('v1')],
+        { targetMonitorIds: ['m1', 'm2'] },
+        { readyMonitorIds: ['m1', 'm2'] }
+      );
+
+      api.start();
+      api.pause();
+
+      const pauseCommands = syncCommands.filter((entry) => entry.type === 'VIDEO_SYNC_PAUSE');
+      expect(pauseCommands).toHaveLength(2);
+      expect(api.feedback.value).toContain('pausada');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('mantiene reproduccion con degradacion si falla sync en un destino', () => {
+    const { api, syncCommands } = createHarness(
+      [videoItem('v1')],
+      { targetMonitorIds: ['m1', 'm2'] },
+      {
+        readyMonitorIds: ['m1', 'm2'],
+        failSyncMonitorIds: ['m2']
+      }
+    );
+
+    api.start();
+
+    expect(api.isPlaying.value).toBe(true);
+    expect(syncCommands.some((entry) => entry.monitorId === 'm2' && entry.type === 'VIDEO_SYNC_PLAY')).toBe(true);
+    expect(api.feedback.value).toContain('degradacion');
   });
 });
