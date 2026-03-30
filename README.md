@@ -11,8 +11,8 @@ Mythr Prism es un módulo integrado en el ecosistema Mythr, orientado al control
 
 ## Requisitos previos
 
-- Node.js (versión LTS recomendada).
-- pnpm (8.15.9 o superior recomendado para Node.js 16.20.2).
+- Node.js `>=20.19.0` (LTS recomendado; Vite 7 requiere Node 20+).
+- pnpm `>=8.15.9`.
 - Navegador moderno con soporte para APIs necesarias de gestión de ventanas/pantallas.
 
 ## Instalación
@@ -27,6 +27,7 @@ pnpm install
 - `pnpm run build`: genera la build de producción.
 - `pnpm run preview`: sirve la build para validación local.
 - `pnpm run typecheck`: ejecuta la verificación de tipos.
+- `pnpm run test`: ejecuta tests con Vitest.
 
 ## Uso básico
 
@@ -34,7 +35,7 @@ pnpm install
 2. Arranca el entorno local con `pnpm run dev`.
 3. Abre la URL indicada en consola en un navegador compatible.
 4. Prueba el flujo básico de proyección y control entre ventanas/pantallas.
-5. Valida build y tipos con `pnpm run build` y `pnpm run typecheck`.
+5. Valida build, tipos y tests con `pnpm run build`, `pnpm run typecheck` y `pnpm run test`.
 
 ## Notas de compatibilidad
 
