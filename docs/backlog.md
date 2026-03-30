@@ -6,6 +6,12 @@ Ultima actualizacion: 2026-03-30
 
 Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para proyeccion/control de contenido multi-monitor.
 
+Nota UX (2026-03-30): en Playlist se reforzo comportamiento operativo de modales con overlay fijo + bloqueo de scroll de fondo, y se aplico truncado visual de `source` largos (incluye data URI) manteniendo valor completo por `title`.
+Nota UX (2026-03-30): se limpiaron textos de botones de apertura de dialogo (sin mencionar "modal") y se unifico el estilo de checkboxes inline con un componente reutilizable accesible (`AppCheckbox`).
+Nota UX (2026-03-30): en cada item de playlist los controles `Subir`, `Bajar`, `Editar` y `Eliminar` se mostraron en una sola fila con `flex-nowrap`; en pantallas estrechas el bloque de acciones usa `overflow-x-auto` para evitar salto de linea.
+Nota UX (2026-03-30): se introdujo iconografia consistente con Heroicons en botones y cabeceras de dialogos (icono + texto, iconos decorativos con `aria-hidden="true"`) para mejorar legibilidad operativa sin saturar la interfaz.
+Nota UX (2026-03-30): en formularios de alta/edicion de Playlist se refino el layout por filas (Titulo/Tipo, Source/Archivo local, Duracion-Inicio-Fin y fila final de `Mute` con ayuda contextual) manteniendo validaciones y flujo actual.
+
 ### Reglas de actualizacion
 
 - Mantener cada tarea en su fase objetivo (`MVP`, `V1`, `V2`) y no duplicarla en otra seccion.
@@ -21,7 +27,7 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 
 | Fase | Progreso |
 | --- | --- |
-| MVP | 11% |
+| MVP | 25% |
 | V1 | 0% |
 | V2 | 0% |
 
@@ -50,32 +56,33 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
     - [x] Sincronizar cambios por cierre manual de ventanas secundarias.
     - [x] Agregar prueba de regresion de habilitacion/deshabilitacion.
 
-- [ ] **Reorganizar interfaz principal (Monitores/Playlist)**
+- [x] **Reorganizar interfaz principal (Monitores/Playlist)**
   - Prioridad: `P2`.
   - Objetivo: separar responsabilidades principales en una estructura simple (pestanas o equivalente) para reducir saturacion cognitiva.
   - Dependencias/riesgos: depende de definir layout responsive base; riesgo de aumentar pasos para acciones frecuentes si el flujo no queda directo.
   - Criterio de aceptacion: Monitores y Playlist quedan en secciones separadas, navegables en desktop y mobile sin perdida de funciones actuales.
   - DoD: flujo principal (abrir monitor, seleccionar contenido, controlar playback) se completa sin buscar controles en paneles no relacionados.
   - Subtareas:
-    - [ ] Definir estructura IA minima (tabs o switch de vistas) y reglas responsive.
-    - [ ] Mover controles de monitores a su seccion dedicada.
-    - [ ] Mover gestion de playlist a su seccion dedicada.
-    - [ ] Verificar accesos rapidos para acciones criticas entre secciones.
+    - [x] Definir estructura IA minima (tabs o switch de vistas) y reglas responsive.
+    - [x] Mover controles de monitores a su seccion dedicada.
+    - [x] Mover gestion de playlist a su seccion dedicada.
+    - [x] Verificar accesos rapidos para acciones criticas entre secciones.
 
-- [ ] **Formularios complejos en dialogos modales**
+- [x] **Formularios complejos en dialogos modales**
   - Prioridad: `P3`.
   - Objetivo: reducir carga visual trasladando formularios de alta/edicion compleja a modales enfocados por contexto.
   - Dependencias/riesgos: depende de la reorganizacion de interfaz principal; riesgo de perder contexto del item editado si el modal no refleja estado previo.
   - Criterio de aceptacion: formularios extensos ya no ocupan panel permanente y se abren/cerran via modal con foco y escape controlados.
   - DoD: formularios preservan validaciones actuales, accesibilidad basica (foco inicial/retorno) y no bloquean operacion general.
   - Subtareas:
-    - [ ] Inventariar formularios complejos candidatos (playlist, monitor, ajustes).
-    - [ ] Definir patron unico de modal con props/emits tipados.
-    - [ ] Migrar formulario de mayor impacto al nuevo patron.
-    - [ ] Validar cierre seguro con cambios sin guardar (confirmacion o descarte explicito).
+    - [x] Inventariar formularios complejos candidatos (playlist, monitor, ajustes).
+    - [x] Definir patron unico de modal con props/emits tipados.
+    - [x] Migrar formulario de mayor impacto al nuevo patron.
+    - [x] Validar cierre seguro con cambios sin guardar (confirmacion o descarte explicito).
 
 - [ ] **Rediseno UI + reordenado playlist por drag and drop**
   - Prioridad: `P4`.
+  - Estado: `in-progress`.
   - Objetivo: mejorar percepcion de calidad (limpia/amigable/atractiva) e incorporar drag and drop sin eliminar botones subir/bajar.
   - Dependencias/riesgos: depende de estructura de interfaz definida; riesgo de inconsistencias de UX entre desktop y tactil.
   - Criterio de aceptacion: interfaz adopta lineamientos visuales unificados y la playlist permite reordenado por arrastre, manteniendo metodo actual por botones.
@@ -295,9 +302,9 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 5. [ ] **[MVP] Video sincronizado -> Definir estrategia de sincronizacion (host + clientes)** _(en curso)_
 6. [ ] **[MVP] Video sincronizado -> Implementar mensajes de sync (play/pause/seek/time)** _(pendiente)_
 7. [x] **[MVP][P1] Cerrar todas las ventanas -> Unificar criterio de "ventana abierta" + habilitacion de boton global** _(completado)_
-8. [ ] **[MVP][P2] Reorganizar interfaz principal -> Definir IA de Monitores/Playlist y reglas responsive** _(en curso)_
-9. [ ] **[MVP][P3] Formularios complejos en dialogos -> Migrar primer formulario de alto impacto** _(proximo)_
-10. [ ] **[MVP][P4] Rediseno UI + drag and drop -> Definir lineamientos MVP e integrar DnD con fallback subir/bajar** _(proximo)_
+8. [x] **[MVP][P2] Reorganizar interfaz principal -> Definir IA de Monitores/Playlist y reglas responsive** _(completado)_
+9. [x] **[MVP][P3] Formularios complejos en dialogos -> Migrar primer formulario de alto impacto** _(completado)_
+10. [ ] **[MVP][P4] Rediseno UI + drag and drop -> Definir lineamientos MVP e integrar DnD con fallback subir/bajar** _(en curso)_
 11. [ ] **[MVP][P5] Previsualizacion playlist -> Implementar pipeline imagen/video con fallback** _(proximo)_
 12. [ ] **[MVP][P6] Playlist multi-destino -> Disenar modelo 1:N y comandos de grupo** _(proximo)_
 
@@ -313,3 +320,5 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 - 2026-03-27: bugfix de reactividad en `App.vue` para monitor objetivo, separando watchers de validacion/pausa y eliminando dependencia `deep` sobre `monitorStates` que provocaba ciclo recursivo al actualizar playback.
 - 2026-03-30: se incorporan 6 iniciativas MVP adicionales (P1..P6) para UX/operacion y se ajusta secuencia del sprint sin marcar nuevos completados.
 - 2026-03-30: P1 completado con habilitacion/deshabilitacion del boton global de cierre segun ventanas abiertas y test de regresion del header.
+- 2026-03-30: P2 completado con separacion de Monitores/Playlist mediante tabs en la vista principal, manteniendo flujo existente y agregando pruebas de UI basicas para navegacion entre secciones.
+- 2026-03-30: P3 completado migrando formularios complejos de Playlist a modales accesibles (alta/edicion) con cierre por escape/backdrop y pruebas de apertura/guardado/cancelacion.

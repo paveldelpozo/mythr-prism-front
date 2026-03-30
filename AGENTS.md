@@ -97,6 +97,15 @@ Todo entregable de agente debe incluir, de forma breve y verificable:
 - Capturar errores de APIs browser con fallback seguro.
 - No abusar de logs en produccion; mantener logs intencionales y utiles para diagnostico.
 
+### UX operativa (modales y datos largos)
+
+- Todo modal debe renderizarse en overlay fijo (`fixed/inset-0`) para no desplazarse con el contenido de fondo.
+- Al abrir cualquier modal, bloquear scroll del `body`; al cerrar o desmontar, restaurar de forma segura el estado original.
+- Cadenas largas en UI (URLs/data URI) deben truncarse solo visualmente y exponer valor completo via `title` u otro mecanismo de inspeccion.
+- Botones que disparan dialogos deben usar texto orientado a accion y no explicitar "modal" en su label.
+- Botones de accion deben combinar icono + texto (no icono solo); marcar iconos decorativos con `aria-hidden="true"` y mantener espaciado consistente.
+- Checkboxes inline de formulario deben usar un componente visual unificado y accesible (por defecto `src/components/ui/AppCheckbox.vue`).
+
 ### No sobre-ingenieria
 
 - Preferir soluciones simples, legibles y mantenibles.
