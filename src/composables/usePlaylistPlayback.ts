@@ -60,9 +60,14 @@ export const usePlaylistPlayback = ({
   };
 
   const setCurrentIndex = (nextIndex: number) => {
+    const normalizedIndex = normalizeIndex(nextIndex, items.value.length);
+    if (normalizedIndex === playback.value.currentIndex) {
+      return;
+    }
+
     playback.value = {
       ...playback.value,
-      currentIndex: normalizeIndex(nextIndex, items.value.length)
+      currentIndex: normalizedIndex
     };
   };
 
