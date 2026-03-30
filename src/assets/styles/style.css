@@ -122,6 +122,22 @@
     @apply grid grid-cols-2 gap-2;
   }
 
+  .app-tabs--header {
+    @apply w-full md:min-w-[22rem];
+  }
+
+  .app-tabs--header .app-tab-btn {
+    @apply flex-col gap-1.5;
+  }
+
+  .app-tabs--header .btn-icon {
+    @apply h-5 w-5;
+  }
+
+  .app-header-actions {
+    @apply w-full md:w-auto;
+  }
+
   .app-tab-btn {
     @apply btn-with-icon btn-md border;
   }
@@ -132,6 +148,10 @@
 
   .app-tab-btn--inactive {
     @apply border-slate-400/25 bg-slate-900/35 text-slate-300 hover:border-slate-300/45 hover:text-slate-100;
+  }
+
+  .monitor-toolbar-actions {
+    @apply flex w-full flex-wrap items-center justify-end gap-2 md:w-auto;
   }
 
   .app-alert {

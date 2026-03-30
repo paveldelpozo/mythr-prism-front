@@ -107,6 +107,9 @@ Todo entregable de agente debe incluir, de forma breve y verificable:
 
 ### UX operativa (modales y datos largos)
 
+- Convencion global del shell: las tabs primarias `Monitores/Playlist` viven en la cabecera de la app (zona derecha) y deben conservar semantica accesible `tablist/tab/tabpanel` con tab activa claramente visible.
+- Convencion visual global para tabs primarias de cabecera: usar layout vertical (icono encima del texto) con iconografia ligeramente mayor que en botones secundarios, sin romper semantica ni navegacion accesible.
+- Las acciones globales de una seccion deben vivir en la barra contextual de esa seccion (ej. `Cerrar todas las ventanas` en barra de Monitores junto al filtro), no en la cabecera global.
 - Todo modal debe renderizarse en overlay fijo (`fixed/inset-0`) para no desplazarse con el contenido de fondo.
 - Convencion global obligatoria de modal: abrir centrado en viewport, no exceder limites visibles (`max-h`/`max-w` relativos a pantalla) y usar scroll interno cuando el contenido sea mayor al espacio disponible.
 - Para `max-width` de modales, usar variantes reutilizables en `style.css` (`app-modal-panel--sm/md/lg`) y evitar combinar `max-w-*` inline en el template cuando ya exista variante semantica.

@@ -141,12 +141,14 @@ const MonitorListStub = defineComponent({
   name: 'MonitorListStub',
   props: {
     monitors: { type: Array as PropType<Array<{ id: string }>>, required: true },
-    showOnlyProjectable: { type: Boolean, required: true }
+    showOnlyProjectable: { type: Boolean, required: true },
+    canCloseAllWindows: { type: Boolean, required: true }
   },
   template: `
     <div>
       <p data-testid="monitorlist-visible-monitors">{{ monitors.length }}</p>
       <p data-testid="monitorlist-filter-enabled">{{ showOnlyProjectable ? 'true' : 'false' }}</p>
+      <p data-testid="monitorlist-can-close-all">{{ canCloseAllWindows ? 'true' : 'false' }}</p>
     </div>
   `
 });
@@ -156,7 +158,6 @@ describe('App integration base', () => {
     const wrapper = mount(App, {
       global: {
         stubs: {
-          AppHeader: true,
           MonitorList: MonitorListStub,
           PlaylistManager: PlaylistManagerStub
         }
@@ -168,6 +169,7 @@ describe('App integration base', () => {
     expect(wrapper.get('[data-testid="panel-monitors"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="panel-playlist"]').isVisible()).toBe(false);
     expect(wrapper.get('[data-testid="monitorlist-filter-enabled"]').text()).toBe('true');
+    expect(wrapper.get('[data-testid="monitorlist-can-close-all"]').text()).toBe('true');
     expect(wrapper.get('[data-testid="monitorlist-visible-monitors"]').text()).toBe('1');
     expect(wrapper.get('[data-testid="playlist-visible-monitors"]').text()).toBe('1');
   });
@@ -176,7 +178,6 @@ describe('App integration base', () => {
     const wrapper = mount(App, {
       global: {
         stubs: {
-          AppHeader: true,
           MonitorList: MonitorListStub,
           PlaylistManager: PlaylistManagerStub
         }
@@ -196,7 +197,6 @@ describe('App integration base', () => {
     const wrapper = mount(App, {
       global: {
         stubs: {
-          AppHeader: true,
           MonitorList: MonitorListStub,
           PlaylistManager: PlaylistManagerStub
         }

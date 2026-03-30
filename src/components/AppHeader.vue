@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { XMarkIcon } from '@heroicons/vue/24/outline';
+import { ComputerDesktopIcon, QueueListIcon } from '@heroicons/vue/24/outline';
 
 defineProps<{
-  canCloseAllWindows: boolean;
+  activeMainViewTab: 'monitors' | 'playlist';
 }>();
 
 const emit = defineEmits<{
-  closeAll: [];
+  'update:activeMainViewTab': [value: 'monitors' | 'playlist'];
 }>();
 </script>
 
@@ -17,15 +17,48 @@ const emit = defineEmits<{
       <h1 class="mt-1 text-2xl font-black text-slate-100 md:text-3xl">Panel de Control Multi-Monitor</h1>
     </div>
 
-    <button
-      type="button"
-      class="btn-with-icon btn-md border border-rose-300/40 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25 disabled:border-slate-300/25 disabled:bg-slate-500/10 disabled:text-slate-300/70 disabled:hover:bg-slate-500/10"
-      :disabled="!canCloseAllWindows"
-      :aria-disabled="!canCloseAllWindows"
-      @click="emit('closeAll')"
-    >
-      <XMarkIcon aria-hidden="true" class="btn-icon" />
-      Cerrar todas las ventanas
-    </button>
+    <div class="app-header-actions">
+      <div
+        role="tablist"
+        aria-label="Secciones de trabajo"
+        class="app-tabs app-tabs--header"
+      >
+        <button
+          id="tab-monitors"
+          data-testid="tab-monitors"
+          type="button"
+          role="tab"
+          :aria-selected="activeMainViewTab === 'monitors'"
+          aria-controls="panel-monitors"
+          :tabindex="activeMainViewTab === 'monitors' ? 0 : -1"
+          class="app-tab-btn"
+          :class="activeMainViewTab === 'monitors'
+            ? 'app-tab-btn--active'
+            : 'app-tab-btn--inactive'"
+          @click="emit('update:activeMainViewTab', 'monitors')"
+        >
+          <ComputerDesktopIcon aria-hidden="true" class="btn-icon" />
+          Monitores
+        </button>
+
+        <button
+          id="tab-playlist"
+          data-testid="tab-playlist"
+          type="button"
+          role="tab"
+          :aria-selected="activeMainViewTab === 'playlist'"
+          aria-controls="panel-playlist"
+          :tabindex="activeMainViewTab === 'playlist' ? 0 : -1"
+          class="app-tab-btn"
+          :class="activeMainViewTab === 'playlist'
+            ? 'app-tab-btn--active'
+            : 'app-tab-btn--inactive'"
+          @click="emit('update:activeMainViewTab', 'playlist')"
+        >
+          <QueueListIcon aria-hidden="true" class="btn-icon" />
+          Playlist
+        </button>
+      </div>
+    </div>
   </header>
 </template>

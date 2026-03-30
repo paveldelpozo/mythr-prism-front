@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { EyeIcon, EyeSlashIcon } from '@heroicons/vue/24/outline';
+import { EyeIcon, EyeSlashIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 import MonitorCard from './MonitorCard.vue';
 import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
 
@@ -8,10 +8,12 @@ defineProps<{
   states: MonitorStateMap;
   showOnlyProjectable: boolean;
   totalMonitors: number;
+  canCloseAllWindows: boolean;
 }>();
 
 const emit = defineEmits<{
   'update:showOnlyProjectable': [value: boolean];
+  closeAll: [];
   openWindow: [monitorId: string];
   closeWindow: [monitorId: string];
   requestFullscreen: [monitorId: string];
@@ -35,18 +37,32 @@ const emit = defineEmits<{
         </p>
       </div>
 
-      <button
-        type="button"
-        class="btn-with-icon btn-sm rounded-xl border px-4"
-        :class="showOnlyProjectable
-          ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'
-          : 'border-slate-500/40 bg-slate-700/30 text-slate-100 hover:bg-slate-700/45'"
-        @click="emit('update:showOnlyProjectable', !showOnlyProjectable)"
-      >
-        <EyeIcon v-if="showOnlyProjectable" aria-hidden="true" class="btn-icon" />
-        <EyeSlashIcon v-else aria-hidden="true" class="btn-icon" />
-        {{ showOnlyProjectable ? 'Ver todos' : 'Ver solo proyectables' }}
-      </button>
+      <div class="monitor-toolbar-actions">
+        <button
+          type="button"
+          class="btn-with-icon btn-sm rounded-xl border px-4"
+          :class="showOnlyProjectable
+            ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'
+            : 'border-slate-500/40 bg-slate-700/30 text-slate-100 hover:bg-slate-700/45'"
+          @click="emit('update:showOnlyProjectable', !showOnlyProjectable)"
+        >
+          <EyeIcon v-if="showOnlyProjectable" aria-hidden="true" class="btn-icon" />
+          <EyeSlashIcon v-else aria-hidden="true" class="btn-icon" />
+          {{ showOnlyProjectable ? 'Ver todos' : 'Ver solo proyectables' }}
+        </button>
+
+        <button
+          data-testid="monitorlist-close-all"
+          type="button"
+          class="btn-with-icon btn-sm btn-rose-soft"
+          :disabled="!canCloseAllWindows"
+          :aria-disabled="!canCloseAllWindows"
+          @click="emit('closeAll')"
+        >
+          <XMarkIcon aria-hidden="true" class="btn-icon" />
+          Cerrar todas las ventanas
+        </button>
+      </div>
     </div>
 
     <p

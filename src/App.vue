@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import {
-  ComputerDesktopIcon,
   MagnifyingGlassIcon,
-  QueueListIcon
 } from '@heroicons/vue/24/outline';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppHeader from './components/AppHeader.vue';
@@ -346,50 +344,10 @@ onBeforeUnmount(() => {
     <div class="app-bg-shape app-bg-shape--two" />
 
     <div class="app-shell-content">
-      <AppHeader :can-close-all-windows="canCloseAllWindows" @close-all="closeAllWindows" />
-
-      <section class="glass-panel p-2" aria-label="Navegacion principal">
-        <div
-          role="tablist"
-          aria-label="Secciones de trabajo"
-          class="app-tabs"
-        >
-          <button
-            id="tab-monitors"
-            data-testid="tab-monitors"
-            type="button"
-            role="tab"
-            :aria-selected="activeMainViewTab === 'monitors'"
-            aria-controls="panel-monitors"
-            :tabindex="activeMainViewTab === 'monitors' ? 0 : -1"
-            class="app-tab-btn"
-            :class="activeMainViewTab === 'monitors'
-              ? 'app-tab-btn--active'
-              : 'app-tab-btn--inactive'"
-            @click="activeMainViewTab = 'monitors'"
-          >
-            <ComputerDesktopIcon aria-hidden="true" class="btn-icon" />
-            Monitores
-          </button>
-          <button
-            id="tab-playlist"
-            data-testid="tab-playlist"
-            type="button"
-            role="tab"
-            :aria-selected="activeMainViewTab === 'playlist'"
-            aria-controls="panel-playlist"
-            :tabindex="activeMainViewTab === 'playlist' ? 0 : -1"
-            class="app-tab-btn"
-            :class="activeMainViewTab === 'playlist'
-              ? 'app-tab-btn--active'
-              : 'app-tab-btn--inactive'"
-            @click="activeMainViewTab = 'playlist'"
-          >
-            <QueueListIcon aria-hidden="true" class="btn-icon" />
-            Playlist
-          </button>
-        </div>
-      </section>
+      <AppHeader
+        :active-main-view-tab="activeMainViewTab"
+        @update:active-main-view-tab="activeMainViewTab = $event"
+      />
 
       <section
         id="panel-monitors"
@@ -435,7 +393,9 @@ onBeforeUnmount(() => {
           :states="monitorStates"
           :show-only-projectable="showOnlyProjectable"
           :total-monitors="monitors.length"
+          :can-close-all-windows="canCloseAllWindows"
           @update:show-only-projectable="showOnlyProjectable = $event"
+          @close-all="closeAllWindows"
           @open-window="openWindowForMonitor"
           @close-window="closeWindow"
           @request-fullscreen="requestFullscreen"
