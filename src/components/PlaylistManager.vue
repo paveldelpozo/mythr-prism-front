@@ -723,6 +723,15 @@ const onVideoMutedChange = (itemId: string, value: boolean) => {
   updateVideoMuted(itemId, value);
 };
 
+const onEditingVideoMutedChange = (value: boolean) => {
+  const item = editingItem.value;
+  if (!item || item.kind !== 'video') {
+    return;
+  }
+
+  onVideoMutedChange(item.id, value);
+};
+
 const onModalKeydown = (event: KeyboardEvent) => {
   if (event.key !== 'Escape') {
     return;
@@ -1492,7 +1501,7 @@ onBeforeUnmount(() => {
                 data-testid="edit-video-muted-checkbox"
                 :model-value="editingItem.muted"
                 label="Mute"
-                @update:model-value="(value) => onVideoMutedChange(editingItem.id, value)"
+                @update:model-value="onEditingVideoMutedChange"
               />
               <p data-testid="edit-video-muted-help" class="text-xs text-slate-400">
                 Silencia el audio durante el inicio para evitar sobresaltos.
