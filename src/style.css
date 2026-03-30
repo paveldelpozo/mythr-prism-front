@@ -19,6 +19,14 @@
 }
 
 @layer components {
+  .btn-with-icon {
+    @apply inline-flex items-center justify-center gap-2;
+  }
+
+  .btn-icon {
+    @apply h-4 w-4 shrink-0;
+  }
+
   .glass-panel {
     @apply rounded-2xl border border-slate-700/60 bg-slate-900/60 shadow-glow backdrop-blur;
   }
