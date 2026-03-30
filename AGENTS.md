@@ -19,6 +19,7 @@ Mythr Prism es un modulo del ecosistema Mythr para control y proyeccion de conte
 - `src/services/`: infraestructura (persistencia, html de slave, integraciones browser API).
 - `src/types/`: contratos de dominio y mensajes.
 - `src/utils/`: utilidades puras y acotadas.
+- `src/assets/`: recursos estaticos (styles, imagenes, fuentes y otros assets del runtime/UI).
 
 Regla: los componentes no deben acumular logica de orquestacion compleja si puede vivir en composables/services.
 
@@ -90,6 +91,13 @@ Todo entregable de agente debe incluir, de forma breve y verificable:
 - Composables: `useXxx` (`usePlaylistPlayback.ts`).
 - Tipos e interfaces: PascalCase (`PersistedSessionV1`, `MessageEnvelope`).
 - Constantes globales: UPPER_SNAKE_CASE (`SESSION_SCHEMA_VERSION`).
+
+### Estilos compartidos
+
+- Hoja global principal en `src/assets/styles/style.css`.
+- Mantener `@tailwind base/components/utilities` en esa hoja global.
+- Extraer patrones repetidos de utilidades a clases semanticas reutilizables (botones, modales, tabs, tarjetas, filas de formulario).
+- Evitar utilidades largas duplicadas en templates cuando ya exista clase compartida equivalente.
 
 ### Errores y logs
 

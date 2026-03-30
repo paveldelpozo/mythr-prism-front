@@ -7,6 +7,7 @@ Ultima actualizacion: 2026-03-30
 Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para proyeccion/control de contenido multi-monitor.
 
 Nota UX (2026-03-30): en Playlist se reforzo comportamiento operativo de modales con overlay fijo + bloqueo de scroll de fondo, y se aplico truncado visual de `source` largos (incluye data URI) manteniendo valor completo por `title`.
+Nota Mantenimiento (2026-03-30): se movio la hoja global a `src/assets/styles/style.css` y se extrajeron clases semanticas reutilizables (botones, modales, tabs, tarjetas y filas de formulario) para reducir utilidades Tailwind repetidas sin cambios funcionales.
 Nota Mantenimiento (2026-03-30): se corrigieron warnings de analisis estatico en `App.vue` y `PlaylistManager.vue` (checks `typeof` redundantes y jerarquia HTML invalida dentro de boton de thumbnail) sin cambios funcionales.
 Nota UX (2026-03-30): en los dialogos actuales de Playlist (preview/alta/edicion) se estandarizo boton de cierre en header (derecha, con `aria-label`), se elimino cierre redundante en footer de preview y se mantuvieron acciones de formulario (`Guardar/Cancelar`) sin duplicar cierre generico.
 Nota Bugfix (2026-03-30): los modales de Playlist (preview/alta/edicion) ahora se renderizan con `Teleport` a `body` para evitar desplazamientos del backdrop/dialogo causados por contextos de posicionamiento en contenedores con efectos visuales; se agregaron pruebas de regresion de anclaje a viewport.

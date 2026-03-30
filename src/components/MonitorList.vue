@@ -28,7 +28,7 @@ const emit = defineEmits<{
   <section class="space-y-4">
     <div class="glass-panel flex flex-wrap items-center justify-between gap-3 px-4 py-3">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300/85">Monitores disponibles</p>
+        <p class="section-kicker">Monitores disponibles</p>
         <p class="mt-1 text-sm text-slate-200/90">
           Mostrando {{ monitors.length }} de {{ totalMonitors }}
           {{ showOnlyProjectable ? '(solo proyectables)' : '(todos)' }}
@@ -37,7 +37,7 @@ const emit = defineEmits<{
 
       <button
         type="button"
-        class="btn-with-icon rounded-xl border px-4 py-2 text-xs font-semibold transition"
+        class="btn-with-icon btn-sm rounded-xl border px-4"
         :class="showOnlyProjectable
           ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'
           : 'border-slate-500/40 bg-slate-700/30 text-slate-100 hover:bg-slate-700/45'"
@@ -51,7 +51,7 @@ const emit = defineEmits<{
 
     <p
       v-if="showOnlyProjectable && monitors.length === 0"
-      class="glass-panel border-amber-300/35 bg-amber-900/20 p-4 text-sm text-amber-100"
+      class="app-alert app-alert--amber"
     >
       No hay monitores proyectables disponibles. La ventana principal esta ocupando el unico monitor detectado.
     </p>

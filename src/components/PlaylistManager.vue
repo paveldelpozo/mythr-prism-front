@@ -801,7 +801,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="glass-panel space-y-4 p-4">
     <header>
-      <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300/85">Playlist multimedia</p>
+      <p class="section-kicker">Playlist multimedia</p>
       <h2 class="mt-1 flex items-center gap-2 text-lg font-semibold text-slate-100">
         <QueueListIcon aria-hidden="true" class="btn-icon" />
         Alta, edicion y orden de items
@@ -809,15 +809,15 @@ onBeforeUnmount(() => {
       <p class="text-sm text-slate-300/90">Carga items por URL o data URI. El orden de la lista define la reproduccion.</p>
     </header>
 
-    <div class="rounded-xl border border-indigo-400/30 bg-indigo-950/20 p-3">
+    <div class="playlist-engine-card">
       <p class="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-indigo-200">Motor de reproduccion</p>
 
       <div class="grid gap-2 md:grid-cols-4">
-        <label class="text-xs text-slate-300 md:col-span-2">
+        <label class="form-field md:col-span-2">
           Monitor objetivo
           <select
             :value="playbackState.targetMonitorId ?? ''"
-            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100"
+            class="form-control"
             @change="onTargetMonitorChange"
           >
             <option value="">Seleccionar monitor...</option>
@@ -827,24 +827,24 @@ onBeforeUnmount(() => {
           </select>
         </label>
 
-        <label class="text-xs text-slate-300">
+        <label class="form-field">
           Item activo (indice)
           <input
             :value="playbackState.currentIndex"
             type="number"
             min="0"
-            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100"
+            class="form-control"
             @input="onCurrentIndexInput"
           />
         </label>
 
-        <label class="text-xs text-slate-300">
+        <label class="form-field">
           Intervalo auto (seg)
           <input
             :value="playbackState.intervalSeconds"
             type="number"
             min="1"
-            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100"
+            class="form-control"
             @input="onIntervalInput"
           />
         </label>
@@ -865,7 +865,7 @@ onBeforeUnmount(() => {
 
       <div
         data-testid="video-sync-strategy"
-        class="mt-3 rounded-lg border border-cyan-300/30 bg-cyan-950/20 px-3 py-2 text-xs text-cyan-100"
+        class="sync-info-card"
       >
         <p class="font-semibold uppercase tracking-[0.12em] text-cyan-200/90">Sync host + clientes</p>
         <p v-if="effectiveVideoSyncPlan.reason === 'ok'" class="mt-1 text-cyan-100/95">
@@ -886,7 +886,7 @@ onBeforeUnmount(() => {
       <div class="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
-          class="btn-with-icon rounded-lg border border-emerald-300/35 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25"
+          class="btn-with-icon btn-sm btn-emerald-soft border-emerald-300/35"
           @click="emit('playback:start')"
         >
           <PlayIcon aria-hidden="true" class="btn-icon" />
@@ -894,7 +894,7 @@ onBeforeUnmount(() => {
         </button>
         <button
           type="button"
-          class="btn-with-icon rounded-lg border border-slate-500/45 bg-slate-700/40 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-700/55 disabled:opacity-60"
+          class="btn-with-icon btn-sm btn-slate-soft"
           :disabled="!isPlaying || !playbackState.autoplay"
           @click="emit('playback:pause')"
         >
@@ -903,7 +903,7 @@ onBeforeUnmount(() => {
         </button>
         <button
           type="button"
-          class="btn-with-icon rounded-lg border border-slate-500/45 bg-slate-700/40 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-700/55"
+          class="btn-with-icon btn-sm btn-slate-soft"
           @click="emit('playback:previous')"
         >
           <BackwardIcon aria-hidden="true" class="btn-icon" />
@@ -911,7 +911,7 @@ onBeforeUnmount(() => {
         </button>
         <button
           type="button"
-          class="btn-with-icon rounded-lg border border-slate-500/45 bg-slate-700/40 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-700/55"
+          class="btn-with-icon btn-sm btn-slate-soft"
           @click="emit('playback:next')"
         >
           <ForwardIcon aria-hidden="true" class="btn-icon" />
@@ -919,7 +919,7 @@ onBeforeUnmount(() => {
         </button>
         <button
           type="button"
-          class="btn-with-icon rounded-lg border border-rose-300/35 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-100 hover:bg-rose-500/20"
+          class="btn-with-icon btn-sm btn-rose-soft"
           @click="emit('playback:stop')"
         >
           <StopIcon aria-hidden="true" class="btn-icon" />
@@ -932,15 +932,15 @@ onBeforeUnmount(() => {
       </p>
     </div>
 
-    <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700/70 bg-slate-950/40 p-3">
+    <div class="surface-panel-xl flex flex-wrap items-center justify-between gap-3">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Edicion avanzada</p>
+        <p class="section-kicker-muted">Edicion avanzada</p>
         <p class="text-sm text-slate-300/90">Agrega o edita items en un cuadro modal para mantener limpia la vista principal.</p>
       </div>
       <button
         data-testid="open-add-item-modal"
         type="button"
-        class="btn-with-icon rounded-lg border border-emerald-300/35 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25"
+        class="btn-with-icon btn-sm btn-emerald-soft border-emerald-300/35"
         @click="openAddModal"
       >
         <PlusIcon aria-hidden="true" class="btn-icon" />
@@ -949,14 +949,14 @@ onBeforeUnmount(() => {
     </div>
 
     <div
-      class="rounded-xl border border-slate-700/70 bg-gradient-to-br from-slate-900/85 to-slate-950/60 p-3"
+      class="playlist-queue-card"
     >
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300/85">Items en cola</p>
+          <p class="section-kicker">Items en cola</p>
           <p class="mt-1 text-sm text-slate-300/90">Arrastra un item para cambiar su posicion o usa Subir/Bajar como fallback.</p>
         </div>
-        <div class="rounded-lg border border-slate-600/70 bg-slate-900/70 px-2.5 py-1 text-xs text-slate-200">
+        <div class="playlist-count-pill">
           {{ items.length }} {{ items.length === 1 ? 'item' : 'items' }}
         </div>
       </div>
@@ -965,7 +965,7 @@ onBeforeUnmount(() => {
       </p>
     </div>
 
-    <div v-if="items.length === 0" class="rounded-xl border border-dashed border-slate-600/80 bg-slate-950/35 p-6 text-sm text-slate-300/90">
+    <div v-if="items.length === 0" class="empty-dashed-panel">
       La playlist esta vacia. Agrega el primer item para comenzar.
     </div>
 
@@ -975,13 +975,13 @@ onBeforeUnmount(() => {
         :key="item.id"
         :data-testid="`playlist-item-${item.id}`"
         :draggable="true"
-        class="rounded-xl border bg-slate-950/45 p-3 transition"
+        class="playlist-item-card"
         :class="[
           draggedItemId === item.id
-            ? 'border-emerald-300/70 opacity-70 shadow-[0_0_0_1px_rgba(16,185,129,0.45)]'
-            : 'border-slate-700/70',
+            ? 'playlist-item-card--dragging'
+            : '',
           dragOverItemId === item.id && draggedItemId !== item.id
-            ? 'ring-2 ring-emerald-300/65 ring-offset-0'
+            ? 'playlist-item-card--drag-over'
             : ''
         ]"
         @dragstart="onItemDragStart(item.id, $event)"
@@ -993,7 +993,7 @@ onBeforeUnmount(() => {
           <div class="flex items-center gap-2">
             <span
               aria-hidden="true"
-              class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-600/70 bg-slate-900/80 text-slate-300"
+              class="drag-handle"
               title="Arrastrar para reordenar"
             >
               <Bars3Icon class="h-4 w-4" />
@@ -1005,11 +1005,11 @@ onBeforeUnmount(() => {
 
           <div
             :data-testid="`playlist-item-actions-${item.id}`"
-            class="flex max-w-full flex-nowrap items-center justify-end gap-1.5 overflow-x-auto scroll-smooth"
+            class="playlist-actions-row flex flex-nowrap overflow-x-auto"
           >
             <button
               type="button"
-              class="btn-with-icon shrink-0 rounded-md border border-slate-600/60 px-2.5 py-1.5 text-xs text-slate-100 hover:bg-slate-700/60 disabled:opacity-50"
+              class="btn-item-action btn-item-action--neutral"
               :disabled="index === 0"
               @click="moveItem(item.id, 'up')"
             >
@@ -1018,7 +1018,7 @@ onBeforeUnmount(() => {
             </button>
             <button
               type="button"
-              class="btn-with-icon shrink-0 rounded-md border border-slate-600/60 px-2.5 py-1.5 text-xs text-slate-100 hover:bg-slate-700/60 disabled:opacity-50"
+              class="btn-item-action btn-item-action--neutral"
               :disabled="index === items.length - 1"
               @click="moveItem(item.id, 'down')"
             >
@@ -1028,7 +1028,7 @@ onBeforeUnmount(() => {
             <button
               :data-testid="`open-edit-item-modal-${item.id}`"
               type="button"
-              class="btn-with-icon shrink-0 rounded-md border border-indigo-300/30 bg-indigo-500/20 px-2.5 py-1.5 text-xs font-semibold text-indigo-100 hover:bg-indigo-500/30"
+              class="btn-item-action btn-item-action--indigo"
               @click="openEditModal(item.id)"
             >
               <PencilSquareIcon aria-hidden="true" class="btn-icon" />
@@ -1036,7 +1036,7 @@ onBeforeUnmount(() => {
             </button>
             <button
               type="button"
-              class="btn-with-icon shrink-0 rounded-md border border-rose-300/35 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-100 hover:bg-rose-500/20"
+              class="btn-item-action btn-item-action--rose"
               @click="removeItem(item.id)"
             >
               <TrashIcon aria-hidden="true" class="btn-icon" />
@@ -1049,7 +1049,7 @@ onBeforeUnmount(() => {
           <button
             :data-testid="`item-thumbnail-${item.id}`"
             type="button"
-            class="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 transition hover:border-slate-500/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/75"
+            class="playlist-thumbnail-btn"
             :aria-label="`Ampliar previsualizacion de ${item.name}`"
             @click="openPreviewModal(item.id)"
           >
@@ -1102,7 +1102,7 @@ onBeforeUnmount(() => {
       <div
         v-if="previewItem"
         data-testid="preview-item-modal-overlay"
-        class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4"
+        class="app-modal-overlay fixed inset-0 items-center justify-center"
         @click.self="closePreviewModal"
       >
         <div
@@ -1111,11 +1111,11 @@ onBeforeUnmount(() => {
           aria-modal="true"
           aria-labelledby="preview-item-modal-title"
           aria-describedby="preview-item-modal-description"
-          class="flex max-h-[calc(100vh-2rem)] w-full max-w-4xl max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl"
+          class="app-modal-panel flex max-h-[calc(100vh-2rem)] w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden max-w-4xl"
         >
           <header
             data-testid="preview-item-modal-header"
-            class="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-700/70 bg-slate-900/95 px-4 py-3"
+            class="app-modal-header sticky top-0"
           >
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Preview ampliada</p>
@@ -1127,7 +1127,7 @@ onBeforeUnmount(() => {
             <button
               data-testid="close-preview-item-modal-header"
               type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-600/70 text-slate-200 transition hover:bg-slate-800"
+              class="app-modal-close-btn"
               aria-label="Cerrar preview"
               @click="closePreviewModal"
             >
@@ -1135,7 +1135,7 @@ onBeforeUnmount(() => {
             </button>
           </header>
 
-          <div data-testid="preview-item-modal-body" class="min-h-0 flex-1 overflow-auto px-4 py-3">
+          <div data-testid="preview-item-modal-body" class="app-modal-body min-h-0 flex-1 overflow-auto">
             <div class="flex min-h-[18rem] items-center justify-center overflow-auto rounded-xl border border-slate-700/70 bg-slate-950/55 p-3">
               <img
                 v-if="previewThumbnail.status === 'ready' && previewThumbnail.source"
@@ -1169,7 +1169,7 @@ onBeforeUnmount(() => {
       <div
         v-if="isAddModalOpen"
         data-testid="add-item-modal-overlay"
-        class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4"
+        class="app-modal-overlay fixed inset-0 items-center justify-center"
         @click.self="closeAddModal"
       >
         <div
@@ -1177,11 +1177,11 @@ onBeforeUnmount(() => {
           role="dialog"
           aria-modal="true"
           aria-labelledby="add-item-modal-title"
-          class="flex max-h-[calc(100vh-2rem)] w-full max-w-2xl max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl"
+          class="app-modal-panel flex max-h-[calc(100vh-2rem)] w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden max-w-2xl"
         >
           <header
             data-testid="add-item-modal-header"
-            class="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-700/70 bg-slate-900/95 px-4 py-3"
+            class="app-modal-header sticky top-0"
           >
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Playlist multimedia</p>
@@ -1193,7 +1193,7 @@ onBeforeUnmount(() => {
             <button
               data-testid="close-add-item-modal-header"
               type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-600/70 text-slate-200 transition hover:bg-slate-800"
+              class="app-modal-close-btn"
               aria-label="Cerrar dialogo de alta"
               @click="closeAddModal"
             >
@@ -1201,24 +1201,24 @@ onBeforeUnmount(() => {
             </button>
           </header>
 
-        <div data-testid="add-item-modal-body" class="min-h-0 flex-1 overflow-auto px-4 py-3">
-          <div data-layout-group="primary" class="grid gap-2 md:grid-cols-2">
-          <label class="text-xs text-slate-300">
+        <div data-testid="add-item-modal-body" class="app-modal-body min-h-0 flex-1 overflow-auto">
+          <div data-layout-group="primary" class="form-row">
+          <label class="form-field">
             Titulo
             <input
               ref="addModalNameInput"
               v-model="newItemName"
               type="text"
               placeholder="Promo apertura"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100"
+              class="form-control"
             />
           </label>
 
-          <label class="text-xs text-slate-300">
+          <label class="form-field">
             Tipo
             <select
               v-model="newItemKind"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100"
+              class="form-control"
             >
               <option value="image">Imagen</option>
               <option value="video">Video</option>
@@ -1226,25 +1226,25 @@ onBeforeUnmount(() => {
           </label>
           </div>
 
-          <div data-layout-group="source" class="mt-2 grid gap-2 md:grid-cols-2">
-          <label class="text-xs text-slate-300">
+          <div data-layout-group="source" class="form-row mt-2">
+          <label class="form-field">
             Source (URL o data URI)
             <input
               v-model="newItemSource"
               type="text"
               placeholder="https://... o data:image/..."
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100"
+              class="form-control"
               @input="newImageFileFeedback = null"
             />
           </label>
 
-          <label class="text-xs text-slate-300">
+          <label class="form-field">
             Archivo local (imagen)
             <input
               type="file"
               accept="image/*"
               :disabled="newItemKind !== 'image'"
-              class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100 file:mr-2 file:rounded-md file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              class="form-file-control"
               @change="onNewImageFileChange"
             />
             <span v-if="newItemKind !== 'image'" class="mt-1 block text-[11px] text-slate-400">
@@ -1253,37 +1253,37 @@ onBeforeUnmount(() => {
           </label>
           </div>
 
-          <div data-layout-group="timing" class="mt-2 grid gap-2 md:grid-cols-3">
-          <label class="text-xs text-slate-300">
+          <div data-layout-group="timing" class="form-row--triple mt-2">
+          <label class="form-field">
             Duracion (ms)
             <input
               v-model.number="newImageDurationMs"
               type="number"
               min="1"
               :disabled="newItemKind !== 'image'"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              class="form-control"
             />
           </label>
 
-          <label class="text-xs text-slate-300">
+          <label class="form-field">
             Inicio (ms)
             <input
               v-model.number="newVideoStartAtMs"
               type="number"
               min="0"
               :disabled="newItemKind !== 'video'"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              class="form-control"
             />
           </label>
 
-          <label class="text-xs text-slate-300">
+          <label class="form-field">
             Fin (ms, opcional)
             <input
               v-model="newVideoEndAtMs"
               type="text"
               placeholder="vacio = hasta el final"
               :disabled="newItemKind !== 'video'"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              class="form-control"
             />
           </label>
           </div>
@@ -1295,7 +1295,7 @@ onBeforeUnmount(() => {
           <div
             v-if="newItemKind === 'video'"
             data-layout-group="mute"
-            class="mt-2 rounded-lg border border-slate-700/70 bg-slate-900/70 px-3 py-2"
+            class="form-inline-card"
           >
             <div class="flex flex-wrap items-center gap-2">
               <AppCheckbox v-model="newVideoMuted" data-testid="new-video-muted-checkbox" label="Iniciar en mute" />
@@ -1310,12 +1310,12 @@ onBeforeUnmount(() => {
 
         <footer
           data-testid="add-item-modal-footer"
-          class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-700/70 bg-slate-900/95 px-4 py-3"
+          class="app-modal-footer sticky bottom-0"
         >
           <button
             data-testid="cancel-add-item-modal"
             type="button"
-            class="btn-with-icon rounded-lg border border-slate-600/60 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-800"
+            class="btn-with-icon btn-sm btn-neutral"
             @click="closeAddModal"
           >
             <XMarkIcon aria-hidden="true" class="btn-icon" />
@@ -1324,7 +1324,7 @@ onBeforeUnmount(() => {
           <button
             data-testid="save-add-item-modal"
             type="button"
-            class="btn-with-icon rounded-lg border border-emerald-300/35 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25"
+            class="btn-with-icon btn-sm btn-emerald-soft border-emerald-300/35"
             @click="addItem"
           >
             <CheckIcon aria-hidden="true" class="btn-icon" />
@@ -1337,7 +1337,7 @@ onBeforeUnmount(() => {
       <div
         v-if="editingItem"
         data-testid="edit-item-modal-overlay"
-        class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4"
+        class="app-modal-overlay fixed inset-0 items-center justify-center"
         @click.self="cancelEditModal"
       >
         <div
@@ -1345,11 +1345,11 @@ onBeforeUnmount(() => {
           role="dialog"
           aria-modal="true"
           aria-labelledby="edit-item-modal-title"
-          class="flex max-h-[calc(100vh-2rem)] w-full max-w-2xl max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl"
+          class="app-modal-panel flex max-h-[calc(100vh-2rem)] w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden max-w-2xl"
         >
           <header
             data-testid="edit-item-modal-header"
-            class="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-700/70 bg-slate-900/95 px-4 py-3"
+            class="app-modal-header sticky top-0"
           >
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Playlist multimedia</p>
@@ -1361,7 +1361,7 @@ onBeforeUnmount(() => {
             <button
               data-testid="close-edit-item-modal-header"
               type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-600/70 text-slate-200 transition hover:bg-slate-800"
+              class="app-modal-close-btn"
               aria-label="Cerrar dialogo de edicion"
               @click="cancelEditModal"
             >
@@ -1369,24 +1369,24 @@ onBeforeUnmount(() => {
             </button>
           </header>
 
-        <div data-testid="edit-item-modal-body" class="min-h-0 flex-1 overflow-auto px-4 py-3">
-          <div data-layout-group="primary" class="grid gap-2 md:grid-cols-2">
-          <label class="text-xs text-slate-300">
+        <div data-testid="edit-item-modal-body" class="app-modal-body min-h-0 flex-1 overflow-auto">
+          <div data-layout-group="primary" class="form-row">
+          <label class="form-field">
             Titulo
             <input
               ref="editModalNameInput"
               :value="editingItem.name"
               type="text"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100"
+               class="form-control"
               @input="onItemNameInput(editingItem.id, $event)"
             />
           </label>
 
-          <label class="text-xs text-slate-300">
+          <label class="form-field">
             Tipo
             <select
               :value="editingItem.kind"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100"
+               class="form-control"
               @change="onItemKindChange(editingItem.id, $event)"
             >
               <option value="image">Imagen</option>
@@ -1395,24 +1395,24 @@ onBeforeUnmount(() => {
           </label>
           </div>
 
-          <div data-layout-group="source" class="mt-2 grid gap-2 md:grid-cols-2">
-          <label class="text-xs text-slate-300">
+          <div data-layout-group="source" class="form-row mt-2">
+          <label class="form-field">
             Source (URL o data URI)
             <input
               :value="editingItem.source"
               type="text"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100"
+               class="form-control"
               @input="onItemSourceInput(editingItem.id, $event)"
             />
           </label>
 
-          <label class="text-xs text-slate-300">
+          <label class="form-field">
             Archivo local (imagen)
             <input
               type="file"
               accept="image/*"
               :disabled="editingItem.kind !== 'image'"
-              class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100 file:mr-2 file:rounded-md file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+               class="form-file-control"
               @change="onItemImageFileChange(editingItem.id, $event)"
             />
             <span v-if="editingItem.kind !== 'image'" class="mt-1 block text-[11px] text-slate-400">
@@ -1425,15 +1425,15 @@ onBeforeUnmount(() => {
             {{ itemImageFileFeedback[editingItem.id] }}
           </p>
 
-          <div data-layout-group="timing" class="mt-2 grid gap-2 md:grid-cols-3">
-          <label class="text-xs text-slate-300">
+          <div data-layout-group="timing" class="form-row--triple mt-2">
+          <label class="form-field">
             Duracion (ms)
             <input
               v-if="editingItem.kind === 'image'"
               :value="editingItem.durationMs"
               type="number"
               min="1"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100"
+               class="form-control"
               @input="onImageDurationInput(editingItem.id, $event)"
             />
             <input
@@ -1441,18 +1441,18 @@ onBeforeUnmount(() => {
               type="number"
               min="1"
               disabled
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+               class="form-control"
             />
           </label>
 
-          <label class="text-xs text-slate-300">
+          <label class="form-field">
             Inicio (ms)
             <input
               v-if="editingItem.kind === 'video'"
               :value="editingItem.startAtMs"
               type="number"
               min="0"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100"
+               class="form-control"
               @input="onVideoStartInput(editingItem.id, $event)"
             />
             <input
@@ -1460,24 +1460,24 @@ onBeforeUnmount(() => {
               type="number"
               min="0"
               disabled
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+               class="form-control"
             />
           </label>
 
-          <label class="text-xs text-slate-300">
+          <label class="form-field">
             Fin (ms, opcional)
             <input
               v-if="editingItem.kind === 'video'"
               :value="editingItem.endAtMs ?? ''"
               type="text"
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100"
+               class="form-control"
               @input="onVideoEndInput(editingItem.id, $event)"
             />
             <input
               v-else
               type="text"
               disabled
-              class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+               class="form-control"
             />
           </label>
           </div>
@@ -1485,7 +1485,7 @@ onBeforeUnmount(() => {
           <div
             v-if="editingItem.kind === 'video'"
             data-layout-group="mute"
-            class="mt-2 rounded-lg border border-slate-700/70 bg-slate-900/70 px-3 py-2"
+            class="form-inline-card"
           >
             <div class="flex flex-wrap items-center gap-2">
               <AppCheckbox
@@ -1503,12 +1503,12 @@ onBeforeUnmount(() => {
 
         <footer
           data-testid="edit-item-modal-footer"
-          class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-700/70 bg-slate-900/95 px-4 py-3"
+          class="app-modal-footer sticky bottom-0"
         >
           <button
             data-testid="cancel-edit-item-modal"
             type="button"
-            class="btn-with-icon rounded-lg border border-slate-600/60 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-800"
+            class="btn-with-icon btn-sm btn-neutral"
             @click="cancelEditModal"
           >
             <XMarkIcon aria-hidden="true" class="btn-icon" />
@@ -1517,7 +1517,7 @@ onBeforeUnmount(() => {
           <button
             data-testid="save-edit-item-modal"
             type="button"
-            class="btn-with-icon rounded-lg border border-indigo-300/30 bg-indigo-500/20 px-3 py-2 text-xs font-semibold text-indigo-100 hover:bg-indigo-500/30"
+            class="btn-with-icon btn-sm btn-indigo-soft"
             @click="closeEditModal"
           >
             <CheckIcon aria-hidden="true" class="btn-icon" />

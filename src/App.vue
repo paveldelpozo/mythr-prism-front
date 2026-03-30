@@ -321,18 +321,18 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="relative min-h-screen overflow-hidden px-4 py-8 text-slate-100 md:px-8">
+  <main class="app-shell">
     <div class="app-bg-shape app-bg-shape--one" />
     <div class="app-bg-shape app-bg-shape--two" />
 
-    <div class="relative mx-auto max-w-7xl space-y-6">
+    <div class="app-shell-content">
       <AppHeader :can-close-all-windows="canCloseAllWindows" @close-all="closeAllWindows" />
 
       <section class="glass-panel p-2" aria-label="Navegacion principal">
         <div
           role="tablist"
           aria-label="Secciones de trabajo"
-          class="grid grid-cols-2 gap-2"
+          class="app-tabs"
         >
           <button
             id="tab-monitors"
@@ -342,10 +342,10 @@ onBeforeUnmount(() => {
             :aria-selected="activeMainViewTab === 'monitors'"
             aria-controls="panel-monitors"
             :tabindex="activeMainViewTab === 'monitors' ? 0 : -1"
-            class="btn-with-icon rounded-xl border px-4 py-2 text-sm font-semibold transition"
+            class="app-tab-btn"
             :class="activeMainViewTab === 'monitors'
-              ? 'border-indigo-300/50 bg-indigo-500/30 text-indigo-50 shadow-[0_0_0_1px_rgba(165,180,252,0.25)]'
-              : 'border-slate-400/25 bg-slate-900/35 text-slate-300 hover:border-slate-300/45 hover:text-slate-100'"
+              ? 'app-tab-btn--active'
+              : 'app-tab-btn--inactive'"
             @click="activeMainViewTab = 'monitors'"
           >
             <ComputerDesktopIcon aria-hidden="true" class="btn-icon" />
@@ -359,10 +359,10 @@ onBeforeUnmount(() => {
             :aria-selected="activeMainViewTab === 'playlist'"
             aria-controls="panel-playlist"
             :tabindex="activeMainViewTab === 'playlist' ? 0 : -1"
-            class="btn-with-icon rounded-xl border px-4 py-2 text-sm font-semibold transition"
+            class="app-tab-btn"
             :class="activeMainViewTab === 'playlist'
-              ? 'border-indigo-300/50 bg-indigo-500/30 text-indigo-50 shadow-[0_0_0_1px_rgba(165,180,252,0.25)]'
-              : 'border-slate-400/25 bg-slate-900/35 text-slate-300 hover:border-slate-300/45 hover:text-slate-100'"
+              ? 'app-tab-btn--active'
+              : 'app-tab-btn--inactive'"
             @click="activeMainViewTab = 'playlist'"
           >
             <QueueListIcon aria-hidden="true" class="btn-icon" />
@@ -381,7 +381,7 @@ onBeforeUnmount(() => {
       >
         <section
           v-if="!isWindowManagementSupported"
-          class="glass-panel border-rose-300/35 bg-rose-900/20 p-5 text-rose-100"
+          class="app-alert app-alert--rose p-5"
         >
           <p class="text-sm font-semibold">
             Este navegador no soporta Window Management API (`getScreenDetails`).
@@ -400,7 +400,7 @@ onBeforeUnmount(() => {
           </p>
           <button
             type="button"
-            class="btn-with-icon rounded-2xl border border-indigo-300/35 bg-indigo-500/25 px-8 py-4 text-sm font-bold tracking-wide text-indigo-50 transition hover:bg-indigo-500/35 disabled:cursor-not-allowed disabled:opacity-60"
+            class="btn-with-icon btn-lg border border-indigo-300/35 bg-indigo-500/25 text-indigo-50 hover:bg-indigo-500/35"
             :disabled="isLoadingMonitors"
             @click="loadMonitors"
           >
@@ -450,7 +450,7 @@ onBeforeUnmount(() => {
 
       <section
         v-if="globalError"
-        class="glass-panel border-amber-300/35 bg-amber-900/20 p-4 text-sm text-amber-100"
+        class="app-alert app-alert--amber"
       >
         {{ globalError }}
       </section>

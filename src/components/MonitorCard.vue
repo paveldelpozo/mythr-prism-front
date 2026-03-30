@@ -50,7 +50,7 @@ const emit = defineEmits<{
       </div>
     </header>
 
-    <div class="mb-4 rounded-xl border border-slate-700/70 bg-slate-950/40 p-3">
+    <div class="surface-panel-xl mb-4">
       <p class="text-xs text-slate-300/90">Estado ventana: {{ state.isWindowOpen ? 'Abierta' : 'Cerrada' }}</p>
       <p class="text-xs text-slate-300/90">Handshake: {{ state.isSlaveReady ? 'Conectado' : 'Pendiente' }}</p>
       <p class="text-xs text-slate-300/90">Fullscreen: {{ state.isFullscreen ? 'Activo' : 'No activo' }}</p>
@@ -63,7 +63,7 @@ const emit = defineEmits<{
     <button
       v-if="!state.isWindowOpen"
       type="button"
-      class="btn-with-icon mb-4 w-full rounded-xl border border-indigo-300/30 bg-indigo-500/20 px-4 py-3 font-semibold text-indigo-100 transition hover:bg-indigo-500/30"
+      class="btn-with-icon btn-md btn-indigo-soft mb-4 w-full border"
       @click="emit('openWindow', monitor.id)"
     >
       <ArrowTopRightOnSquareIcon aria-hidden="true" class="btn-icon" />
