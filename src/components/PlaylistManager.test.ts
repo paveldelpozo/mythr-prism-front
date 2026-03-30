@@ -1,9 +1,15 @@
-import { flushPromises, mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vitest';
+import { config, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import PlaylistManager from './PlaylistManager.vue';
+import * as videoThumbnailService from '../services/videoThumbnail';
 import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
 import type { MultimediaItem, PlaylistPlaybackState } from '../types/playlist';
 import type { VideoSyncPlan } from '../types/videoSync';
+
+config.global.stubs = {
+  ...(config.global.stubs ?? {}),
+  teleport: true
+};
 
 const createMonitor = (id: string, label: string): MonitorDescriptor => ({
   id,
@@ -138,7 +144,54 @@ const getLayoutGroupOrder = (wrapper: ReturnType<typeof mount>, modalTestId: str
     .findAll('[data-layout-group]')
     .map((group) => group.attributes('data-layout-group') ?? '');
 
+const expectModalViewportLayout = (
+  wrapper: ReturnType<typeof mount>,
+  ids: {
+    overlay: string;
+    modal: string;
+    header: string;
+    body: string;
+    footer?: string;
+  }
+) => {
+  const overlay = wrapper.get(`[data-testid="${ids.overlay}"]`);
+  expect(overlay.classes()).toContain('fixed');
+  expect(overlay.classes()).toContain('inset-0');
+  expect(overlay.classes()).toContain('items-center');
+  expect(overlay.classes()).toContain('justify-center');
+
+  const modal = wrapper.get(`[data-testid="${ids.modal}"]`);
+  expect(modal.classes()).toContain('flex');
+  expect(modal.classes()).toContain('flex-col');
+  expect(modal.classes()).toContain('overflow-hidden');
+  expect(modal.classes()).toContain('max-h-[calc(100vh-2rem)]');
+  expect(modal.classes()).toContain('max-w-[calc(100vw-2rem)]');
+
+  const header = wrapper.get(`[data-testid="${ids.header}"]`);
+  expect(header.classes()).toContain('sticky');
+  expect(header.classes()).toContain('top-0');
+
+  const body = wrapper.get(`[data-testid="${ids.body}"]`);
+  expect(body.classes()).toContain('min-h-0');
+  expect(body.classes()).toContain('overflow-auto');
+
+  if (!ids.footer) {
+    return;
+  }
+
+  const footer = wrapper.get(`[data-testid="${ids.footer}"]`);
+  expect(footer.classes()).toContain('sticky');
+  expect(footer.classes()).toContain('bottom-0');
+};
+
 describe('components/PlaylistManager', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+  });
+
   it('abre modal de alta y permite guardar item', async () => {
     const wrapper = mount(PlaylistManager, {
       props: {
@@ -152,6 +205,8 @@ describe('components/PlaylistManager', () => {
     });
 
     await openAddModal(wrapper);
+    const closeButton = wrapper.get('[data-testid="close-add-item-modal-header"]');
+    expect(closeButton.attributes('aria-label')).toBe('Cerrar dialogo de alta');
 
     await wrapper.get('input[placeholder="Promo apertura"]').setValue('Intro');
     await wrapper.get('input[placeholder="https://... o data:image/..."]').setValue('https://cdn/intro.png');
@@ -185,6 +240,24 @@ describe('components/PlaylistManager', () => {
 
     expect(wrapper.find('[data-testid="add-item-modal"]').exists()).toBe(false);
     expect(wrapper.emitted('update:items')).toBeUndefined();
+  });
+
+  it('cierra modal de alta con boton de cerrar en header', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await openAddModal(wrapper);
+    await wrapper.get('[data-testid="close-add-item-modal-header"]').trigger('click');
+
+    expect(wrapper.find('[data-testid="add-item-modal"]').exists()).toBe(false);
   });
 
   it('reordena items por drag and drop y muestra feedback', async () => {
@@ -251,10 +324,13 @@ describe('components/PlaylistManager', () => {
     });
 
     await openAddModal(wrapper);
-    const overlay = wrapper.get('[data-testid="add-item-modal-overlay"]');
-
-    expect(overlay.classes()).toContain('fixed');
-    expect(overlay.classes()).toContain('inset-0');
+    expectModalViewportLayout(wrapper, {
+      overlay: 'add-item-modal-overlay',
+      modal: 'add-item-modal',
+      header: 'add-item-modal-header',
+      body: 'add-item-modal-body',
+      footer: 'add-item-modal-footer'
+    });
     expect(document.body.style.overflow).toBe('hidden');
 
     await wrapper.get('[data-testid="cancel-add-item-modal"]').trigger('click');
@@ -368,15 +444,118 @@ describe('components/PlaylistManager', () => {
     });
 
     await wrapper.get('[data-testid="open-edit-item-modal-a"]').trigger('click');
-    const overlay = wrapper.get('[data-testid="edit-item-modal-overlay"]');
-
-    expect(overlay.classes()).toContain('fixed');
-    expect(overlay.classes()).toContain('inset-0');
+    expectModalViewportLayout(wrapper, {
+      overlay: 'edit-item-modal-overlay',
+      modal: 'edit-item-modal',
+      header: 'edit-item-modal-header',
+      body: 'edit-item-modal-body',
+      footer: 'edit-item-modal-footer'
+    });
     expect(document.body.style.overflow).toBe('hidden');
 
     await wrapper.get('[data-testid="cancel-edit-item-modal"]').trigger('click');
 
     expect(document.body.style.overflow).toBe(initialOverflow);
+  });
+
+  it('teleporta overlays de preview, alta y edicion al body para anclar viewport real', async () => {
+    const wrapper = mount(PlaylistManager, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: false
+        }
+      },
+      props: {
+        items: [createImage('a', 'A')],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await wrapper.get('[data-testid="item-thumbnail-a"]').trigger('click');
+    const previewOverlay = document.body.querySelector('[data-testid="preview-item-modal-overlay"]');
+    const previewModal = document.body.querySelector('[data-testid="preview-item-modal"]');
+    expect(previewOverlay).not.toBeNull();
+    expect(previewOverlay?.parentElement).toBe(document.body);
+    expect(previewModal).not.toBeNull();
+    expect(document.querySelector('.glass-panel [data-testid="preview-item-modal-overlay"]')).toBeNull();
+
+    const closePreviewButton = document.body.querySelector('[data-testid="close-preview-item-modal-header"]');
+    if (!(closePreviewButton instanceof HTMLButtonElement)) {
+      throw new Error('No se encontro boton de cierre de preview en contenido teletransportado.');
+    }
+    closePreviewButton.click();
+    await flushPromises();
+    await wrapper.get('[data-testid="open-add-item-modal"]').trigger('click');
+
+    const addOverlay = document.body.querySelector('[data-testid="add-item-modal-overlay"]');
+    const addModal = document.body.querySelector('[data-testid="add-item-modal"]');
+    expect(addOverlay).not.toBeNull();
+    expect(addOverlay?.parentElement).toBe(document.body);
+    expect(addModal).not.toBeNull();
+    expect(document.querySelector('.glass-panel [data-testid="add-item-modal-overlay"]')).toBeNull();
+
+    const cancelAddButton = document.body.querySelector('[data-testid="cancel-add-item-modal"]');
+    if (!(cancelAddButton instanceof HTMLButtonElement)) {
+      throw new Error('No se encontro boton cancelar en modal de alta teletransportado.');
+    }
+    cancelAddButton.click();
+    await flushPromises();
+    await wrapper.get('[data-testid="open-edit-item-modal-a"]').trigger('click');
+
+    const editOverlay = document.body.querySelector('[data-testid="edit-item-modal-overlay"]');
+    const editModal = document.body.querySelector('[data-testid="edit-item-modal"]');
+    expect(editOverlay).not.toBeNull();
+    expect(editOverlay?.parentElement).toBe(document.body);
+    expect(editModal).not.toBeNull();
+    expect(document.querySelector('.glass-panel [data-testid="edit-item-modal-overlay"]')).toBeNull();
+  });
+
+  it('mantiene overlay fijo/centrado aun con scroll del contenedor padre', async () => {
+    const wrapper = mount(PlaylistManager, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: false
+        }
+      },
+      props: {
+        items: [createImage('a', 'A')],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    const playlistPanel = document.querySelector('[data-testid="panel-playlist"]');
+    if (playlistPanel instanceof HTMLElement) {
+      playlistPanel.style.maxHeight = '180px';
+      playlistPanel.style.overflow = 'auto';
+      playlistPanel.scrollTop = 120;
+    }
+
+    await wrapper.get('[data-testid="open-add-item-modal"]').trigger('click');
+
+    const overlay = document.body.querySelector('[data-testid="add-item-modal-overlay"]');
+    const modal = document.body.querySelector('[data-testid="add-item-modal"]');
+
+    if (!(overlay instanceof HTMLElement) || !(modal instanceof HTMLElement)) {
+      throw new Error('No se encontraron overlay y modal teletransportados para validar viewport.');
+    }
+
+    expect(overlay.classList.contains('fixed')).toBe(true);
+    expect(overlay.classList.contains('inset-0')).toBe(true);
+    expect(overlay.classList.contains('items-center')).toBe(true);
+    expect(overlay.classList.contains('justify-center')).toBe(true);
+
+    expect(modal.classList.contains('max-h-[calc(100vh-2rem)]')).toBe(true);
+    expect(modal.classList.contains('max-w-[calc(100vw-2rem)]')).toBe(true);
   });
 
   it('trunca visualmente source largo y mantiene title con valor completo', async () => {
@@ -406,6 +585,192 @@ describe('components/PlaylistManager', () => {
     expect(sourcePreview.text().length).toBeLessThan(longSource.length);
     expect(sourcePreview.text()).toContain('...');
     expect(sourcePreview.text()).not.toBe(longSource);
+  });
+
+  it('renderiza thumbnail de imagen usando source del item', () => {
+    const item = createImage('img-thumb', 'Imagen con preview');
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [item],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    const thumbnail = wrapper.get('[data-testid="item-thumbnail-image-img-thumb"]');
+    expect(thumbnail.attributes('src')).toBe(item.source);
+  });
+
+  it('abre modal de preview ampliada al hacer click en thumbnail', async () => {
+    const item = createImage('img-preview', 'Imagen ampliada');
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [item],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await wrapper.get('[data-testid="item-thumbnail-img-preview"]').trigger('click');
+
+    const modal = wrapper.get('[data-testid="preview-item-modal"]');
+    expect(modal.attributes('role')).toBe('dialog');
+    expect(modal.attributes('aria-modal')).toBe('true');
+    expectModalViewportLayout(wrapper, {
+      overlay: 'preview-item-modal-overlay',
+      modal: 'preview-item-modal',
+      header: 'preview-item-modal-header',
+      body: 'preview-item-modal-body'
+    });
+    expect(wrapper.find('[data-testid="preview-item-modal-footer"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="close-preview-item-modal-header"]').attributes('aria-label')).toBe('Cerrar preview');
+    expect(modal.text()).toContain('Imagen ampliada');
+    expect(modal.text()).toContain('Tipo: Imagen');
+    expect(wrapper.get('[data-testid="preview-item-modal-image"]').attributes('src')).toBe(item.source);
+  });
+
+  it('permite cerrar modal de preview por boton, Escape y click fuera', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [createImage('img-close', 'Imagen cierre')],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await wrapper.get('[data-testid="item-thumbnail-img-close"]').trigger('click');
+    await wrapper.get('[data-testid="close-preview-item-modal-header"]').trigger('click');
+    expect(wrapper.find('[data-testid="preview-item-modal"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="item-thumbnail-img-close"]').trigger('click');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await flushPromises();
+    expect(wrapper.find('[data-testid="preview-item-modal"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="item-thumbnail-img-close"]').trigger('click');
+    await wrapper.get('[data-testid="preview-item-modal-overlay"]').trigger('click');
+    expect(wrapper.find('[data-testid="preview-item-modal"]').exists()).toBe(false);
+  });
+
+  it('genera thumbnail de video de forma asincrona cuando la captura es exitosa', async () => {
+    const captureSpy = vi
+      .spyOn(videoThumbnailService, 'captureVideoThumbnail')
+      .mockResolvedValueOnce('data:image/jpeg;base64,VIDEO_THUMB_OK');
+
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [createVideo('vid-thumb', 'Video con preview')],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    expect(wrapper.get('[data-testid="item-thumbnail-loading-vid-thumb"]').text()).toContain('Generando preview');
+
+    await flushPromises();
+
+    expect(captureSpy).toHaveBeenCalledTimes(1);
+    expect(wrapper.get('[data-testid="item-thumbnail-video-vid-thumb"]').attributes('src')).toContain(
+      'VIDEO_THUMB_OK'
+    );
+  });
+
+  it('muestra fallback cuando falla captura de thumbnail de video (cors/timeout/error)', async () => {
+    vi.spyOn(videoThumbnailService, 'captureVideoThumbnail').mockRejectedValueOnce(
+      new Error('video-thumbnail:canvas-tainted')
+    );
+
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [createVideo('vid-fallback', 'Video con fallback')],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await flushPromises();
+
+    const fallback = wrapper.get('[data-testid="item-thumbnail-fallback-vid-fallback"]');
+    expect(fallback.text()).toContain('Preview no disponible');
+  });
+
+  it('muestra fallback claro en modal cuando no hay thumbnail disponible', async () => {
+    vi.spyOn(videoThumbnailService, 'captureVideoThumbnail').mockRejectedValueOnce(
+      new Error('video-thumbnail:network-failure')
+    );
+
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [createVideo('vid-modal-fallback', 'Video sin preview')],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await flushPromises();
+    await wrapper.get('[data-testid="item-thumbnail-vid-modal-fallback"]').trigger('click');
+
+    const fallback = wrapper.get('[data-testid="preview-item-modal-fallback"]');
+    expect(fallback.text()).toContain('No hay thumbnail disponible para este item');
+    expect(fallback.text()).toContain('Preview no disponible');
+    expect(wrapper.get('[data-testid="preview-item-modal"]').text()).toContain('Tipo: Video');
+  });
+
+  it('mantiene acciones de editar/eliminar/reordenar operativas mientras se procesa thumbnail', async () => {
+    const neverEndingThumbnail = new Promise<string>(() => {});
+    vi.spyOn(videoThumbnailService, 'captureVideoThumbnail').mockReturnValue(neverEndingThumbnail);
+
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [createVideo('video-a', 'Video A'), createImage('image-b', 'Imagen B')],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    const dataTransfer = createMockDataTransfer();
+    await wrapper.get('[data-testid="playlist-item-video-a"]').trigger('dragstart', { dataTransfer });
+    await wrapper.get('[data-testid="playlist-item-image-b"]').trigger('drop', { dataTransfer });
+
+    await wrapper.get('[data-testid="open-edit-item-modal-video-a"]').trigger('click');
+    expect(wrapper.find('[data-testid="edit-item-modal"]').exists()).toBe(true);
+    await wrapper.get('[data-testid="cancel-edit-item-modal"]').trigger('click');
+
+    const actions = wrapper.get('[data-testid="playlist-item-actions-video-a"]').findAll('button');
+    const deleteButton = actions.find((button) => button.text() === 'Eliminar');
+    if (!deleteButton) {
+      throw new Error('No se encontro boton Eliminar para validar acciones con thumbnail en carga.');
+    }
+    await deleteButton.trigger('click');
+
+    const emissions = wrapper.emitted('update:items') ?? [];
+    expect(emissions.length).toBeGreaterThanOrEqual(2);
+    const reordered = emissions[0]?.[0] as MultimediaItem[];
+    const removed = emissions.at(-1)?.[0] as MultimediaItem[];
+
+    expect(reordered.map((item) => item.id)).toContain('video-a');
+    expect(removed.some((item) => item.id === 'video-a')).toBe(false);
   });
 
   it('mantiene acciones del item en linea con contenedor inline sin wrap', async () => {
@@ -636,5 +1001,45 @@ describe('components/PlaylistManager', () => {
     expect(timingRow.text()).toContain('Duracion (ms)');
     expect(timingRow.text()).toContain('Inicio (ms)');
     expect(timingRow.text()).toContain('Fin (ms, opcional)');
+  });
+
+  it('incluye boton de cerrar en header de edicion y mantiene guardar/cancelar operativos', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [createImage('edit-header', 'Edit Header')],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await wrapper.get('[data-testid="open-edit-item-modal-edit-header"]').trigger('click');
+    const closeButton = wrapper.get('[data-testid="close-edit-item-modal-header"]');
+    expect(closeButton.attributes('aria-label')).toBe('Cerrar dialogo de edicion');
+
+    await closeButton.trigger('click');
+    expect(wrapper.find('[data-testid="edit-item-modal"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="open-edit-item-modal-edit-header"]').trigger('click');
+    await wrapper.get('[data-testid="cancel-edit-item-modal"]').trigger('click');
+    expect(wrapper.find('[data-testid="edit-item-modal"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="open-edit-item-modal-edit-header"]').trigger('click');
+    const sourceInput = wrapper
+      .get('[data-testid="edit-item-modal"]')
+      .findAll('input')
+      .find((node) => (node.element as HTMLInputElement).type === 'text' && node.element instanceof HTMLInputElement);
+
+    if (!sourceInput) {
+      throw new Error('No se encontro input de source para validar guardado en edicion.');
+    }
+
+    await sourceInput.setValue('https://cdn/edit-header.png');
+    await wrapper.get('[data-testid="save-edit-item-modal"]').trigger('click');
+
+    const emissions = wrapper.emitted('update:items') ?? [];
+    expect(emissions.length).toBeGreaterThan(0);
   });
 });

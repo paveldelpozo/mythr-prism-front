@@ -4,7 +4,9 @@ import {
   ArrowUpIcon,
   Bars3Icon,
   CheckIcon,
+  ExclamationTriangleIcon,
   PencilSquareIcon,
+  PhotoIcon,
   PlusIcon,
   QueueListIcon,
   TrashIcon,
@@ -17,8 +19,9 @@ import {
   PlayIcon,
   StopIcon
 } from '@heroicons/vue/24/solid';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue';
 import AppCheckbox from './ui/AppCheckbox.vue';
+import { usePlaylistThumbnails } from '../composables/usePlaylistThumbnails';
 import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
 import type { MediaItemKind, MultimediaItem, PlaylistPlaybackState } from '../types/playlist';
 import { buildVideoSyncPlan, type VideoSyncPlan } from '../types/videoSync';
@@ -61,12 +64,14 @@ const itemImageFileFeedback = ref<Record<string, string>>({});
 const isAddModalOpen = ref(false);
 const editingItemId = ref<string | null>(null);
 const editingItemSnapshot = ref<MultimediaItem | null>(null);
+const previewItemId = ref<string | null>(null);
 const draggedItemId = ref<string | null>(null);
 const dragOverItemId = ref<string | null>(null);
 const reorderFeedback = ref<string>('Arrastra y suelta para reordenar en desktop.');
 const addModalNameInput = ref<HTMLInputElement | null>(null);
 const editModalNameInput = ref<HTMLInputElement | null>(null);
 const bodyScrollSnapshot = ref<{ overflow: string; paddingRight: string } | null>(null);
+const { getItemThumbnail } = usePlaylistThumbnails(toRef(props, 'items'));
 
 const editingItem = computed<MultimediaItem | null>(() => {
   if (!editingItemId.value) {
@@ -74,6 +79,34 @@ const editingItem = computed<MultimediaItem | null>(() => {
   }
 
   return props.items.find((item) => item.id === editingItemId.value) ?? null;
+});
+
+const previewItem = computed<MultimediaItem | null>(() => {
+  if (!previewItemId.value) {
+    return null;
+  }
+
+  return props.items.find((item) => item.id === previewItemId.value) ?? null;
+});
+
+const previewLabel = computed<string>(() => {
+  if (!previewItem.value) {
+    return '';
+  }
+
+  return previewItem.value.kind === 'image' ? 'Imagen' : 'Video';
+});
+
+const previewThumbnail = computed(() => {
+  if (!previewItem.value) {
+    return {
+      status: 'error',
+      source: null,
+      message: 'No hay item seleccionado para previsualizar.'
+    };
+  }
+
+  return getItemThumbnail(previewItem.value);
 });
 
 const createItemId = (): string => {
@@ -392,6 +425,19 @@ const closeEditModal = () => {
   editingItemSnapshot.value = null;
 };
 
+const openPreviewModal = (itemId: string) => {
+  const item = props.items.find((entry) => entry.id === itemId);
+  if (!item) {
+    return;
+  }
+
+  previewItemId.value = itemId;
+};
+
+const closePreviewModal = () => {
+  previewItemId.value = null;
+};
+
 const cancelEditModal = () => {
   if (editingItemId.value && editingItemSnapshot.value) {
     const snapshot = editingItemSnapshot.value;
@@ -683,6 +729,11 @@ const onModalKeydown = (event: KeyboardEvent) => {
     return;
   }
 
+  if (previewItemId.value) {
+    closePreviewModal();
+    return;
+  }
+
   if (editingItemId.value) {
     cancelEditModal();
     return;
@@ -714,7 +765,7 @@ watch(editingItemId, (itemId) => {
 });
 
 watch(
-  () => isAddModalOpen.value || Boolean(editingItemId.value),
+  () => isAddModalOpen.value || Boolean(editingItemId.value) || Boolean(previewItemId.value),
   (isAnyModalOpen) => {
     if (isAnyModalOpen) {
       lockBodyScroll();
@@ -730,6 +781,10 @@ watch(
   (itemIds) => {
     if (draggedItemId.value && !itemIds.includes(draggedItemId.value)) {
       clearDragState();
+    }
+
+    if (previewItemId.value && !itemIds.includes(previewItemId.value)) {
+      closePreviewModal();
     }
   }
 );
@@ -991,43 +1046,164 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <p class="text-sm font-medium text-slate-100">{{ item.name }}</p>
-        <p
-          :data-testid="`item-source-preview-${item.id}`"
-          :title="item.source"
-          class="mt-1 truncate text-xs text-slate-300/80"
-        >
-          {{ toSourcePreview(item.source) }}
-        </p>
-        <p v-if="item.kind === 'image'" class="mt-2 text-xs text-slate-300/85">Duracion: {{ item.durationMs }} ms</p>
-        <p v-else class="mt-2 text-xs text-slate-300/85">
-          Inicio: {{ item.startAtMs }} ms | Fin: {{ item.endAtMs ?? 'hasta final' }} | Mute: {{ item.muted ? 'si' : 'no' }}
-        </p>
+        <div class="mt-2 flex items-start gap-3">
+          <button
+            :data-testid="`item-thumbnail-${item.id}`"
+            type="button"
+            class="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 transition hover:border-slate-500/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/75"
+            :aria-label="`Ampliar previsualizacion de ${item.name}`"
+            @click="openPreviewModal(item.id)"
+          >
+            <img
+              v-if="getItemThumbnail(item).status === 'ready' && getItemThumbnail(item).source"
+              :data-testid="`item-thumbnail-${item.kind}-${item.id}`"
+              :src="getItemThumbnail(item).source ?? ''"
+              :alt="`Thumbnail de ${item.name}`"
+              class="h-full w-full object-cover"
+            />
+            <p
+              v-else-if="getItemThumbnail(item).status === 'loading'"
+              :data-testid="`item-thumbnail-loading-${item.id}`"
+              class="px-2 text-center text-[11px] text-slate-400"
+            >
+              {{ getItemThumbnail(item).message }}
+            </p>
+            <div
+              v-else
+              :data-testid="`item-thumbnail-fallback-${item.id}`"
+              class="flex flex-col items-center gap-1 px-2 text-center text-[11px] text-amber-200"
+            >
+              <ExclamationTriangleIcon aria-hidden="true" class="h-4 w-4" />
+              <span>{{ getItemThumbnail(item).message }}</span>
+            </div>
+          </button>
+
+          <div class="min-w-0 flex-1">
+            <p class="flex items-center gap-1.5 text-sm font-medium text-slate-100">
+              <PhotoIcon aria-hidden="true" class="h-4 w-4 text-slate-400" />
+              {{ item.name }}
+            </p>
+            <p
+              :data-testid="`item-source-preview-${item.id}`"
+              :title="item.source"
+              class="mt-1 truncate text-xs text-slate-300/80"
+            >
+              {{ toSourcePreview(item.source) }}
+            </p>
+            <p v-if="item.kind === 'image'" class="mt-2 text-xs text-slate-300/85">Duracion: {{ item.durationMs }} ms</p>
+            <p v-else class="mt-2 text-xs text-slate-300/85">
+              Inicio: {{ item.startAtMs }} ms | Fin: {{ item.endAtMs ?? 'hasta final' }} | Mute: {{ item.muted ? 'si' : 'no' }}
+            </p>
+          </div>
+        </div>
       </li>
     </ul>
 
-    <div
-      v-if="isAddModalOpen"
-      data-testid="add-item-modal-overlay"
-      class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4"
-      @click.self="closeAddModal"
-    >
+    <Teleport to="body">
       <div
-        data-testid="add-item-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="add-item-modal-title"
-        class="w-full max-w-2xl rounded-2xl border border-slate-700/70 bg-slate-900 p-4 shadow-2xl"
+        v-if="previewItem"
+        data-testid="preview-item-modal-overlay"
+        class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4"
+        @click.self="closePreviewModal"
       >
-        <header class="mb-3">
-          <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Playlist multimedia</p>
-          <h3 id="add-item-modal-title" class="mt-1 flex items-center gap-2 text-lg font-semibold text-slate-100">
-            <PlusIcon aria-hidden="true" class="btn-icon" />
-            Agregar item
-          </h3>
-        </header>
+        <div
+          data-testid="preview-item-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="preview-item-modal-title"
+          aria-describedby="preview-item-modal-description"
+          class="flex max-h-[calc(100vh-2rem)] w-full max-w-4xl max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl"
+        >
+          <header
+            data-testid="preview-item-modal-header"
+            class="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-700/70 bg-slate-900/95 px-4 py-3"
+          >
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Preview ampliada</p>
+              <h3 id="preview-item-modal-title" class="mt-1 text-lg font-semibold text-slate-100">
+                {{ previewItem.name }}
+              </h3>
+              <p id="preview-item-modal-description" class="mt-1 text-xs text-slate-300/85">Tipo: {{ previewLabel }}</p>
+            </div>
+            <button
+              data-testid="close-preview-item-modal-header"
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-600/70 text-slate-200 transition hover:bg-slate-800"
+              aria-label="Cerrar preview"
+              @click="closePreviewModal"
+            >
+              <XMarkIcon aria-hidden="true" class="h-4 w-4" />
+            </button>
+          </header>
 
-        <div data-layout-group="primary" class="grid gap-2 md:grid-cols-2">
+          <div data-testid="preview-item-modal-body" class="min-h-0 flex-1 overflow-auto px-4 py-3">
+            <div class="flex min-h-[18rem] items-center justify-center overflow-auto rounded-xl border border-slate-700/70 bg-slate-950/55 p-3">
+              <img
+                v-if="previewThumbnail.status === 'ready' && previewThumbnail.source"
+                data-testid="preview-item-modal-image"
+                :src="previewThumbnail.source"
+                :alt="`Preview ampliada de ${previewItem.name}`"
+                class="h-auto max-h-[65vh] w-full object-contain"
+              />
+              <p
+                v-else-if="previewThumbnail.status === 'loading'"
+                data-testid="preview-item-modal-loading"
+                class="text-center text-sm text-slate-300"
+              >
+                {{ previewThumbnail.message }}
+              </p>
+              <div
+                v-else
+                data-testid="preview-item-modal-fallback"
+                class="flex flex-col items-center gap-2 text-center text-sm text-amber-200"
+              >
+                <ExclamationTriangleIcon aria-hidden="true" class="h-5 w-5" />
+                <p class="font-semibold">No hay thumbnail disponible para este item.</p>
+                <p class="text-xs text-amber-100/90">{{ previewThumbnail.message }}</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div
+        v-if="isAddModalOpen"
+        data-testid="add-item-modal-overlay"
+        class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4"
+        @click.self="closeAddModal"
+      >
+        <div
+          data-testid="add-item-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-item-modal-title"
+          class="flex max-h-[calc(100vh-2rem)] w-full max-w-2xl max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl"
+        >
+          <header
+            data-testid="add-item-modal-header"
+            class="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-700/70 bg-slate-900/95 px-4 py-3"
+          >
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Playlist multimedia</p>
+              <h3 id="add-item-modal-title" class="mt-1 flex items-center gap-2 text-lg font-semibold text-slate-100">
+                <PlusIcon aria-hidden="true" class="btn-icon" />
+                Agregar item
+              </h3>
+            </div>
+            <button
+              data-testid="close-add-item-modal-header"
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-600/70 text-slate-200 transition hover:bg-slate-800"
+              aria-label="Cerrar dialogo de alta"
+              @click="closeAddModal"
+            >
+              <XMarkIcon aria-hidden="true" class="h-4 w-4" />
+            </button>
+          </header>
+
+        <div data-testid="add-item-modal-body" class="min-h-0 flex-1 overflow-auto px-4 py-3">
+          <div data-layout-group="primary" class="grid gap-2 md:grid-cols-2">
           <label class="text-xs text-slate-300">
             Titulo
             <input
@@ -1049,9 +1225,9 @@ onBeforeUnmount(() => {
               <option value="video">Video</option>
             </select>
           </label>
-        </div>
+          </div>
 
-        <div data-layout-group="source" class="mt-2 grid gap-2 md:grid-cols-2">
+          <div data-layout-group="source" class="mt-2 grid gap-2 md:grid-cols-2">
           <label class="text-xs text-slate-300">
             Source (URL o data URI)
             <input
@@ -1076,9 +1252,9 @@ onBeforeUnmount(() => {
               Disponible solo para items de imagen.
             </span>
           </label>
-        </div>
+          </div>
 
-        <div data-layout-group="timing" class="mt-2 grid gap-2 md:grid-cols-3">
+          <div data-layout-group="timing" class="mt-2 grid gap-2 md:grid-cols-3">
           <label class="text-xs text-slate-300">
             Duracion (ms)
             <input
@@ -1111,24 +1287,32 @@ onBeforeUnmount(() => {
               class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             />
           </label>
-        </div>
-
-        <p v-if="newImageFileFeedback && newItemKind === 'image'" class="mt-2 text-xs text-amber-200">
-          {{ newImageFileFeedback }}
-        </p>
-
-        <div v-if="newItemKind === 'video'" data-layout-group="mute" class="mt-2 rounded-lg border border-slate-700/70 bg-slate-900/70 px-3 py-2">
-          <div class="flex flex-wrap items-center gap-2">
-            <AppCheckbox v-model="newVideoMuted" data-testid="new-video-muted-checkbox" label="Iniciar en mute" />
-            <p data-testid="new-video-muted-help" class="text-xs text-slate-400">
-              Evita picos de audio al cargar el video en pantalla.
-            </p>
           </div>
+
+          <p v-if="newImageFileFeedback && newItemKind === 'image'" class="mt-2 text-xs text-amber-200">
+            {{ newImageFileFeedback }}
+          </p>
+
+          <div
+            v-if="newItemKind === 'video'"
+            data-layout-group="mute"
+            class="mt-2 rounded-lg border border-slate-700/70 bg-slate-900/70 px-3 py-2"
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <AppCheckbox v-model="newVideoMuted" data-testid="new-video-muted-checkbox" label="Iniciar en mute" />
+              <p data-testid="new-video-muted-help" class="text-xs text-slate-400">
+                Evita picos de audio al cargar el video en pantalla.
+              </p>
+            </div>
+          </div>
+
+          <p v-if="formError" class="mt-3 text-xs text-amber-200">{{ formError }}</p>
         </div>
 
-        <p v-if="formError" class="mt-3 text-xs text-amber-200">{{ formError }}</p>
-
-        <footer class="mt-4 flex justify-end gap-2">
+        <footer
+          data-testid="add-item-modal-footer"
+          class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-700/70 bg-slate-900/95 px-4 py-3"
+        >
           <button
             data-testid="cancel-add-item-modal"
             type="button"
@@ -1148,31 +1332,46 @@ onBeforeUnmount(() => {
             Guardar
           </button>
         </footer>
+        </div>
       </div>
-    </div>
 
-    <div
-      v-if="editingItem"
-      data-testid="edit-item-modal-overlay"
-      class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4"
-      @click.self="cancelEditModal"
-    >
       <div
-        data-testid="edit-item-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-item-modal-title"
-        class="w-full max-w-2xl rounded-2xl border border-slate-700/70 bg-slate-900 p-4 shadow-2xl"
+        v-if="editingItem"
+        data-testid="edit-item-modal-overlay"
+        class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4"
+        @click.self="cancelEditModal"
       >
-        <header class="mb-3">
-          <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Playlist multimedia</p>
-          <h3 id="edit-item-modal-title" class="mt-1 flex items-center gap-2 text-lg font-semibold text-slate-100">
-            <PencilSquareIcon aria-hidden="true" class="btn-icon" />
-            Editar item
-          </h3>
-        </header>
+        <div
+          data-testid="edit-item-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-item-modal-title"
+          class="flex max-h-[calc(100vh-2rem)] w-full max-w-2xl max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl"
+        >
+          <header
+            data-testid="edit-item-modal-header"
+            class="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-700/70 bg-slate-900/95 px-4 py-3"
+          >
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Playlist multimedia</p>
+              <h3 id="edit-item-modal-title" class="mt-1 flex items-center gap-2 text-lg font-semibold text-slate-100">
+                <PencilSquareIcon aria-hidden="true" class="btn-icon" />
+                Editar item
+              </h3>
+            </div>
+            <button
+              data-testid="close-edit-item-modal-header"
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-600/70 text-slate-200 transition hover:bg-slate-800"
+              aria-label="Cerrar dialogo de edicion"
+              @click="cancelEditModal"
+            >
+              <XMarkIcon aria-hidden="true" class="h-4 w-4" />
+            </button>
+          </header>
 
-        <div data-layout-group="primary" class="grid gap-2 md:grid-cols-2">
+        <div data-testid="edit-item-modal-body" class="min-h-0 flex-1 overflow-auto px-4 py-3">
+          <div data-layout-group="primary" class="grid gap-2 md:grid-cols-2">
           <label class="text-xs text-slate-300">
             Titulo
             <input
@@ -1195,9 +1394,9 @@ onBeforeUnmount(() => {
               <option value="video">Video</option>
             </select>
           </label>
-        </div>
+          </div>
 
-        <div data-layout-group="source" class="mt-2 grid gap-2 md:grid-cols-2">
+          <div data-layout-group="source" class="mt-2 grid gap-2 md:grid-cols-2">
           <label class="text-xs text-slate-300">
             Source (URL o data URI)
             <input
@@ -1221,13 +1420,13 @@ onBeforeUnmount(() => {
               Disponible solo para items de imagen.
             </span>
           </label>
-        </div>
+          </div>
 
-        <p v-if="editingItem.kind === 'image' && itemImageFileFeedback[editingItem.id]" class="mt-2 text-xs text-amber-200">
-          {{ itemImageFileFeedback[editingItem.id] }}
-        </p>
+          <p v-if="editingItem.kind === 'image' && itemImageFileFeedback[editingItem.id]" class="mt-2 text-xs text-amber-200">
+            {{ itemImageFileFeedback[editingItem.id] }}
+          </p>
 
-        <div data-layout-group="timing" class="mt-2 grid gap-2 md:grid-cols-3">
+          <div data-layout-group="timing" class="mt-2 grid gap-2 md:grid-cols-3">
           <label class="text-xs text-slate-300">
             Duracion (ms)
             <input
@@ -1282,27 +1481,31 @@ onBeforeUnmount(() => {
               class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             />
           </label>
-        </div>
+          </div>
 
-        <div
-          v-if="editingItem.kind === 'video'"
-          data-layout-group="mute"
-          class="mt-2 rounded-lg border border-slate-700/70 bg-slate-900/70 px-3 py-2"
-        >
-          <div class="flex flex-wrap items-center gap-2">
-            <AppCheckbox
-              data-testid="edit-video-muted-checkbox"
-              :model-value="editingItem.muted"
-              label="Mute"
-              @update:model-value="(value) => onVideoMutedChange(editingItem.id, value)"
-            />
-            <p data-testid="edit-video-muted-help" class="text-xs text-slate-400">
-              Silencia el audio durante el inicio para evitar sobresaltos.
-            </p>
+          <div
+            v-if="editingItem.kind === 'video'"
+            data-layout-group="mute"
+            class="mt-2 rounded-lg border border-slate-700/70 bg-slate-900/70 px-3 py-2"
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <AppCheckbox
+                data-testid="edit-video-muted-checkbox"
+                :model-value="editingItem.muted"
+                label="Mute"
+                @update:model-value="(value) => onVideoMutedChange(editingItem.id, value)"
+              />
+              <p data-testid="edit-video-muted-help" class="text-xs text-slate-400">
+                Silencia el audio durante el inicio para evitar sobresaltos.
+              </p>
+            </div>
           </div>
         </div>
 
-        <footer class="mt-4 flex justify-end gap-2">
+        <footer
+          data-testid="edit-item-modal-footer"
+          class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-700/70 bg-slate-900/95 px-4 py-3"
+        >
           <button
             data-testid="cancel-edit-item-modal"
             type="button"
@@ -1322,7 +1525,8 @@ onBeforeUnmount(() => {
             Guardar
           </button>
         </footer>
+        </div>
       </div>
-    </div>
+    </Teleport>
   </section>
 </template>
