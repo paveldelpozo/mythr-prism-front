@@ -109,6 +109,7 @@ Todo entregable de agente debe incluir, de forma breve y verificable:
 
 - Todo modal debe renderizarse en overlay fijo (`fixed/inset-0`) para no desplazarse con el contenido de fondo.
 - Convencion global obligatoria de modal: abrir centrado en viewport, no exceder limites visibles (`max-h`/`max-w` relativos a pantalla) y usar scroll interno cuando el contenido sea mayor al espacio disponible.
+- Para `max-width` de modales, usar variantes reutilizables en `style.css` (`app-modal-panel--sm/md/lg`) y evitar combinar `max-w-*` inline en el template cuando ya exista variante semantica.
 - Estructura base obligatoria en modales: `header` + `body` scrolleable + `footer` de acciones; `header` y `footer` deben permanecer visibles (`sticky top-0` / `sticky bottom-0`) mientras se desplaza el cuerpo.
 - Todo dialogo debe incluir boton/icono de cierre en el extremo derecho del `header`, con `aria-label` explicito y accion de cierre equivalente a `Escape`.
 - Evitar boton de "Cerrar" redundante en `footer`: usar acciones de contexto (`Guardar`/`Cancelar` cuando aplique) y dejar el cierre generico en el `header`.

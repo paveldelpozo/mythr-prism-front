@@ -149,6 +149,7 @@ const expectModalViewportLayout = (
   ids: {
     overlay: string;
     modal: string;
+    modalVariant: string;
     header: string;
     body: string;
     footer?: string;
@@ -161,11 +162,8 @@ const expectModalViewportLayout = (
   expect(overlay.classes()).toContain('justify-center');
 
   const modal = wrapper.get(`[data-testid="${ids.modal}"]`);
-  expect(modal.classes()).toContain('flex');
-  expect(modal.classes()).toContain('flex-col');
-  expect(modal.classes()).toContain('overflow-hidden');
-  expect(modal.classes()).toContain('max-h-[calc(100vh-2rem)]');
-  expect(modal.classes()).toContain('max-w-[calc(100vw-2rem)]');
+  expect(modal.classes()).toContain('app-modal-panel');
+  expect(modal.classes()).toContain(ids.modalVariant);
 
   const header = wrapper.get(`[data-testid="${ids.header}"]`);
   expect(header.classes()).toContain('sticky');
@@ -327,6 +325,7 @@ describe('components/PlaylistManager', () => {
     expectModalViewportLayout(wrapper, {
       overlay: 'add-item-modal-overlay',
       modal: 'add-item-modal',
+      modalVariant: 'app-modal-panel--md',
       header: 'add-item-modal-header',
       body: 'add-item-modal-body',
       footer: 'add-item-modal-footer'
@@ -447,6 +446,7 @@ describe('components/PlaylistManager', () => {
     expectModalViewportLayout(wrapper, {
       overlay: 'edit-item-modal-overlay',
       modal: 'edit-item-modal',
+      modalVariant: 'app-modal-panel--md',
       header: 'edit-item-modal-header',
       body: 'edit-item-modal-body',
       footer: 'edit-item-modal-footer'
@@ -554,8 +554,8 @@ describe('components/PlaylistManager', () => {
     expect(overlay.classList.contains('items-center')).toBe(true);
     expect(overlay.classList.contains('justify-center')).toBe(true);
 
-    expect(modal.classList.contains('max-h-[calc(100vh-2rem)]')).toBe(true);
-    expect(modal.classList.contains('max-w-[calc(100vw-2rem)]')).toBe(true);
+    expect(modal.classList.contains('app-modal-panel')).toBe(true);
+    expect(modal.classList.contains('app-modal-panel--md')).toBe(true);
   });
 
   it('trunca visualmente source largo y mantiene title con valor completo', async () => {
@@ -625,6 +625,7 @@ describe('components/PlaylistManager', () => {
     expectModalViewportLayout(wrapper, {
       overlay: 'preview-item-modal-overlay',
       modal: 'preview-item-modal',
+      modalVariant: 'app-modal-panel--lg',
       header: 'preview-item-modal-header',
       body: 'preview-item-modal-body'
     });

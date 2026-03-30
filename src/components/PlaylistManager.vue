@@ -1111,7 +1111,7 @@ onBeforeUnmount(() => {
           aria-modal="true"
           aria-labelledby="preview-item-modal-title"
           aria-describedby="preview-item-modal-description"
-          class="app-modal-panel flex max-h-[calc(100vh-2rem)] w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden max-w-4xl"
+          class="app-modal-panel app-modal-panel--lg"
         >
           <header
             data-testid="preview-item-modal-header"
@@ -1177,7 +1177,7 @@ onBeforeUnmount(() => {
           role="dialog"
           aria-modal="true"
           aria-labelledby="add-item-modal-title"
-          class="app-modal-panel flex max-h-[calc(100vh-2rem)] w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden max-w-2xl"
+          class="app-modal-panel app-modal-panel--md"
         >
           <header
             data-testid="add-item-modal-header"
@@ -1345,7 +1345,7 @@ onBeforeUnmount(() => {
           role="dialog"
           aria-modal="true"
           aria-labelledby="edit-item-modal-title"
-          class="app-modal-panel flex max-h-[calc(100vh-2rem)] w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden max-w-2xl"
+          class="app-modal-panel app-modal-panel--md"
         >
           <header
             data-testid="edit-item-modal-header"

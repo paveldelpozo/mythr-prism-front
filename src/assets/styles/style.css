@@ -231,7 +231,19 @@
   }
 
   .app-modal-panel {
-    @apply flex max-h-[calc(100vh-2rem)] w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl;
+    @apply flex max-h-[calc(100vh-2rem)] w-full flex-col overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl;
+  }
+
+  .app-modal-panel--sm {
+    max-width: min(calc(100vw - 2rem), 32rem);
+  }
+
+  .app-modal-panel--md {
+    max-width: min(calc(100vw - 2rem), 42rem);
+  }
+
+  .app-modal-panel--lg {
+    max-width: min(calc(100vw - 2rem), 56rem);
   }
 
   .app-modal-header {
