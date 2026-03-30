@@ -4,7 +4,7 @@ import type { MultimediaItem, PlaylistPlaybackState } from '../types/playlist';
 interface UsePlaylistPlaybackOptions {
   items: Ref<MultimediaItem[]>;
   playback: Ref<PlaylistPlaybackState>;
-  applyItemToMonitor: (monitorId: string, item: MultimediaItem | null) => void;
+  applyItemToMonitor: (monitorId: string, item: MultimediaItem | null) => boolean;
   isMonitorReady: (monitorId: string) => boolean;
 }
 
@@ -29,6 +29,21 @@ const normalizeIndex = (index: number, total: number): number => {
 
   const raw = index % total;
   return raw >= 0 ? raw : raw + total;
+};
+
+const resolveSelectedMonitorIds = (monitorIds: readonly string[]): string[] => {
+  const deduped = new Set<string>();
+
+  monitorIds.forEach((monitorId) => {
+    const trimmed = monitorId.trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+
+    deduped.add(trimmed);
+  });
+
+  return Array.from(deduped);
 };
 
 export const usePlaylistPlayback = ({
@@ -76,12 +91,14 @@ export const usePlaylistPlayback = ({
       return 'No hay items en la playlist.';
     }
 
-    if (!playback.value.targetMonitorId) {
-      return 'Selecciona un monitor objetivo para la playlist.';
+    const targetMonitorIds = resolveSelectedMonitorIds(playback.value.targetMonitorIds);
+    if (targetMonitorIds.length === 0) {
+      return 'Selecciona al menos un monitor objetivo para la playlist.';
     }
 
-    if (!isMonitorReady(playback.value.targetMonitorId)) {
-      return 'El monitor objetivo no tiene ventana activa. Abre una ventana antes de reproducir.';
+    const hasReadyMonitor = targetMonitorIds.some((monitorId) => isMonitorReady(monitorId));
+    if (!hasReadyMonitor) {
+      return 'Ningun monitor objetivo tiene ventana activa. Abre al menos una ventana antes de reproducir.';
     }
 
     return null;
@@ -94,15 +111,44 @@ export const usePlaylistPlayback = ({
       return false;
     }
 
-    const targetMonitorId = playback.value.targetMonitorId;
+    const targetMonitorIds = resolveSelectedMonitorIds(playback.value.targetMonitorIds);
     const item = activeItem.value;
-    if (!targetMonitorId || !item) {
+    if (targetMonitorIds.length === 0 || !item) {
       feedback.value = 'No se pudo resolver el item activo.';
       return false;
     }
 
-    applyItemToMonitor(targetMonitorId, item);
-    feedback.value = `Aplicando #${playback.value.currentIndex + 1}: ${item.name}`;
+    let appliedCount = 0;
+    const unavailableMonitorIds: string[] = [];
+    const failedMonitorIds: string[] = [];
+
+    targetMonitorIds.forEach((monitorId) => {
+      if (!isMonitorReady(monitorId)) {
+        unavailableMonitorIds.push(monitorId);
+        return;
+      }
+
+      const sent = applyItemToMonitor(monitorId, item);
+      if (!sent) {
+        failedMonitorIds.push(monitorId);
+        return;
+      }
+
+      appliedCount += 1;
+    });
+
+    if (appliedCount === 0) {
+      feedback.value = 'No se pudo aplicar el item activo en los monitores seleccionados.';
+      return false;
+    }
+
+    const warnings = unavailableMonitorIds.length + failedMonitorIds.length;
+    if (warnings > 0) {
+      feedback.value = `Aplicando #${playback.value.currentIndex + 1}: ${item.name} en ${appliedCount} destino(s). ${warnings} destino(s) no disponibles.`;
+      return true;
+    }
+
+    feedback.value = `Aplicando #${playback.value.currentIndex + 1}: ${item.name} en ${appliedCount} destino(s).`;
     return true;
   };
 
@@ -148,9 +194,9 @@ export const usePlaylistPlayback = ({
     isPlaying.value = false;
     clearTimer();
 
-    if (playback.value.targetMonitorId) {
-      applyItemToMonitor(playback.value.targetMonitorId, null);
-    }
+    resolveSelectedMonitorIds(playback.value.targetMonitorIds).forEach((monitorId) => {
+      applyItemToMonitor(monitorId, null);
+    });
 
     feedback.value = 'Reproduccion detenida.';
   };
@@ -210,21 +256,24 @@ export const usePlaylistPlayback = ({
   );
 
   watch(
-    () => playback.value.targetMonitorId,
-    (nextMonitorId) => {
-      if (!nextMonitorId) {
+    () => playback.value.targetMonitorIds,
+    (nextMonitorIds) => {
+      const targetMonitorIds = resolveSelectedMonitorIds(nextMonitorIds);
+      if (targetMonitorIds.length === 0) {
         if (isPlaying.value) {
           pause();
         }
-        feedback.value = 'Selecciona un monitor objetivo para comenzar.';
+        feedback.value = 'Selecciona al menos un monitor objetivo para comenzar.';
         return;
       }
 
-      if (isPlaying.value && !isMonitorReady(nextMonitorId)) {
+      const hasReadyMonitor = targetMonitorIds.some((monitorId) => isMonitorReady(monitorId));
+      if (isPlaying.value && !hasReadyMonitor) {
         pause();
-        feedback.value = 'El monitor objetivo no tiene ventana abierta.';
+        feedback.value = 'Ninguno de los monitores objetivo tiene ventana abierta.';
       }
-    }
+    },
+    { deep: true }
   );
 
   onBeforeUnmount(() => {

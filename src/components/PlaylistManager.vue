@@ -177,16 +177,48 @@ const updatePlaybackState = (patch: Partial<PlaylistPlaybackState>) => {
   });
 };
 
-const onTargetMonitorChange = (event: Event) => {
-  const value = (event.target as HTMLSelectElement).value;
-  const nextTargetMonitorId = value.length > 0 ? value : null;
+const selectedTargetMonitorIds = computed<string[]>(() => {
+  const deduped = new Set<string>();
 
-  if (nextTargetMonitorId === props.playbackState.targetMonitorId) {
+  props.playbackState.targetMonitorIds.forEach((monitorId) => {
+    const trimmed = monitorId.trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+
+    deduped.add(trimmed);
+  });
+
+  return Array.from(deduped);
+});
+
+const selectedTargetMonitorIdSet = computed(() => new Set(selectedTargetMonitorIds.value));
+
+const selectedMonitorReadyCount = computed(() =>
+  selectedTargetMonitorIds.value.filter((monitorId) => props.monitorStates[monitorId]?.isWindowOpen).length
+);
+
+const unavailableSelectedMonitorLabels = computed(() =>
+  selectedTargetMonitorIds.value
+    .filter((monitorId) => !props.monitorStates[monitorId]?.isWindowOpen)
+    .map((monitorId) => monitorLabelById(monitorId))
+);
+
+const onTargetMonitorToggle = (monitorId: string, selected: boolean) => {
+  const nextTargetMonitorIds = selected
+    ? [...selectedTargetMonitorIds.value, monitorId]
+    : selectedTargetMonitorIds.value.filter((id) => id !== monitorId);
+
+  const dedupedTargetMonitorIds = Array.from(new Set(nextTargetMonitorIds));
+  const prevSerialized = selectedTargetMonitorIds.value.join('|');
+  const nextSerialized = dedupedTargetMonitorIds.join('|');
+
+  if (prevSerialized === nextSerialized) {
     return;
   }
 
   updatePlaybackState({
-    targetMonitorId: nextTargetMonitorId
+    targetMonitorIds: dedupedTargetMonitorIds
   });
 };
 
@@ -208,15 +240,29 @@ const onAutoplayChange = (value: boolean) => {
   });
 };
 
-const selectedMonitorReady = (): boolean => {
-  const monitorId = props.playbackState.targetMonitorId;
-  if (!monitorId) {
-    return false;
+const monitorSelectionFeedback = computed(() => {
+  const selectedCount = selectedTargetMonitorIds.value.length;
+  const readyCount = selectedMonitorReadyCount.value;
+
+  if (selectedCount === 0) {
+    return {
+      tone: 'text-amber-200',
+      message: 'Selecciona uno o mas monitores para iniciar la reproduccion.'
+    };
   }
 
-  const monitorState = props.monitorStates[monitorId];
-  return Boolean(monitorState?.isWindowOpen);
-};
+  if (readyCount === 0) {
+    return {
+      tone: 'text-amber-200',
+      message: `Seleccionados ${selectedCount} destinos, pero ninguno tiene ventana abierta.`
+    };
+  }
+
+  return {
+    tone: 'text-emerald-200',
+    message: `Destinos activos: ${readyCount}/${selectedCount} con ventana abierta.`
+  };
+});
 
 const effectiveVideoSyncPlan = computed<VideoSyncPlan>(() => {
   if (props.videoSyncPlan) {
@@ -229,7 +275,7 @@ const effectiveVideoSyncPlan = computed<VideoSyncPlan>(() => {
 
   return buildVideoSyncPlan({
     openMonitorIds,
-    preferredHostMonitorId: props.playbackState.targetMonitorId
+    preferredHostMonitorId: selectedTargetMonitorIds.value[0] ?? null
   });
 });
 
@@ -822,19 +868,29 @@ onBeforeUnmount(() => {
       <p class="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-indigo-200">Motor de reproduccion</p>
 
       <div class="grid gap-2 md:grid-cols-4">
-        <label class="form-field md:col-span-2">
-          Monitor objetivo
-          <select
-            :value="playbackState.targetMonitorId ?? ''"
-            class="form-control"
-            @change="onTargetMonitorChange"
-          >
-            <option value="">Seleccionar monitor...</option>
-            <option v-for="monitor in monitors" :key="monitor.id" :value="monitor.id">
-              {{ monitor.label }} {{ monitorStates[monitor.id]?.isWindowOpen ? '(ventana abierta)' : '(sin ventana)' }}
-            </option>
-          </select>
-        </label>
+        <fieldset class="form-field md:col-span-2" data-testid="playlist-target-monitors">
+          <legend>Monitores objetivo</legend>
+          <div class="mt-2 space-y-2 rounded-xl border border-white/10 bg-slate-900/35 p-3">
+            <label
+              v-for="monitor in monitors"
+              :key="monitor.id"
+              class="flex items-center justify-between gap-3"
+            >
+              <AppCheckbox
+                :data-testid="`playlist-target-monitor-${monitor.id}`"
+                :model-value="selectedTargetMonitorIdSet.has(monitor.id)"
+                :label="monitor.label"
+                @update:model-value="(value) => onTargetMonitorToggle(monitor.id, value)"
+              />
+              <span
+                class="text-xs"
+                :class="monitorStates[monitor.id]?.isWindowOpen ? 'text-emerald-200' : 'text-amber-200'"
+              >
+                {{ monitorStates[monitor.id]?.isWindowOpen ? 'Ventana abierta' : 'Sin ventana' }}
+              </span>
+            </label>
+          </div>
+        </fieldset>
 
         <label class="form-field">
           Item activo (indice)
@@ -867,10 +923,22 @@ onBeforeUnmount(() => {
           @update:model-value="onAutoplayChange"
         />
 
-        <span class="text-xs" :class="selectedMonitorReady() ? 'text-emerald-200' : 'text-amber-200'">
-          {{ selectedMonitorReady() ? 'Monitor listo para reproducir.' : 'El monitor objetivo requiere ventana abierta.' }}
+        <span data-testid="playlist-target-status" class="text-xs" :class="monitorSelectionFeedback.tone">
+          {{ monitorSelectionFeedback.message }}
+        </span>
+
+        <span data-testid="playlist-target-summary" class="text-xs text-slate-300/90">
+          {{ selectedTargetMonitorIds.length }} destino(s) seleccionado(s)
         </span>
       </div>
+
+      <p
+        v-if="unavailableSelectedMonitorLabels.length > 0"
+        data-testid="playlist-target-warning"
+        class="mt-2 text-xs text-amber-200"
+      >
+        Advertencia: {{ unavailableSelectedMonitorLabels.join(', ') }} sin ventana disponible.
+      </p>
 
       <div
         data-testid="video-sync-strategy"

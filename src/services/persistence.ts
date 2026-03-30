@@ -54,7 +54,7 @@ const createDefaultSession = (): PersistedSessionV1 => ({
   monitors: {},
   playlist: [],
   playback: {
-    targetMonitorId: null,
+    targetMonitorIds: [],
     currentIndex: 0,
     autoplay: false,
     intervalSeconds: DEFAULT_PLAYBACK_INTERVAL_SECONDS
@@ -274,11 +274,38 @@ const sanitizePlaybackState = (
     playlistLength
   );
 
-  return {
-    targetMonitorId:
+  const sanitizeTargetMonitorIds = (): string[] => {
+    if (Array.isArray(value.targetMonitorIds)) {
+      const deduped = new Set<string>();
+
+      value.targetMonitorIds.forEach((monitorId) => {
+        if (typeof monitorId !== 'string') {
+          return;
+        }
+
+        const trimmed = monitorId.trim();
+        if (trimmed.length === 0) {
+          return;
+        }
+
+        deduped.add(trimmed);
+      });
+
+      if (deduped.size > 0) {
+        return Array.from(deduped);
+      }
+    }
+
+    const legacyTargetMonitorId =
       typeof value.targetMonitorId === 'string' && value.targetMonitorId.trim().length > 0
-        ? value.targetMonitorId
-        : null,
+        ? value.targetMonitorId.trim()
+        : null;
+
+    return legacyTargetMonitorId ? [legacyTargetMonitorId] : [];
+  };
+
+  return {
+    targetMonitorIds: sanitizeTargetMonitorIds(),
     currentIndex,
     autoplay:
       playlistLength > 0 && typeof value.autoplay === 'boolean' ? value.autoplay : fallback.autoplay,
@@ -296,6 +323,8 @@ const extractLegacyPlaybackState = (value: Record<string, unknown>): unknown => 
   }
 
   if (
+    'targetMonitorIds' in value
+    ||
     'targetMonitorId' in value
     || 'targetScreenId' in value
     || 'currentIndex' in value
@@ -303,6 +332,7 @@ const extractLegacyPlaybackState = (value: Record<string, unknown>): unknown => 
     || 'intervalSeconds' in value
   ) {
     return {
+      targetMonitorIds: value.targetMonitorIds,
       targetMonitorId: value.targetMonitorId ?? value.targetScreenId,
       currentIndex: value.currentIndex,
       autoplay: value.autoplay,

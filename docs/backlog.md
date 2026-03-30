@@ -36,7 +36,7 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 
 | Fase | Progreso |
 | --- | --- |
-| MVP | 42% |
+| MVP | 54% |
 | V1 | 0% |
 | V2 | 0% |
 
@@ -115,19 +115,21 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
     - [x] Definir placeholders para estados `loading`, `error`, `cors-blocked`.
     - [x] Limitar concurrencia/frecuencia para evitar picos de consumo.
 
-- [ ] **Playlist multi-destino (una playlist en multiples pantallas)**
+- [x] **Playlist multi-destino (una playlist en multiples pantallas)**
   - Prioridad: `P6`.
+  - Estado: `completed`.
   - Objetivo: permitir asignar una misma playlist a mas de una salida externa de forma simultanea y controlada.
   - Dependencias/riesgos: depende de contrato de comandos master-slave y modelo de playback; riesgo de conflictos de estado (play/pause/seek) entre destinos.
   - Criterio de aceptacion: operador puede asignar N monitores a una playlist y ejecutar controles coherentes por grupo sin romper flujo de monitor unico.
   - DoD: modelo de estado soporta multi-destino serializable, comandos tipados por grupo y validacion de regresion en modo monitor unico.
   - Subtareas:
-    - [ ] Redefinir modelo de asignacion playlist->monitor para soportar 1:N.
-    - [ ] Definir estrategia de comandos (broadcast por grupo + ack/errores por monitor).
-    - [ ] Adaptar UI para seleccionar multiples destinos con feedback claro.
-    - [ ] Definir pruebas de sincronizacion basica y manejo de fallos parciales.
+    - [x] Redefinir modelo de asignacion playlist->monitor para soportar 1:N.
+    - [x] Definir estrategia de comandos (broadcast por grupo + ack/errores por monitor).
+    - [x] Adaptar UI para seleccionar multiples destinos con feedback claro.
+    - [x] Definir pruebas de sincronizacion basica y manejo de fallos parciales.
 
 - [ ] **Video sincronizado**
+  - Estado: `in-progress`.
   - Dependencias: playlist multimedia, reloj/timestamp compartido.
   - Hecho: multiples monitores reproducen el mismo video con desfase maximo aceptable.
   - Subtareas:

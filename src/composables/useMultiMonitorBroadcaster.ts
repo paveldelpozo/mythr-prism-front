@@ -511,16 +511,18 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     }
   };
 
-  const setPlaylistItemForMonitor = (monitorId: string, item: MultimediaItem | null) => {
+  const setPlaylistItemForMonitor = (monitorId: string, item: MultimediaItem | null): boolean => {
     const state = getMonitorState(monitorId);
     state.activeMediaItem = item;
 
     const message = buildMasterMessage(monitorId, 'SET_MEDIA', {
       item
     });
-    if (message) {
-      sendToSlave(monitorId, message);
+    if (!message) {
+      return false;
     }
+
+    return sendToSlave(monitorId, message);
   };
 
   const requestFullscreen = (monitorId: string) => {

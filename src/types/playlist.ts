@@ -24,7 +24,7 @@ export interface VideoMultimediaItem extends MultimediaItemBase {
 export type MultimediaItem = ImageMultimediaItem | VideoMultimediaItem;
 
 export interface PlaylistPlaybackState {
-  targetMonitorId: string | null;
+  targetMonitorIds: string[];
   currentIndex: number;
   autoplay: boolean;
   intervalSeconds: number;

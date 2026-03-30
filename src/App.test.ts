@@ -99,7 +99,7 @@ vi.mock('./services/persistence', () => ({
     monitors: {},
     playlist: [],
     playback: {
-      targetMonitorId: null,
+      targetMonitorIds: [],
       currentIndex: 0,
       autoplay: false,
       intervalSeconds: 5
@@ -118,7 +118,7 @@ const PlaylistManagerStub = defineComponent({
   props: {
     monitors: { type: Array as PropType<Array<{ id: string }>>, required: true },
     playbackState: {
-      type: Object as PropType<{ targetMonitorId: string | null; [key: string]: unknown }>,
+      type: Object as PropType<{ targetMonitorIds: string[]; [key: string]: unknown }>,
       required: true
     }
   },
@@ -126,10 +126,10 @@ const PlaylistManagerStub = defineComponent({
   template: `
     <div>
       <p data-testid="playlist-visible-monitors">{{ monitors.length }}</p>
-      <p data-testid="playlist-target">{{ playbackState.targetMonitorId ?? 'null' }}</p>
+      <p data-testid="playlist-target">{{ playbackState.targetMonitorIds.length > 0 ? playbackState.targetMonitorIds.join(',') : 'null' }}</p>
       <button
         data-testid="set-invalid-target"
-        @click="$emit('update:playbackState', { ...playbackState, targetMonitorId: 'missing-monitor' })"
+        @click="$emit('update:playbackState', { ...playbackState, targetMonitorIds: ['missing-monitor'] })"
       >
         invalid
       </button>

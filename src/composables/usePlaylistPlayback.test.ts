@@ -13,11 +13,17 @@ interface HarnessResult {
 
 const createHarness = (
   seedItems: MultimediaItem[],
-  seedPlayback?: Partial<PlaylistPlaybackState>
+  seedPlayback?: Partial<PlaylistPlaybackState>,
+  options?: {
+    readyMonitorIds?: string[];
+    failMonitorIds?: string[];
+  }
 ): HarnessResult => {
   const items = ref<MultimediaItem[]>(seedItems);
+  const readyMonitorIdSet = new Set(options?.readyMonitorIds ?? ['m1']);
+  const failMonitorIdSet = new Set(options?.failMonitorIds ?? []);
   const playback = ref<PlaylistPlaybackState>({
-    targetMonitorId: 'm1',
+    targetMonitorIds: ['m1'],
     currentIndex: 0,
     autoplay: false,
     intervalSeconds: 5,
@@ -33,8 +39,9 @@ const createHarness = (
         playback,
         applyItemToMonitor: (monitorId, item) => {
           applied.push({ monitorId, item });
+          return !failMonitorIdSet.has(monitorId);
         },
-        isMonitorReady: () => true
+        isMonitorReady: (monitorId) => readyMonitorIdSet.has(monitorId)
       });
 
       return () => null;
@@ -80,7 +87,43 @@ describe('composables/usePlaylistPlayback', () => {
     api.stop();
 
     expect(api.isPlaying.value).toBe(false);
-    expect(applied.at(-1)).toEqual({ monitorId: playback.value.targetMonitorId, item: null });
+    expect(applied.at(-1)).toEqual({ monitorId: playback.value.targetMonitorIds[0], item: null });
+  });
+
+  it('aplica item activo a multiples destinos seleccionados', () => {
+    const { api, applied } = createHarness(
+      [imageItem('a')],
+      { targetMonitorIds: ['m1', 'm2'] },
+      { readyMonitorIds: ['m1', 'm2'] }
+    );
+
+    api.start();
+
+    const appliedToItem = applied.filter((entry) => entry.item?.id === 'a');
+    expect(appliedToItem).toEqual([
+      { monitorId: 'm1', item: imageItem('a') },
+      { monitorId: 'm2', item: imageItem('a') }
+    ]);
+    expect(api.feedback.value).toContain('2 destino(s)');
+  });
+
+  it('degrada de forma elegante ante destinos no disponibles', () => {
+    const { api, applied } = createHarness(
+      [imageItem('a')],
+      { targetMonitorIds: ['m1', 'm2', 'm3'] },
+      {
+        readyMonitorIds: ['m1', 'm2'],
+        failMonitorIds: ['m2']
+      }
+    );
+
+    api.start();
+
+    expect(api.isPlaying.value).toBe(true);
+    expect(applied.some((entry) => entry.monitorId === 'm1' && entry.item?.id === 'a')).toBe(true);
+    expect(applied.some((entry) => entry.monitorId === 'm2' && entry.item?.id === 'a')).toBe(true);
+    expect(applied.some((entry) => entry.monitorId === 'm3')).toBe(false);
+    expect(api.feedback.value).toContain('no disponibles');
   });
 
   it('programa autoplay timer y avanza automaticamente', () => {

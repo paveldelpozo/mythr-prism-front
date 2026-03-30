@@ -28,7 +28,7 @@ const createMonitor = (id: string, label: string): MonitorDescriptor => ({
 });
 
 const createPlaybackState = (overrides?: Partial<PlaylistPlaybackState>): PlaylistPlaybackState => ({
-  targetMonitorId: null,
+  targetMonitorIds: [],
   currentIndex: 0,
   autoplay: false,
   intervalSeconds: 5,
@@ -828,29 +828,55 @@ describe('components/PlaylistManager', () => {
     expect(payload[0]?.source.startsWith('data:image/png;base64,')).toBe(true);
   });
 
-  it('emite target monitor correcto y evita emisiones redundantes', async () => {
+  it('permite seleccion multi-destino y evita emisiones redundantes', async () => {
     const wrapper = mount(PlaylistManager, {
       props: {
         items: [],
         monitors: [createMonitor('m1', 'Monitor 1'), createMonitor('m2', 'Monitor 2')],
         monitorStates: createMonitorStates(),
-        playbackState: createPlaybackState({ targetMonitorId: null }),
+        playbackState: createPlaybackState({ targetMonitorIds: [] }),
         playbackFeedback: '',
         isPlaying: false
       }
     });
 
-    const select = wrapper.get('select');
-    await select.setValue('m1');
+    const targetM1 = wrapper.get('[data-testid="playlist-target-monitor-m1"]');
+    (targetM1.element as HTMLInputElement).checked = true;
+    await targetM1.trigger('change');
 
     const emissions = wrapper.emitted('update:playbackState') ?? [];
     expect(emissions).toHaveLength(1);
-    expect((emissions[0]?.[0] as PlaylistPlaybackState).targetMonitorId).toBe('m1');
+    expect((emissions[0]?.[0] as PlaylistPlaybackState).targetMonitorIds).toEqual(['m1']);
 
-    await wrapper.setProps({ playbackState: createPlaybackState({ targetMonitorId: 'm1' }) });
-    await select.setValue('m1');
+    await wrapper.setProps({ playbackState: createPlaybackState({ targetMonitorIds: ['m1'] }) });
+    (targetM1.element as HTMLInputElement).checked = true;
+    await targetM1.trigger('change');
 
     expect(wrapper.emitted('update:playbackState')).toHaveLength(1);
+
+    const targetM2 = wrapper.get('[data-testid="playlist-target-monitor-m2"]');
+    (targetM2.element as HTMLInputElement).checked = true;
+    await targetM2.trigger('change');
+
+    const latestPlayback = wrapper.emitted('update:playbackState')?.at(-1)?.[0] as PlaylistPlaybackState;
+    expect(latestPlayback.targetMonitorIds).toEqual(['m1', 'm2']);
+    expect(wrapper.get('[data-testid="playlist-target-summary"]').text()).toContain('1 destino(s)');
+  });
+
+  it('muestra feedback operativo de destinos activos y advertencias', () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [],
+        monitors: [createMonitor('m1', 'Monitor 1'), createMonitor('m2', 'Monitor 2')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState({ targetMonitorIds: ['m1', 'm2'] }),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    expect(wrapper.get('[data-testid="playlist-target-status"]').text()).toContain('Destinos activos: 1/2');
+    expect(wrapper.get('[data-testid="playlist-target-warning"]').text()).toContain('Monitor 2');
   });
 
   it('usa textos limpios en botones que abren modales', async () => {
@@ -876,7 +902,7 @@ describe('components/PlaylistManager', () => {
         items: [createImage('a', 'A')],
         monitors: [createMonitor('m1', 'Monitor 1'), createMonitor('m2', 'Monitor 2')],
         monitorStates: createMonitorStates(),
-        playbackState: createPlaybackState({ targetMonitorId: 'm1' }),
+        playbackState: createPlaybackState({ targetMonitorIds: ['m1'] }),
         videoSyncPlan: createVideoSyncPlan(),
         playbackFeedback: '',
         isPlaying: false

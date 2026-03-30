@@ -38,11 +38,27 @@ const clampPlaylistIndex = (index: number, total: number): number => {
   return index;
 };
 
+const sanitizeTargetMonitorIds = (monitorIds: readonly string[]): string[] => {
+  const deduped = new Set<string>();
+
+  monitorIds.forEach((monitorId) => {
+    const trimmed = monitorId.trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+
+    deduped.add(trimmed);
+  });
+
+  return Array.from(deduped);
+};
+
 const normalizePlaybackByPlaylist = (
   playback: PlaylistPlaybackState,
   playlistLength: number
 ): PlaylistPlaybackState => ({
   ...playback,
+  targetMonitorIds: sanitizeTargetMonitorIds(playback.targetMonitorIds),
   currentIndex: clampPlaylistIndex(playback.currentIndex, playlistLength),
   autoplay: playlistLength > 0 ? playback.autoplay : false
 });
@@ -182,7 +198,7 @@ const buildSessionSnapshot = (): PersistedSessionV1 => ({
   monitors: buildPersistableMonitorStateMap(),
   playlist: buildPersistablePlaylist(),
   playback: {
-    targetMonitorId: playlistPlaybackState.value.targetMonitorId,
+    targetMonitorIds: sanitizeTargetMonitorIds(playlistPlaybackState.value.targetMonitorIds),
     currentIndex: Math.max(0, Math.round(playlistPlaybackState.value.currentIndex)),
     autoplay: playlistPlaybackState.value.autoplay,
     intervalSeconds: Math.max(1, Math.round(playlistPlaybackState.value.intervalSeconds))
@@ -199,14 +215,13 @@ const visibleMonitors = computed(() => {
 
 const knownMonitorIds = computed(() => new Set(monitors.value.map((monitor) => monitor.id)));
 
-const isTargetMonitorWindowOpen = computed(() => {
-  const targetMonitorId = playlistPlaybackState.value.targetMonitorId;
-  if (!targetMonitorId) {
-    return false;
-  }
+const selectedTargetMonitorIds = computed(() =>
+  sanitizeTargetMonitorIds(playlistPlaybackState.value.targetMonitorIds)
+);
 
-  return Boolean(monitorStates[targetMonitorId]?.isWindowOpen);
-});
+const hasAnyTargetMonitorWindowOpen = computed(() =>
+  selectedTargetMonitorIds.value.some((monitorId) => Boolean(monitorStates[monitorId]?.isWindowOpen))
+);
 
 const openSlaveWindowsCount = computed(() =>
   Object.values(monitorStates).reduce(
@@ -226,7 +241,7 @@ const openSlaveMonitorIds = computed(() =>
 const videoSyncPlan = computed(() =>
   buildVideoSyncPlan({
     openMonitorIds: openSlaveMonitorIds.value,
-    preferredHostMonitorId: playlistPlaybackState.value.targetMonitorId
+    preferredHostMonitorId: selectedTargetMonitorIds.value[0] ?? null
   })
 );
 
@@ -276,23 +291,28 @@ watch(
 );
 
 watch(
-  [() => playlistPlaybackState.value.targetMonitorId, hasDetectedMonitors, knownMonitorIds],
-  ([targetMonitorId, monitorsDetected, monitorIds]) => {
-    if (!targetMonitorId || !monitorsDetected || monitorIds.has(targetMonitorId)) {
+  [selectedTargetMonitorIds, hasDetectedMonitors, knownMonitorIds],
+  ([targetMonitorIds, monitorsDetected, monitorIds]) => {
+    if (!monitorsDetected) {
+      return;
+    }
+
+    const validMonitorIds = targetMonitorIds.filter((monitorId) => monitorIds.has(monitorId));
+    if (validMonitorIds.length === targetMonitorIds.length) {
       return;
     }
 
     playlistPlaybackState.value = {
       ...playlistPlaybackState.value,
-      targetMonitorId: null
+      targetMonitorIds: validMonitorIds
     };
   }
 );
 
 watch(
-  [() => playlistPlaybackState.value.targetMonitorId, isPlaylistPlaying, isTargetMonitorWindowOpen],
-  ([targetMonitorId, playing, targetWindowOpen]) => {
-    if (!targetMonitorId || !playing || targetWindowOpen) {
+  [selectedTargetMonitorIds, isPlaylistPlaying, hasAnyTargetMonitorWindowOpen],
+  ([targetMonitorIds, playing, hasOpenTarget]) => {
+    if (targetMonitorIds.length === 0 || !playing || hasOpenTarget) {
       return;
     }
 

@@ -61,7 +61,7 @@ describe('services/persistence', () => {
         }
       ],
       playback: {
-        targetMonitorId: 'm1',
+        targetMonitorIds: ['m1'],
         currentIndex: 999,
         autoplay: true,
         intervalSeconds: 0
@@ -77,6 +77,7 @@ describe('services/persistence', () => {
     expect(loaded.monitors.m1.transform.scale).toBe(0.05);
     expect(loaded.monitors.m1.imageDataUrl).toBeNull();
     expect(loaded.playlist).toHaveLength(1);
+    expect(loaded.playback.targetMonitorIds).toEqual(['m1']);
     expect(loaded.playback.currentIndex).toBe(0);
     expect(loaded.playback.intervalSeconds).toBe(1);
   });
@@ -128,9 +129,41 @@ describe('services/persistence', () => {
 
     expect(loaded.ui.showOnlyProjectable).toBe(false);
     expect(loaded.monitors.m2.imageDataUrl).toBe('data:image/png;base64,BBB');
-    expect(loaded.playback.targetMonitorId).toBe('m2');
+    expect(loaded.playback.targetMonitorIds).toEqual(['m2']);
     expect(loaded.playback.autoplay).toBe(true);
     expect(loaded.playlist[0]?.kind).toBe('video');
+  });
+
+  it('migra playback legacy de destino unico a targetMonitorIds', () => {
+    const persisted = {
+      version: SESSION_SCHEMA_VERSION,
+      ui: {
+        showOnlyProjectable: true,
+        panelPreferences: {}
+      },
+      monitors: {},
+      playlist: [
+        {
+          id: 'img-1',
+          kind: 'image',
+          name: 'Imagen legacy',
+          source: 'data:image/png;base64,AAA',
+          durationMs: 3000
+        }
+      ],
+      playback: {
+        targetMonitorId: 'm9',
+        currentIndex: 0,
+        autoplay: false,
+        intervalSeconds: 5
+      }
+    };
+
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(persisted));
+
+    const loaded = loadPersistedSession();
+
+    expect(loaded.playback.targetMonitorIds).toEqual(['m9']);
   });
 
   it('clamp autoplay e indice cuando playlist esta vacia', () => {
@@ -143,7 +176,7 @@ describe('services/persistence', () => {
       monitors: {},
       playlist: [],
       playback: {
-        targetMonitorId: 'm3',
+        targetMonitorIds: ['m3'],
         currentIndex: 20,
         autoplay: true,
         intervalSeconds: 10
@@ -172,7 +205,7 @@ describe('services/persistence', () => {
       monitors: {},
       playlist: [],
       playback: {
-        targetMonitorId: 'm1',
+        targetMonitorIds: ['m1'],
         currentIndex: 50,
         autoplay: true,
         intervalSeconds: 0
