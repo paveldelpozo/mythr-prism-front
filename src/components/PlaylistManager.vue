@@ -2,6 +2,7 @@
 import {
   ArrowDownIcon,
   ArrowUpIcon,
+  Bars3Icon,
   CheckIcon,
   PencilSquareIcon,
   PlusIcon,
@@ -60,6 +61,9 @@ const itemImageFileFeedback = ref<Record<string, string>>({});
 const isAddModalOpen = ref(false);
 const editingItemId = ref<string | null>(null);
 const editingItemSnapshot = ref<MultimediaItem | null>(null);
+const draggedItemId = ref<string | null>(null);
+const dragOverItemId = ref<string | null>(null);
+const reorderFeedback = ref<string>('Arrastra y suelta para reordenar en desktop.');
 const addModalNameInput = ref<HTMLInputElement | null>(null);
 const editModalNameInput = ref<HTMLInputElement | null>(null);
 const bodyScrollSnapshot = ref<{ overflow: string; paddingRight: string } | null>(null);
@@ -403,6 +407,24 @@ const removeItem = (itemId: string) => {
   emitItems(props.items.filter((item) => item.id !== itemId));
 };
 
+const reorderItemsById = (sourceItemId: string, targetItemId: string): boolean => {
+  const sourceIndex = props.items.findIndex((item) => item.id === sourceItemId);
+  const targetIndex = props.items.findIndex((item) => item.id === targetItemId);
+
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
+    return false;
+  }
+
+  const nextItems = [...props.items];
+  const [sourceItem] = nextItems.splice(sourceIndex, 1);
+  if (!sourceItem) {
+    return false;
+  }
+  nextItems.splice(targetIndex, 0, sourceItem);
+  emitItems(nextItems);
+  return true;
+};
+
 const moveItem = (itemId: string, direction: 'up' | 'down') => {
   const index = props.items.findIndex((item) => item.id === itemId);
   if (index < 0) {
@@ -414,10 +436,59 @@ const moveItem = (itemId: string, direction: 'up' | 'down') => {
     return;
   }
 
-  const nextItems = [...props.items];
-  const [current] = nextItems.splice(index, 1);
-  nextItems.splice(targetIndex, 0, current);
-  emitItems(nextItems);
+  const moved = reorderItemsById(itemId, props.items[targetIndex]?.id ?? '');
+  if (moved) {
+    reorderFeedback.value = `Item movido a la posicion ${targetIndex + 1}.`;
+  }
+};
+
+const clearDragState = () => {
+  draggedItemId.value = null;
+  dragOverItemId.value = null;
+};
+
+const onItemDragStart = (itemId: string, event: DragEvent) => {
+  draggedItemId.value = itemId;
+  dragOverItemId.value = itemId;
+
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', itemId);
+  }
+};
+
+const onItemDragOver = (itemId: string, event: DragEvent) => {
+  if (!draggedItemId.value || draggedItemId.value === itemId) {
+    return;
+  }
+
+  event.preventDefault();
+  dragOverItemId.value = itemId;
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+};
+
+const onItemDrop = (targetItemId: string, event: DragEvent) => {
+  event.preventDefault();
+  const sourceItemId = draggedItemId.value ?? event.dataTransfer?.getData('text/plain') ?? '';
+
+  if (!sourceItemId || sourceItemId === targetItemId) {
+    clearDragState();
+    return;
+  }
+
+  const moved = reorderItemsById(sourceItemId, targetItemId);
+  if (moved) {
+    const targetIndex = props.items.findIndex((item) => item.id === targetItemId);
+    reorderFeedback.value = `Item movido a la posicion ${targetIndex + 1}.`;
+  }
+
+  clearDragState();
+};
+
+const onItemDragEnd = () => {
+  clearDragState();
 };
 
 const updateItemKind = (itemId: string, kind: MediaItemKind) => {
@@ -654,6 +725,15 @@ watch(
   }
 );
 
+watch(
+  () => props.items.map((item) => item.id),
+  (itemIds) => {
+    if (draggedItemId.value && !itemIds.includes(draggedItemId.value)) {
+      clearDragState();
+    }
+  }
+);
+
 onMounted(() => {
   window.addEventListener('keydown', onModalKeydown);
 });
@@ -814,20 +894,60 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div v-if="items.length === 0" class="rounded-xl border border-slate-700/70 bg-slate-950/40 p-4 text-sm text-slate-300/90">
+    <div
+      class="rounded-xl border border-slate-700/70 bg-gradient-to-br from-slate-900/85 to-slate-950/60 p-3"
+    >
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300/85">Items en cola</p>
+          <p class="mt-1 text-sm text-slate-300/90">Arrastra un item para cambiar su posicion o usa Subir/Bajar como fallback.</p>
+        </div>
+        <div class="rounded-lg border border-slate-600/70 bg-slate-900/70 px-2.5 py-1 text-xs text-slate-200">
+          {{ items.length }} {{ items.length === 1 ? 'item' : 'items' }}
+        </div>
+      </div>
+      <p data-testid="playlist-reorder-feedback" aria-live="polite" class="mt-2 text-xs text-emerald-200/90">
+        {{ reorderFeedback }}
+      </p>
+    </div>
+
+    <div v-if="items.length === 0" class="rounded-xl border border-dashed border-slate-600/80 bg-slate-950/35 p-6 text-sm text-slate-300/90">
       La playlist esta vacia. Agrega el primer item para comenzar.
     </div>
 
-    <ul v-else class="space-y-3">
+    <ul v-else class="space-y-3" data-testid="playlist-items-list">
       <li
         v-for="(item, index) in items"
         :key="item.id"
-        class="rounded-xl border border-slate-700/70 bg-slate-950/40 p-3"
+        :data-testid="`playlist-item-${item.id}`"
+        :draggable="true"
+        class="rounded-xl border bg-slate-950/45 p-3 transition"
+        :class="[
+          draggedItemId === item.id
+            ? 'border-emerald-300/70 opacity-70 shadow-[0_0_0_1px_rgba(16,185,129,0.45)]'
+            : 'border-slate-700/70',
+          dragOverItemId === item.id && draggedItemId !== item.id
+            ? 'ring-2 ring-emerald-300/65 ring-offset-0'
+            : ''
+        ]"
+        @dragstart="onItemDragStart(item.id, $event)"
+        @dragover="onItemDragOver(item.id, $event)"
+        @drop="onItemDrop(item.id, $event)"
+        @dragend="onItemDragEnd"
       >
         <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300/80">
-            #{{ index + 1 }} · {{ item.kind === 'image' ? 'Imagen' : 'Video' }}
-          </p>
+          <div class="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-600/70 bg-slate-900/80 text-slate-300"
+              title="Arrastrar para reordenar"
+            >
+              <Bars3Icon class="h-4 w-4" />
+            </span>
+            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300/80">
+              #{{ index + 1 }} · {{ item.kind === 'image' ? 'Imagen' : 'Video' }}
+            </p>
+          </div>
 
           <div
             :data-testid="`playlist-item-actions-${item.id}`"
@@ -871,7 +991,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <p class="text-sm text-slate-200">{{ item.name }}</p>
+        <p class="text-sm font-medium text-slate-100">{{ item.name }}</p>
         <p
           :data-testid="`item-source-preview-${item.id}`"
           :title="item.source"
@@ -879,8 +999,8 @@ onBeforeUnmount(() => {
         >
           {{ toSourcePreview(item.source) }}
         </p>
-        <p v-if="item.kind === 'image'" class="mt-1 text-xs text-slate-300/80">Duracion: {{ item.durationMs }} ms</p>
-        <p v-else class="mt-1 text-xs text-slate-300/80">
+        <p v-if="item.kind === 'image'" class="mt-2 text-xs text-slate-300/85">Duracion: {{ item.durationMs }} ms</p>
+        <p v-else class="mt-2 text-xs text-slate-300/85">
           Inicio: {{ item.startAtMs }} ms | Fin: {{ item.endAtMs ?? 'hasta final' }} | Mute: {{ item.muted ? 'si' : 'no' }}
         </p>
       </li>

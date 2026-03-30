@@ -11,6 +11,7 @@ Nota UX (2026-03-30): se limpiaron textos de botones de apertura de dialogo (sin
 Nota UX (2026-03-30): en cada item de playlist los controles `Subir`, `Bajar`, `Editar` y `Eliminar` se mostraron en una sola fila con `flex-nowrap`; en pantallas estrechas el bloque de acciones usa `overflow-x-auto` para evitar salto de linea.
 Nota UX (2026-03-30): se introdujo iconografia consistente con Heroicons en botones y cabeceras de dialogos (icono + texto, iconos decorativos con `aria-hidden="true"`) para mejorar legibilidad operativa sin saturar la interfaz.
 Nota UX (2026-03-30): en formularios de alta/edicion de Playlist se refino el layout por filas (Titulo/Tipo, Source/Archivo local, Duracion-Inicio-Fin y fila final de `Mute` con ayuda contextual) manteniendo validaciones y flujo actual.
+Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas y agrega drag and drop nativo con feedback de item arrastrado/destino, manteniendo `Subir/Bajar` como fallback accesible.
 
 ### Reglas de actualizacion
 
@@ -27,7 +28,7 @@ Nota UX (2026-03-30): en formularios de alta/edicion de Playlist se refino el la
 
 | Fase | Progreso |
 | --- | --- |
-| MVP | 26% |
+| MVP | 33% |
 | V1 | 0% |
 | V2 | 0% |
 
@@ -80,21 +81,22 @@ Nota UX (2026-03-30): en formularios de alta/edicion de Playlist se refino el la
     - [x] Migrar formulario de mayor impacto al nuevo patron.
     - [x] Validar cierre seguro con cambios sin guardar (confirmacion o descarte explicito).
 
-- [ ] **Rediseno UI + reordenado playlist por drag and drop**
+- [x] **Rediseno UI + reordenado playlist por drag and drop**
   - Prioridad: `P4`.
-  - Estado: `in-progress`.
+  - Estado: `completed`.
   - Objetivo: mejorar percepcion de calidad (limpia/amigable/atractiva) e incorporar drag and drop sin eliminar botones subir/bajar.
   - Dependencias/riesgos: depende de estructura de interfaz definida; riesgo de inconsistencias de UX entre desktop y tactil.
   - Criterio de aceptacion: interfaz adopta lineamientos visuales unificados y la playlist permite reordenado por arrastre, manteniendo metodo actual por botones.
   - DoD: drag and drop funciona con feedback visual, persiste orden correcto y convive con accesibilidad por controles alternativos.
   - Subtareas:
-    - [ ] Definir lineamientos visuales MVP (tipografia, espaciado, jerarquia y feedback).
-    - [ ] Aplicar rediseno incremental en vistas de Monitores y Playlist.
-    - [ ] Integrar interaccion drag and drop en lista de playlist.
-    - [ ] Mantener y validar botones subir/bajar como fallback accesible.
+    - [x] Definir lineamientos visuales MVP (tipografia, espaciado, jerarquia y feedback).
+    - [x] Aplicar rediseno incremental en vistas de Monitores y Playlist.
+    - [x] Integrar interaccion drag and drop en lista de playlist.
+    - [x] Mantener y validar botones subir/bajar como fallback accesible.
 
 - [ ] **Previsualizacion de items de playlist (incluye video)**
   - Prioridad: `P5`.
+  - Estado: `in-progress`.
   - Objetivo: mostrar preview por item para mejorar identificacion rapida de contenido antes de reproducir.
   - Dependencias/riesgos: depende de normalizacion de origen de media; riesgo CORS/decodificacion en videos remotos y costo de CPU por captura de fotograma.
   - Criterio de aceptacion: cada item de playlist muestra miniatura; en video se intenta capturar frame y, si falla, se usa fallback visual consistente.

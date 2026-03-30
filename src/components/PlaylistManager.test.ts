@@ -82,6 +82,34 @@ const createFileList = (file: File): FileList => {
   return fileList as FileList;
 };
 
+const createMockDataTransfer = (): DataTransfer => {
+  const store: Record<string, string> = {};
+
+  return {
+    dropEffect: 'move',
+    effectAllowed: 'all',
+    files: [] as unknown as FileList,
+    items: [] as unknown as DataTransferItemList,
+    types: [],
+    clearData: (format?: string) => {
+      if (!format) {
+        for (const key of Object.keys(store)) {
+          delete store[key];
+        }
+        return;
+      }
+
+      delete store[format];
+    },
+    getData: (format: string) => store[format] ?? '',
+    setData: (format: string, value: string) => {
+      store[format] = value;
+    },
+    setDragImage: () => {},
+    addElement: () => {}
+  } as DataTransfer;
+};
+
 const createVideoSyncPlan = (overrides?: Partial<VideoSyncPlan>): VideoSyncPlan => ({
   strategy: {
     commandLeadMs: 800,
@@ -157,6 +185,56 @@ describe('components/PlaylistManager', () => {
 
     expect(wrapper.find('[data-testid="add-item-modal"]').exists()).toBe(false);
     expect(wrapper.emitted('update:items')).toBeUndefined();
+  });
+
+  it('reordena items por drag and drop y muestra feedback', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [createImage('a', 'A'), createImage('b', 'B'), createImage('c', 'C')],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    const dataTransfer = createMockDataTransfer();
+
+    await wrapper.get('[data-testid="playlist-item-a"]').trigger('dragstart', { dataTransfer });
+    await wrapper.get('[data-testid="playlist-item-c"]').trigger('dragover', { dataTransfer });
+    await wrapper.get('[data-testid="playlist-item-c"]').trigger('drop', { dataTransfer });
+
+    const payload = wrapper.emitted('update:items')?.at(-1)?.[0] as MultimediaItem[];
+    expect(payload.map((item) => item.id)).toEqual(['b', 'c', 'a']);
+    expect(wrapper.get('[data-testid="playlist-reorder-feedback"]').text()).toContain('posicion 3');
+  });
+
+  it('mantiene fallback subir/bajar tras habilitar drag and drop', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [createImage('a', 'A'), createImage('b', 'B')],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    const bajarButton = wrapper
+      .get('[data-testid="playlist-item-actions-a"]')
+      .findAll('button')
+      .find((button) => button.text() === 'Bajar');
+
+    if (!bajarButton) {
+      throw new Error('No se encontro boton Bajar para fallback.');
+    }
+
+    await bajarButton.trigger('click');
+
+    const payload = wrapper.emitted('update:items')?.at(-1)?.[0] as MultimediaItem[];
+    expect(payload.map((item) => item.id)).toEqual(['b', 'a']);
   });
 
   it('mantiene overlay fijo y bloquea/restaura scroll del body en alta', async () => {

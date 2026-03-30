@@ -105,6 +105,7 @@ Todo entregable de agente debe incluir, de forma breve y verificable:
 - Botones que disparan dialogos deben usar texto orientado a accion y no explicitar "modal" en su label.
 - Botones de accion deben combinar icono + texto (no icono solo); marcar iconos decorativos con `aria-hidden="true"` y mantener espaciado consistente.
 - Checkboxes inline de formulario deben usar un componente visual unificado y accesible (por defecto `src/components/ui/AppCheckbox.vue`).
+- Interacciones de reordenado por drag and drop deben incluir siempre fallback accesible por botones (`Subir/Bajar`) y feedback visual de origen/destino durante el arrastre.
 
 ### No sobre-ingenieria
 
