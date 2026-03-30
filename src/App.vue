@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import {
+  ComputerDesktopIcon,
+  MagnifyingGlassIcon,
+  QueueListIcon
+} from '@heroicons/vue/24/outline';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppHeader from './components/AppHeader.vue';
 import MonitorList from './components/MonitorList.vue';
@@ -64,6 +69,8 @@ const {
 const showOnlyProjectable = ref(persistedSession.ui.showOnlyProjectable);
 const panelPreferences = ref(persistedSession.ui.panelPreferences);
 const playlistItems = ref<MultimediaItem[]>(persistedSession.playlist);
+type MainViewTab = 'monitors' | 'playlist';
+const activeMainViewTab = ref<MainViewTab>('monitors');
 const playlistPlaybackState = ref<PlaylistPlaybackState>(
   normalizePlaybackByPlaylist(persistedSession.playback, persistedSession.playlist.length)
 );
@@ -307,63 +314,124 @@ onBeforeUnmount(() => {
     <div class="relative mx-auto max-w-7xl space-y-6">
       <AppHeader :can-close-all-windows="canCloseAllWindows" @close-all="closeAllWindows" />
 
-      <PlaylistManager
-        v-model:items="playlistItems"
-        v-model:playback-state="playlistPlaybackState"
-        :monitors="visibleMonitors"
-        :monitor-states="monitorStates"
-        :playback-feedback="playlistPlaybackFeedback"
-        :is-playing="isPlaylistPlaying"
-        @playback:start="startPlaylist"
-        @playback:pause="pausePlaylist"
-        @playback:next="playNext"
-        @playback:previous="playPrevious"
-        @playback:stop="stopPlaylist"
-      />
-
-      <section
-        v-if="!isWindowManagementSupported"
-        class="glass-panel border-rose-300/35 bg-rose-900/20 p-5 text-rose-100"
-      >
-        <p class="text-sm font-semibold">
-          Este navegador no soporta Window Management API (`getScreenDetails`).
-        </p>
-        <p class="mt-1 text-sm text-rose-100/90">
-          Usa Chrome/Edge actualizados y concede permiso para deteccion de pantallas.
-        </p>
-      </section>
-
-      <section
-        v-else-if="!hasDetectedMonitors"
-        class="glass-panel flex flex-col items-center gap-5 px-6 py-16 text-center"
-      >
-        <p class="max-w-xl text-sm text-slate-200/90">
-          Detecta pantallas para iniciar la sesion multi-monitor. Se solicitara permiso del navegador para acceder al detalle de monitores.
-        </p>
-        <button
-          type="button"
-          class="rounded-2xl border border-indigo-300/35 bg-indigo-500/25 px-8 py-4 text-sm font-bold tracking-wide text-indigo-50 transition hover:bg-indigo-500/35 disabled:cursor-not-allowed disabled:opacity-60"
-          :disabled="isLoadingMonitors"
-          @click="loadMonitors"
+      <section class="glass-panel p-2" aria-label="Navegacion principal">
+        <div
+          role="tablist"
+          aria-label="Secciones de trabajo"
+          class="grid grid-cols-2 gap-2"
         >
-          {{ isLoadingMonitors ? 'Detectando monitores...' : 'Detectar pantallas' }}
-        </button>
+          <button
+            id="tab-monitors"
+            data-testid="tab-monitors"
+            type="button"
+            role="tab"
+            :aria-selected="activeMainViewTab === 'monitors'"
+            aria-controls="panel-monitors"
+            :tabindex="activeMainViewTab === 'monitors' ? 0 : -1"
+            class="btn-with-icon rounded-xl border px-4 py-2 text-sm font-semibold transition"
+            :class="activeMainViewTab === 'monitors'
+              ? 'border-indigo-300/50 bg-indigo-500/30 text-indigo-50 shadow-[0_0_0_1px_rgba(165,180,252,0.25)]'
+              : 'border-slate-400/25 bg-slate-900/35 text-slate-300 hover:border-slate-300/45 hover:text-slate-100'"
+            @click="activeMainViewTab = 'monitors'"
+          >
+            <ComputerDesktopIcon aria-hidden="true" class="btn-icon" />
+            Monitores
+          </button>
+          <button
+            id="tab-playlist"
+            data-testid="tab-playlist"
+            type="button"
+            role="tab"
+            :aria-selected="activeMainViewTab === 'playlist'"
+            aria-controls="panel-playlist"
+            :tabindex="activeMainViewTab === 'playlist' ? 0 : -1"
+            class="btn-with-icon rounded-xl border px-4 py-2 text-sm font-semibold transition"
+            :class="activeMainViewTab === 'playlist'
+              ? 'border-indigo-300/50 bg-indigo-500/30 text-indigo-50 shadow-[0_0_0_1px_rgba(165,180,252,0.25)]'
+              : 'border-slate-400/25 bg-slate-900/35 text-slate-300 hover:border-slate-300/45 hover:text-slate-100'"
+            @click="activeMainViewTab = 'playlist'"
+          >
+            <QueueListIcon aria-hidden="true" class="btn-icon" />
+            Playlist
+          </button>
+        </div>
       </section>
 
-      <MonitorList
-        v-else
-        :monitors="visibleMonitors"
-        :states="monitorStates"
-        :show-only-projectable="showOnlyProjectable"
-        :total-monitors="monitors.length"
-        @update:show-only-projectable="showOnlyProjectable = $event"
-        @open-window="openWindowForMonitor"
-        @close-window="closeWindow"
-        @request-fullscreen="requestFullscreen"
-        @upload-image="uploadImage"
-        @clear-image="(id) => setImageForMonitor(id, null)"
-        @transform="applyTransform"
-      />
+      <section
+        id="panel-monitors"
+        data-testid="panel-monitors"
+        role="tabpanel"
+        aria-labelledby="tab-monitors"
+        v-show="activeMainViewTab === 'monitors'"
+        class="space-y-6"
+      >
+        <section
+          v-if="!isWindowManagementSupported"
+          class="glass-panel border-rose-300/35 bg-rose-900/20 p-5 text-rose-100"
+        >
+          <p class="text-sm font-semibold">
+            Este navegador no soporta Window Management API (`getScreenDetails`).
+          </p>
+          <p class="mt-1 text-sm text-rose-100/90">
+            Usa Chrome/Edge actualizados y concede permiso para deteccion de pantallas.
+          </p>
+        </section>
+
+        <section
+          v-else-if="!hasDetectedMonitors"
+          class="glass-panel flex flex-col items-center gap-5 px-6 py-16 text-center"
+        >
+          <p class="max-w-xl text-sm text-slate-200/90">
+            Detecta pantallas para iniciar la sesion multi-monitor. Se solicitara permiso del navegador para acceder al detalle de monitores.
+          </p>
+          <button
+            type="button"
+            class="btn-with-icon rounded-2xl border border-indigo-300/35 bg-indigo-500/25 px-8 py-4 text-sm font-bold tracking-wide text-indigo-50 transition hover:bg-indigo-500/35 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="isLoadingMonitors"
+            @click="loadMonitors"
+          >
+            <MagnifyingGlassIcon aria-hidden="true" class="btn-icon" />
+            {{ isLoadingMonitors ? 'Detectando monitores...' : 'Detectar pantallas' }}
+          </button>
+        </section>
+
+        <MonitorList
+          v-else
+          :monitors="visibleMonitors"
+          :states="monitorStates"
+          :show-only-projectable="showOnlyProjectable"
+          :total-monitors="monitors.length"
+          @update:show-only-projectable="showOnlyProjectable = $event"
+          @open-window="openWindowForMonitor"
+          @close-window="closeWindow"
+          @request-fullscreen="requestFullscreen"
+          @upload-image="uploadImage"
+          @clear-image="(id) => setImageForMonitor(id, null)"
+          @transform="applyTransform"
+        />
+      </section>
+
+      <section
+        id="panel-playlist"
+        data-testid="panel-playlist"
+        role="tabpanel"
+        aria-labelledby="tab-playlist"
+        v-show="activeMainViewTab === 'playlist'"
+      >
+        <PlaylistManager
+          v-model:items="playlistItems"
+          v-model:playback-state="playlistPlaybackState"
+          :monitors="visibleMonitors"
+          :monitor-states="monitorStates"
+          :playback-feedback="playlistPlaybackFeedback"
+          :is-playing="isPlaylistPlaying"
+          @playback:start="startPlaylist"
+          @playback:pause="pausePlaylist"
+          @playback:next="playNext"
+          @playback:previous="playPrevious"
+          @playback:stop="stopPlaylist"
+        />
+      </section>
 
       <section
         v-if="globalError"

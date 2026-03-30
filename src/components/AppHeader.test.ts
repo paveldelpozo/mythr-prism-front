@@ -30,4 +30,15 @@ describe('AppHeader', () => {
 
     expect(wrapper.emitted('closeAll')).toHaveLength(1);
   });
+
+  it('renderiza icono decorativo en boton principal', () => {
+    const wrapper = mount(AppHeader, {
+      props: {
+        canCloseAllWindows: true
+      }
+    });
+
+    const icon = wrapper.get('button svg[aria-hidden="true"]');
+    expect(icon.attributes('aria-hidden')).toBe('true');
+  });
 });

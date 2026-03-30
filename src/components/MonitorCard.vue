@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowTopRightOnSquareIcon } from '@heroicons/vue/24/outline';
 import MonitorControls from './MonitorControls.vue';
 import type { MonitorDescriptor, MonitorRuntimeState } from '../types/broadcaster';
 
@@ -62,9 +63,10 @@ const emit = defineEmits<{
     <button
       v-if="!state.isWindowOpen"
       type="button"
-      class="mb-4 w-full rounded-xl border border-indigo-300/30 bg-indigo-500/20 px-4 py-3 font-semibold text-indigo-100 transition hover:bg-indigo-500/30"
+      class="btn-with-icon mb-4 w-full rounded-xl border border-indigo-300/30 bg-indigo-500/20 px-4 py-3 font-semibold text-indigo-100 transition hover:bg-indigo-500/30"
       @click="emit('openWindow', monitor.id)"
     >
+      <ArrowTopRightOnSquareIcon aria-hidden="true" class="btn-icon" />
       Abrir ventana en este monitor
     </button>
 

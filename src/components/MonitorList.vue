@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { EyeIcon, EyeSlashIcon } from '@heroicons/vue/24/outline';
 import MonitorCard from './MonitorCard.vue';
 import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
 
@@ -36,12 +37,14 @@ const emit = defineEmits<{
 
       <button
         type="button"
-        class="rounded-xl border px-4 py-2 text-xs font-semibold transition"
+        class="btn-with-icon rounded-xl border px-4 py-2 text-xs font-semibold transition"
         :class="showOnlyProjectable
           ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'
           : 'border-slate-500/40 bg-slate-700/30 text-slate-100 hover:bg-slate-700/45'"
         @click="emit('update:showOnlyProjectable', !showOnlyProjectable)"
       >
+        <EyeIcon v-if="showOnlyProjectable" aria-hidden="true" class="btn-icon" />
+        <EyeSlashIcon v-else aria-hidden="true" class="btn-icon" />
         {{ showOnlyProjectable ? 'Ver todos' : 'Ver solo proyectables' }}
       </button>
     </div>

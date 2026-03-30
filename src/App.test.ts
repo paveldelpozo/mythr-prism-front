@@ -163,8 +163,32 @@ describe('App integration base', () => {
       }
     });
 
+    expect(wrapper.get('[data-testid="tab-monitors"]').attributes('aria-selected')).toBe('true');
+    expect(wrapper.get('[data-testid="tab-playlist"]').attributes('aria-selected')).toBe('false');
+    expect(wrapper.get('[data-testid="panel-monitors"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="panel-playlist"]').isVisible()).toBe(false);
     expect(wrapper.get('[data-testid="monitorlist-filter-enabled"]').text()).toBe('true');
     expect(wrapper.get('[data-testid="monitorlist-visible-monitors"]').text()).toBe('1');
+    expect(wrapper.get('[data-testid="playlist-visible-monitors"]').text()).toBe('1');
+  });
+
+  it('permite cambiar entre tabs y muestra el panel correcto', async () => {
+    const wrapper = mount(App, {
+      global: {
+        stubs: {
+          AppHeader: true,
+          MonitorList: MonitorListStub,
+          PlaylistManager: PlaylistManagerStub
+        }
+      }
+    });
+
+    await wrapper.get('[data-testid="tab-playlist"]').trigger('click');
+
+    expect(wrapper.get('[data-testid="tab-monitors"]').attributes('aria-selected')).toBe('false');
+    expect(wrapper.get('[data-testid="tab-playlist"]').attributes('aria-selected')).toBe('true');
+    expect(wrapper.get('[data-testid="panel-monitors"]').isVisible()).toBe(false);
+    expect(wrapper.get('[data-testid="panel-playlist"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="playlist-visible-monitors"]').text()).toBe('1');
   });
 
@@ -179,6 +203,7 @@ describe('App integration base', () => {
       }
     });
 
+    await wrapper.get('[data-testid="tab-playlist"]').trigger('click');
     await wrapper.get('[data-testid="set-invalid-target"]').trigger('click');
     await nextTick();
     await nextTick();
