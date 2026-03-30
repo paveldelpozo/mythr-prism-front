@@ -13,6 +13,9 @@ Nota Mantenimiento (2026-03-30): se movio la hoja global a `src/assets/styles/st
 Nota Mantenimiento (2026-03-30): se corrigieron warnings de analisis estatico en `App.vue` y `PlaylistManager.vue` (checks `typeof` redundantes y jerarquia HTML invalida dentro de boton de thumbnail) sin cambios funcionales.
 Nota UX (2026-03-30): en los dialogos actuales de Playlist (preview/alta/edicion) se estandarizo boton de cierre en header (derecha, con `aria-label`), se elimino cierre redundante en footer de preview y se mantuvieron acciones de formulario (`Guardar/Cancelar`) sin duplicar cierre generico.
 Nota Bugfix (2026-03-30): los modales de Playlist (preview/alta/edicion) ahora se renderizan con `Teleport` a `body` para evitar desplazamientos del backdrop/dialogo causados por contextos de posicionamiento en contenedores con efectos visuales; se agregaron pruebas de regresion de anclaje a viewport.
+Nota Bugfix (2026-03-30): se corrigio la replicacion en modo espejo cuando el origen envia imagen; el destino ya no recibe un `SET_MEDIA` nulo despues del `SET_IMAGE`, por lo que deja el estado "Esperando contenido..." y mantiene degradacion parcial si algun destino no esta disponible.
+Nota Bugfix (2026-03-30): al salir/recargar la pantalla master se intenta cerrar automaticamente todas las ventanas esclavas via `beforeunload` + `pagehide`, con cierre tolerante a errores para evitar pantallas huerfanas bloqueadas.
+Nota Bugfix/UX (2026-03-30): modo espejo ahora preserva visualizacion del origen durante la replicacion, al desactivar limpia de inmediato contenido espejado en destinos abiertos y resetea configuracion (`enabled=false`, `source=null`, `destinations=[]`); ademas, el control de activacion se reemplazo por boton de accion claro (`Iniciar espejo`/`Finalizar espejo`).
 Nota Mantenimiento (2026-03-30): se corrigieron warnings por `max-w` duplicado en `PlaylistManager.vue` extrayendo el ancho de modal a variantes reutilizables (`app-modal-panel--sm/md/lg`) y eliminando utilidades redundantes en template.
 Nota Mantenimiento (2026-03-30): se corrigio nullability en `PlaylistManager.vue` (TS18047) al editar `muted` de video, encapsulando el cambio en un handler tipado con guard explicito de `editingItem` sin cambios de UX/flujo.
 Nota UX (2026-03-30): se aplico una convencion global para modales activos de Playlist (alta, edicion, preview): centrados en viewport, con `max-h/max-w` relativos a pantalla, `body` con scroll interno y `header/footer` sticky siempre visibles.
@@ -38,7 +41,7 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 
 | Fase | Progreso |
 | --- | --- |
-| MVP | 69% |
+| MVP | 77% |
 | V1 | 0% |
 | V2 | 0% |
 
@@ -149,16 +152,17 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
     - [x] Acciones guardar/cargar desde UI.
     - [x] Validacion de compatibilidad entre versiones.
 
-- [ ] **Modo espejo**
-  - Estado: `in-progress`.
+- [x] **Modo espejo**
+  - Estado: `completed`.
   - Dependencias: asignacion de salidas/monitores.
   - Hecho: una salida replica otra con estabilidad y control de activacion/desactivacion.
   - Subtareas:
-    - [ ] Selector de origen de espejo.
-    - [ ] Pipeline de render compartido/duplicado.
-    - [ ] Pruebas de rendimiento basicas.
+    - [x] Selector de origen de espejo.
+    - [x] Pipeline de render compartido/duplicado.
+    - [x] Pruebas de rendimiento basicas.
 
 - [ ] **Thumbnails**
+  - Estado: `in-progress`.
   - Dependencias: pipeline de render por salida.
   - Hecho: la UI muestra previews actualizadas de cada monitor sin bloquear interaccion.
   - Subtareas:
@@ -324,7 +328,8 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 12. [x] **[MVP][P6] Playlist multi-destino -> Disenar modelo 1:N y comandos de grupo** _(completado)_
 13. [x] **[MVP] Guardado/restauracion de layouts -> Esquema de serializacion de layout** _(completado)_
 14. [x] **[MVP] Guardado/restauracion de layouts -> Acciones guardar/cargar desde UI** _(completado)_
-15. [ ] **[MVP] Modo espejo -> Selector de origen de espejo** _(en curso)_
+15. [x] **[MVP] Modo espejo -> Selector de origen de espejo** _(completado)_
+16. [ ] **[MVP] Thumbnails -> Captura periodica de frame reducido** _(en curso)_
 
 ## Notas
 
@@ -343,3 +348,4 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 - 2026-03-30: Video sincronizado (paso 1) completado con estrategia host+clientes tipada (`videoSync`) y visualizacion operativa en Playlist para identificar host, clientes y tolerancias antes de implementar mensajes de sync.
 - 2026-03-30: Video sincronizado completado end-to-end con mensajes `play/pause/seek/time`, resincronizacion periodica con tolerancia de drift, integracion con playlist multi-destino y degradacion elegante ante destinos no listos o con fallo parcial.
 - 2026-03-30: completadas acciones de UI para guardar/cargar/eliminar layouts con feedback operativo y proteccion de sobrescritura/eliminacion accidental; se agregaron pruebas de regresion de flujo y se marco el siguiente item de MVP (`Modo espejo`) en curso.
+- 2026-03-30: Modo espejo completado end-to-end con UI de activacion/origen/destinos, replicacion de estado (transform/media/imagen) origen->destinos, prevencion de ciclos y degradacion operativa con feedback cuando destinos espejo no estan disponibles.

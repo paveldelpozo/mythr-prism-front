@@ -45,7 +45,13 @@ const mountMonitorList = (canCloseAllWindows: boolean) =>
       layouts: [],
       layoutDraftName: '',
       selectedLayoutId: null,
-      layoutFeedback: null
+      layoutFeedback: null,
+      mirrorEnabled: false,
+      mirrorSourceMonitorId: null,
+      mirrorTargetMonitorIds: [],
+      mirrorActiveTargetCount: 0,
+      mirrorUnavailableTargetIds: [],
+      mirrorLastError: null
     },
     global: {
       stubs: {
@@ -74,5 +80,28 @@ describe('MonitorList', () => {
     await closeAllButton.trigger('click');
 
     expect(wrapper.emitted('closeAll')).toHaveLength(1);
+  });
+
+  it('emite cambios de modo espejo desde la UI', async () => {
+    const wrapper = mountMonitorList(true);
+
+    await wrapper.get('[data-testid="mirror-mode-toggle-btn"]').trigger('click');
+
+    await wrapper.get('[data-testid="mirror-source-select"]').setValue('monitor-1');
+
+    expect(wrapper.emitted('update:mirrorEnabled')?.[0]).toEqual([true]);
+    expect(wrapper.emitted('update:mirrorSourceMonitorId')?.[0]).toEqual(['monitor-1']);
+  });
+
+  it('muestra boton espejo con texto de accion segun estado', async () => {
+    const wrapper = mountMonitorList(true);
+
+    expect(wrapper.get('[data-testid="mirror-mode-toggle-btn"]').text()).toContain('Iniciar espejo');
+
+    await wrapper.setProps({
+      mirrorEnabled: true
+    });
+
+    expect(wrapper.get('[data-testid="mirror-mode-toggle-btn"]').text()).toContain('Finalizar espejo');
   });
 });

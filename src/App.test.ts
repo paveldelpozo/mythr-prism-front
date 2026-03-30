@@ -62,6 +62,9 @@ const mockMonitorStates = reactive({
 
 const applyTransformSpy = vi.fn();
 const setImageForMonitorSpy = vi.fn();
+const setMirrorEnabledSpy = vi.fn();
+const setMirrorSourceMonitorIdSpy = vi.fn();
+const setMirrorTargetMonitorIdsSpy = vi.fn();
 const sessionSaverScheduleSpy = vi.fn();
 
 const buildPersistedSession = (
@@ -80,6 +83,11 @@ const buildPersistedSession = (
     autoplay: false,
     intervalSeconds: 5
   },
+  mirror: {
+    enabled: false,
+    sourceMonitorId: null,
+    targetMonitorIds: []
+  },
   layouts: [],
   ...overrides
 });
@@ -96,6 +104,17 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
     isLoadingMonitors: ref(false),
     isWindowManagementSupported: true,
     monitorStates: mockMonitorStates,
+    mirrorConfig: ref({
+      enabled: false,
+      sourceMonitorId: null,
+      targetMonitorIds: []
+    }),
+    mirrorStatus: ref({
+      activeTargetCount: 0,
+      unavailableTargetIds: [],
+      lastReplicatedAtMs: null,
+      lastError: null
+    }),
     monitors: mockMonitors,
     persistableMonitorStates: computed(() => ({
       master: {
@@ -111,6 +130,9 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
     openWindowForMonitor: vi.fn(),
     requestFullscreen: vi.fn(),
     sendVideoSyncCommand: vi.fn(() => true),
+    setMirrorEnabled: setMirrorEnabledSpy,
+    setMirrorSourceMonitorId: setMirrorSourceMonitorIdSpy,
+    setMirrorTargetMonitorIds: setMirrorTargetMonitorIdsSpy,
     setImageForMonitor: setImageForMonitorSpy,
     setPlaylistItemForMonitor: vi.fn()
   })
@@ -172,9 +194,30 @@ const MonitorListStub = defineComponent({
     layoutDraftName: {
       type: String,
       default: ''
+    },
+    mirrorEnabled: {
+      type: Boolean,
+      required: true
+    },
+    mirrorSourceMonitorId: {
+      type: String,
+      default: null
+    },
+    mirrorTargetMonitorIds: {
+      type: Array as PropType<string[]>,
+      required: true
     }
   },
-  emits: ['update:layoutDraftName', 'update:selectedLayoutId', 'saveLayout', 'loadLayout', 'deleteLayout'],
+  emits: [
+    'update:layoutDraftName',
+    'update:selectedLayoutId',
+    'update:mirrorEnabled',
+    'update:mirrorSourceMonitorId',
+    'update:mirrorTargetMonitorIds',
+    'saveLayout',
+    'loadLayout',
+    'deleteLayout'
+  ],
   template: `
     <div>
       <p data-testid="monitorlist-visible-monitors">{{ monitors.length }}</p>
@@ -183,6 +226,7 @@ const MonitorListStub = defineComponent({
       <p data-testid="monitorlist-layout-count">{{ layouts.length }}</p>
       <p data-testid="monitorlist-layout-feedback">{{ layoutFeedback ?? 'null' }}</p>
       <p data-testid="monitorlist-layout-draft">{{ layoutDraftName }}</p>
+      <p data-testid="monitorlist-mirror-enabled">{{ mirrorEnabled ? 'true' : 'false' }}</p>
       <button
         data-testid="layout-set-name"
         @click="$emit('update:layoutDraftName', 'Escena principal')"
@@ -199,6 +243,10 @@ const MonitorListStub = defineComponent({
       <button data-testid="layout-save-trigger" @click="$emit('saveLayout')">save-layout</button>
       <button data-testid="layout-load-trigger" @click="$emit('loadLayout')">load-layout</button>
       <button data-testid="layout-delete-trigger" @click="$emit('deleteLayout')">delete-layout</button>
+      <button data-testid="mirror-enable-trigger" @click="$emit('update:mirrorEnabled', true)">enable-mirror</button>
+      <button data-testid="mirror-disable-trigger" @click="$emit('update:mirrorEnabled', false)">disable-mirror</button>
+      <button data-testid="mirror-source-trigger" @click="$emit('update:mirrorSourceMonitorId', 'master')">source-mirror</button>
+      <button data-testid="mirror-targets-trigger" @click="$emit('update:mirrorTargetMonitorIds', ['projector'])">targets-mirror</button>
     </div>
   `
 });
@@ -208,6 +256,9 @@ describe('App integration base', () => {
     mockPersistedSession = buildPersistedSession();
     applyTransformSpy.mockReset();
     setImageForMonitorSpy.mockReset();
+    setMirrorEnabledSpy.mockReset();
+    setMirrorSourceMonitorIdSpy.mockReset();
+    setMirrorTargetMonitorIdsSpy.mockReset();
     sessionSaverScheduleSpy.mockReset();
     vi.restoreAllMocks();
   });
@@ -389,5 +440,26 @@ describe('App integration base', () => {
 
     expect(wrapper.get('[data-testid="monitorlist-layout-count"]').text()).toBe('0');
     expect(wrapper.get('[data-testid="monitorlist-layout-feedback"]').text()).toContain('eliminado');
+  });
+
+  it('permite activar/desactivar modo espejo y configurar origen/destinos', async () => {
+    const wrapper = mount(App, {
+      global: {
+        stubs: {
+          MonitorList: MonitorListStub,
+          PlaylistManager: PlaylistManagerStub
+        }
+      }
+    });
+
+    await wrapper.get('[data-testid="mirror-enable-trigger"]').trigger('click');
+    await wrapper.get('[data-testid="mirror-source-trigger"]').trigger('click');
+    await wrapper.get('[data-testid="mirror-targets-trigger"]').trigger('click');
+    await wrapper.get('[data-testid="mirror-disable-trigger"]').trigger('click');
+
+    expect(setMirrorEnabledSpy).toHaveBeenNthCalledWith(1, true);
+    expect(setMirrorSourceMonitorIdSpy).toHaveBeenCalledWith('master');
+    expect(setMirrorTargetMonitorIdsSpy).toHaveBeenCalledWith(['projector']);
+    expect(setMirrorEnabledSpy).toHaveBeenNthCalledWith(2, false);
   });
 });

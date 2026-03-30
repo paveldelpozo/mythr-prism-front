@@ -1,28 +1,25 @@
 <script setup lang="ts">
-import { ArrowDownTrayIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/vue/24/outline';
+import {
+  ArrowDownTrayIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  PlayIcon,
+  StopIcon,
+  TrashIcon,
+  XMarkIcon
+} from '@heroicons/vue/24/outline';
+import { computed } from 'vue';
 import MonitorCard from './MonitorCard.vue';
+import AppCheckbox from './ui/AppCheckbox.vue';
 import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
-
-defineProps<{
-  monitors: MonitorDescriptor[];
-  states: MonitorStateMap;
-  showOnlyProjectable: boolean;
-  totalMonitors: number;
-  canCloseAllWindows: boolean;
-  layouts: Array<{
-    id: string;
-    name: string;
-    updatedAt: string;
-  }>;
-  layoutDraftName: string;
-  selectedLayoutId: string | null;
-  layoutFeedback: string | null;
-}>();
 
 const emit = defineEmits<{
   'update:showOnlyProjectable': [value: boolean];
   'update:layoutDraftName': [value: string];
   'update:selectedLayoutId': [value: string | null];
+  'update:mirrorEnabled': [value: boolean];
+  'update:mirrorSourceMonitorId': [value: string | null];
+  'update:mirrorTargetMonitorIds': [value: string[]];
   closeAll: [];
   saveLayout: [];
   loadLayout: [];
@@ -37,6 +34,58 @@ const emit = defineEmits<{
     action: { type: 'rotate'; value: number } | { type: 'scale'; value: number } | { type: 'move'; value: { x?: number; y?: number } } | { type: 'reset' }
   ];
 }>();
+
+const props = defineProps<{
+  monitors: MonitorDescriptor[];
+  states: MonitorStateMap;
+  showOnlyProjectable: boolean;
+  totalMonitors: number;
+  canCloseAllWindows: boolean;
+  layouts: Array<{
+    id: string;
+    name: string;
+    updatedAt: string;
+  }>;
+  layoutDraftName: string;
+  selectedLayoutId: string | null;
+  layoutFeedback: string | null;
+  mirrorEnabled: boolean;
+  mirrorSourceMonitorId: string | null;
+  mirrorTargetMonitorIds: string[];
+  mirrorActiveTargetCount: number;
+  mirrorUnavailableTargetIds: string[];
+  mirrorLastError: string | null;
+}>();
+
+const monitorLabelById = (monitorId: string | null): string => {
+  if (!monitorId) {
+    return 'sin origen';
+  }
+
+  return props.monitors.find((monitor) => monitor.id === monitorId)?.label ?? monitorId;
+};
+
+const selectedMirrorTargetIdSet = computed(() => new Set(props.mirrorTargetMonitorIds));
+
+const mirrorDestinationOptions = computed(() =>
+  props.monitors.filter((monitor) => monitor.id !== props.mirrorSourceMonitorId)
+);
+
+const unavailableMirrorTargetLabels = computed(() =>
+  props.mirrorUnavailableTargetIds.map((monitorId) => monitorLabelById(monitorId))
+);
+
+const mirrorActionLabel = computed(() =>
+  props.mirrorEnabled ? 'Finalizar espejo' : 'Iniciar espejo'
+);
+
+const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
+  const nextTargetIds = selected
+    ? [...props.mirrorTargetMonitorIds, monitorId]
+    : props.mirrorTargetMonitorIds.filter((id) => id !== monitorId);
+
+  emit('update:mirrorTargetMonitorIds', Array.from(new Set(nextTargetIds)));
+};
 </script>
 
 <template>
@@ -45,8 +94,8 @@ const emit = defineEmits<{
       <div>
         <p class="section-kicker">Monitores disponibles</p>
         <p class="mt-1 text-sm text-slate-200/90">
-          Mostrando {{ monitors.length }} de {{ totalMonitors }}
-          {{ showOnlyProjectable ? '(solo proyectables)' : '(todos)' }}
+          Mostrando {{ props.monitors.length }} de {{ props.totalMonitors }}
+          {{ props.showOnlyProjectable ? '(solo proyectables)' : '(todos)' }}
         </p>
       </div>
 
@@ -54,22 +103,22 @@ const emit = defineEmits<{
         <button
           type="button"
           class="btn-with-icon btn-sm rounded-xl border px-4"
-          :class="showOnlyProjectable
+          :class="props.showOnlyProjectable
             ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'
             : 'border-slate-500/40 bg-slate-700/30 text-slate-100 hover:bg-slate-700/45'"
-          @click="emit('update:showOnlyProjectable', !showOnlyProjectable)"
+          @click="emit('update:showOnlyProjectable', !props.showOnlyProjectable)"
         >
-          <EyeIcon v-if="showOnlyProjectable" aria-hidden="true" class="btn-icon" />
+          <EyeIcon v-if="props.showOnlyProjectable" aria-hidden="true" class="btn-icon" />
           <EyeSlashIcon v-else aria-hidden="true" class="btn-icon" />
-          {{ showOnlyProjectable ? 'Ver todos' : 'Ver solo proyectables' }}
+          {{ props.showOnlyProjectable ? 'Ver todos' : 'Ver solo proyectables' }}
         </button>
 
         <button
           data-testid="monitorlist-close-all"
           type="button"
           class="btn-with-icon btn-sm btn-rose-soft"
-          :disabled="!canCloseAllWindows"
-          :aria-disabled="!canCloseAllWindows"
+          :disabled="!props.canCloseAllWindows"
+          :aria-disabled="!props.canCloseAllWindows"
           @click="emit('closeAll')"
         >
           <XMarkIcon aria-hidden="true" class="btn-icon" />
@@ -82,7 +131,7 @@ const emit = defineEmits<{
       <div class="flex flex-wrap items-center justify-between gap-2">
         <p class="section-kicker">Layouts guardados</p>
         <span class="text-xs text-slate-300/80" data-testid="layout-count">
-          {{ layouts.length === 0 ? 'Sin layouts' : `${layouts.length} guardado(s)` }}
+          {{ props.layouts.length === 0 ? 'Sin layouts' : `${props.layouts.length} guardado(s)` }}
         </span>
       </div>
 
@@ -94,7 +143,7 @@ const emit = defineEmits<{
             data-testid="layout-name-input"
             type="text"
             class="form-control"
-            :value="layoutDraftName"
+            :value="props.layoutDraftName"
             placeholder="Ej: Escenario principal"
             @input="emit('update:layoutDraftName', ($event.target as HTMLInputElement).value)"
           />
@@ -106,12 +155,12 @@ const emit = defineEmits<{
             id="layout-select"
             data-testid="layout-select"
             class="form-control"
-            :value="selectedLayoutId ?? ''"
+            :value="props.selectedLayoutId ?? ''"
             @change="emit('update:selectedLayoutId', ($event.target as HTMLSelectElement).value || null)"
           >
-            <option value="">{{ layouts.length === 0 ? 'No hay layouts guardados' : 'Selecciona un layout' }}</option>
+            <option value="">{{ props.layouts.length === 0 ? 'No hay layouts guardados' : 'Selecciona un layout' }}</option>
             <option
-              v-for="layout in layouts"
+              v-for="layout in props.layouts"
               :key="layout.id"
               :value="layout.id"
             >
@@ -136,8 +185,8 @@ const emit = defineEmits<{
           type="button"
           data-testid="layout-load-btn"
           class="btn-with-icon btn-sm btn-emerald-soft"
-          :disabled="!selectedLayoutId"
-          :aria-disabled="!selectedLayoutId"
+          :disabled="!props.selectedLayoutId"
+          :aria-disabled="!props.selectedLayoutId"
           @click="emit('loadLayout')"
         >
           <ArrowDownTrayIcon aria-hidden="true" class="btn-icon" />
@@ -148,8 +197,8 @@ const emit = defineEmits<{
           type="button"
           data-testid="layout-delete-btn"
           class="btn-with-icon btn-sm btn-rose-soft"
-          :disabled="!selectedLayoutId"
-          :aria-disabled="!selectedLayoutId"
+          :disabled="!props.selectedLayoutId"
+          :aria-disabled="!props.selectedLayoutId"
           @click="emit('deleteLayout')"
         >
           <TrashIcon aria-hidden="true" class="btn-icon" />
@@ -158,16 +207,94 @@ const emit = defineEmits<{
       </div>
 
       <p
-        v-if="layoutFeedback"
+        v-if="props.layoutFeedback"
         data-testid="layout-feedback"
         class="text-xs text-slate-200/90"
       >
-        {{ layoutFeedback }}
+        {{ props.layoutFeedback }}
+      </p>
+    </div>
+
+    <div class="surface-panel space-y-3 px-4 py-3" data-testid="mirror-mode-panel">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <p class="section-kicker">Modo espejo</p>
+        <span class="text-xs text-slate-300/80" data-testid="mirror-target-count">
+          {{ props.mirrorTargetMonitorIds.length }} destino(s) configurado(s)
+        </span>
+      </div>
+
+      <button
+        id="mirror-mode-enabled"
+        data-testid="mirror-mode-toggle-btn"
+        type="button"
+        class="btn-with-icon btn-sm rounded-xl border px-4"
+        :class="props.mirrorEnabled
+          ? 'border-rose-300/40 bg-rose-500/20 text-rose-100 hover:bg-rose-500/30'
+          : 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'"
+        :aria-pressed="props.mirrorEnabled"
+        @click="emit('update:mirrorEnabled', !props.mirrorEnabled)"
+      >
+        <StopIcon v-if="props.mirrorEnabled" aria-hidden="true" class="btn-icon" />
+        <PlayIcon v-else aria-hidden="true" class="btn-icon" />
+        {{ mirrorActionLabel }}
+      </button>
+
+      <label class="form-field" for="mirror-source-select">
+        Monitor origen
+        <select
+          id="mirror-source-select"
+          data-testid="mirror-source-select"
+          class="form-control"
+          :value="props.mirrorSourceMonitorId ?? ''"
+          @change="emit('update:mirrorSourceMonitorId', ($event.target as HTMLSelectElement).value || null)"
+        >
+          <option value="">Selecciona un origen</option>
+          <option
+            v-for="monitor in props.monitors"
+            :key="monitor.id"
+            :value="monitor.id"
+          >
+            {{ monitor.label }}
+          </option>
+        </select>
+      </label>
+
+      <div class="space-y-2">
+        <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300/80">Destinos espejo</p>
+        <p v-if="mirrorDestinationOptions.length === 0" class="text-xs text-slate-300/80">
+          Selecciona un origen para habilitar destinos espejo.
+        </p>
+        <div v-else class="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <AppCheckbox
+            v-for="monitor in mirrorDestinationOptions"
+            :id="`mirror-target-${monitor.id}`"
+            :key="monitor.id"
+            :model-value="selectedMirrorTargetIdSet.has(monitor.id)"
+            :label="monitor.label"
+            :disabled="!props.mirrorSourceMonitorId"
+            @update:model-value="onMirrorTargetToggle(monitor.id, $event)"
+          />
+        </div>
+      </div>
+
+      <p class="text-xs text-slate-200/90" data-testid="mirror-feedback">
+        <template v-if="!props.mirrorEnabled">Modo espejo desactivado.</template>
+        <template v-else-if="!props.mirrorSourceMonitorId">Define un monitor origen para comenzar la replicacion.</template>
+        <template v-else>
+          Origen: {{ monitorLabelById(props.mirrorSourceMonitorId) }}. Destinos activos: {{ props.mirrorActiveTargetCount }}/{{ props.mirrorTargetMonitorIds.length }}.
+        </template>
+      </p>
+
+      <p v-if="unavailableMirrorTargetLabels.length > 0" class="text-xs text-amber-200/90" data-testid="mirror-unavailable-feedback">
+        Destinos no disponibles: {{ unavailableMirrorTargetLabels.join(', ') }}.
+      </p>
+      <p v-if="props.mirrorLastError" class="text-xs text-amber-200/90" data-testid="mirror-last-error">
+        {{ props.mirrorLastError }}
       </p>
     </div>
 
     <p
-      v-if="showOnlyProjectable && monitors.length === 0"
+      v-if="props.showOnlyProjectable && props.monitors.length === 0"
       class="app-alert app-alert--amber"
     >
       No hay monitores proyectables disponibles. La ventana principal esta ocupando el unico monitor detectado.
@@ -175,10 +302,10 @@ const emit = defineEmits<{
 
     <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
       <MonitorCard
-        v-for="monitor in monitors"
+        v-for="monitor in props.monitors"
         :key="monitor.id"
         :monitor="monitor"
-        :state="states[monitor.id]"
+        :state="props.states[monitor.id]"
         @open-window="emit('openWindow', $event)"
         @close-window="emit('closeWindow', $event)"
         @request-fullscreen="emit('requestFullscreen', $event)"

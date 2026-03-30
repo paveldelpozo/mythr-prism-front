@@ -4,9 +4,17 @@ import {
   createDefaultMonitorState,
   DEFAULT_TRANSFORM,
   type MonitorDescriptor,
+  type MonitorRuntimeState,
   type MonitorStateMap,
   type MonitorTransform
 } from '../types/broadcaster';
+import {
+  DEFAULT_MIRROR_MODE_CONFIG,
+  DEFAULT_MIRROR_MODE_STATUS,
+  sanitizeMirrorModeConfig,
+  type MirrorModeConfig,
+  type MirrorModeStatus
+} from '../types/mirrorMode';
 import {
   isKnownEnvelope,
   type MasterToSlaveMessage,
@@ -35,6 +43,7 @@ interface WindowRegistryEntry {
 
 interface UseMultiMonitorBroadcasterOptions {
   initialMonitorStateById?: PersistedMonitorStateMap;
+  initialMirrorMode?: MirrorModeConfig;
 }
 
 type VideoSyncCommandType = 'VIDEO_SYNC_PLAY' | 'VIDEO_SYNC_PAUSE' | 'VIDEO_SYNC_SEEK' | 'VIDEO_SYNC_TIME';
@@ -115,6 +124,10 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
   const monitorStates = reactive<MonitorStateMap>({});
   const windowsRegistry = new Map<string, WindowRegistryEntry>();
   const initialMonitorStateById = options.initialMonitorStateById ?? {};
+  const mirrorConfig = ref<MirrorModeConfig>(
+    sanitizeMirrorModeConfig(options.initialMirrorMode ?? DEFAULT_MIRROR_MODE_CONFIG)
+  );
+  const mirrorStatus = ref<MirrorModeStatus>({ ...DEFAULT_MIRROR_MODE_STATUS });
 
   const isLoadingMonitors = ref(false);
   const globalError = ref<string | null>(null);
@@ -165,6 +178,101 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     state.lastError = message;
   };
 
+  const knownMonitorIdSet = (): Set<string> =>
+    new Set(monitors.value.map((monitor) => monitor.id));
+
+  const knownMonitorIdsForSanitization = (): ReadonlySet<string> | undefined => {
+    const knownIds = knownMonitorIdSet();
+    return knownIds.size > 0 ? knownIds : undefined;
+  };
+
+  const setMirrorConfig = (nextConfig: MirrorModeConfig) => {
+    mirrorConfig.value = sanitizeMirrorModeConfig(nextConfig, {
+      knownMonitorIds: knownMonitorIdsForSanitization()
+    });
+  };
+
+  const clearMirrorTargets = (
+    targetMonitorIds: readonly string[],
+    sourceMonitorId: string | null
+  ) => {
+    targetMonitorIds.forEach((targetMonitorId) => {
+      if (targetMonitorId === sourceMonitorId) {
+        return;
+      }
+
+      const targetState = getMonitorState(targetMonitorId);
+      targetState.imageDataUrl = null;
+      targetState.activeMediaItem = null;
+
+      const clearMessage = buildMasterMessage(targetMonitorId, 'SET_IMAGE', {
+        imageDataUrl: null
+      });
+
+      if (!clearMessage) {
+        return;
+      }
+
+      const sent = sendToSlave(targetMonitorId, clearMessage);
+      if (sent) {
+        setMonitorError(targetMonitorId, null);
+      }
+    });
+  };
+
+  const setMirrorEnabled = (enabled: boolean) => {
+    const previousConfig = sanitizeMirrorModeConfig(mirrorConfig.value, {
+      knownMonitorIds: knownMonitorIdsForSanitization()
+    });
+
+    if (!enabled) {
+      clearMirrorTargets(previousConfig.targetMonitorIds, previousConfig.sourceMonitorId);
+      setMirrorConfig({ ...DEFAULT_MIRROR_MODE_CONFIG });
+      mirrorStatus.value = {
+        ...DEFAULT_MIRROR_MODE_STATUS,
+        lastError: null
+      };
+      return;
+    }
+
+    setMirrorConfig({
+      ...mirrorConfig.value,
+      enabled
+    });
+
+    if (!mirrorConfig.value.sourceMonitorId) {
+      mirrorStatus.value = {
+        ...mirrorStatus.value,
+        lastError: 'Selecciona un monitor origen para activar el modo espejo.'
+      };
+      return;
+    }
+
+    replicateSourceToMirrorTargets(mirrorConfig.value.sourceMonitorId);
+  };
+
+  const setMirrorSourceMonitorId = (sourceMonitorId: string | null) => {
+    setMirrorConfig({
+      ...mirrorConfig.value,
+      sourceMonitorId
+    });
+
+    if (mirrorConfig.value.enabled && mirrorConfig.value.sourceMonitorId) {
+      replicateSourceToMirrorTargets(mirrorConfig.value.sourceMonitorId);
+    }
+  };
+
+  const setMirrorTargetMonitorIds = (targetMonitorIds: string[]) => {
+    setMirrorConfig({
+      ...mirrorConfig.value,
+      targetMonitorIds
+    });
+
+    if (mirrorConfig.value.enabled && mirrorConfig.value.sourceMonitorId) {
+      replicateSourceToMirrorTargets(mirrorConfig.value.sourceMonitorId);
+    }
+  };
+
   const cleanupMonitorWindow = (monitorId: string) => {
     const entry = windowsRegistry.get(monitorId);
     if (!entry) {
@@ -187,9 +295,11 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       return;
     }
 
-    if (!entry.ref.closed) {
-      entry.ref.close();
-    }
+    try {
+      if (!entry.ref.closed) {
+        entry.ref.close();
+      }
+    } catch {}
 
     cleanupMonitorWindow(monitorId);
   };
@@ -236,6 +346,10 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       closeWindow(monitorId);
       delete monitorStates[monitorId];
     });
+
+    mirrorConfig.value = sanitizeMirrorModeConfig(mirrorConfig.value, {
+      knownMonitorIds: nextIds
+    });
   };
 
   const sendToSlave = (monitorId: string, message: MasterToSlaveMessage): boolean => {
@@ -276,27 +390,106 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     } as Extract<MasterToSlaveMessage, { type: T }>;
   };
 
+  const buildContentMessage = (
+    monitorId: string,
+    state: MonitorRuntimeState
+  ): Extract<MasterToSlaveMessage, { type: 'SET_IMAGE' | 'SET_MEDIA' }> | null => {
+    if (state.activeMediaItem) {
+      return buildMasterMessage(monitorId, 'SET_MEDIA', {
+        item: state.activeMediaItem
+      });
+    }
+
+    return buildMasterMessage(monitorId, 'SET_IMAGE', {
+      imageDataUrl: state.imageDataUrl
+    });
+  };
+
+  const shouldReplicateFromSource = (sourceMonitorId: string): boolean => {
+    if (!mirrorConfig.value.enabled) {
+      return false;
+    }
+
+    if (!mirrorConfig.value.sourceMonitorId) {
+      return false;
+    }
+
+    return mirrorConfig.value.sourceMonitorId === sourceMonitorId;
+  };
+
+  const replicateSourceToMirrorTargets = (sourceMonitorId: string) => {
+    if (!shouldReplicateFromSource(sourceMonitorId)) {
+      return;
+    }
+
+    const sourceState = getMonitorState(sourceMonitorId);
+    const sanitized = sanitizeMirrorModeConfig(mirrorConfig.value, {
+      knownMonitorIds: knownMonitorIdsForSanitization()
+    });
+    mirrorConfig.value = sanitized;
+
+    const unavailableTargetIds: string[] = [];
+    let activeTargetCount = 0;
+
+    sanitized.targetMonitorIds.forEach((targetMonitorId) => {
+      if (targetMonitorId === sourceMonitorId) {
+        return;
+      }
+
+      const targetState = getMonitorState(targetMonitorId);
+      targetState.transform = { ...sourceState.transform };
+      targetState.imageDataUrl = sourceState.imageDataUrl;
+      targetState.activeMediaItem = sourceState.activeMediaItem;
+
+      const transformMessage = buildMasterMessage(targetMonitorId, 'SET_TRANSFORM', {
+        transform: targetState.transform
+      });
+      const contentMessage = buildContentMessage(targetMonitorId, targetState);
+
+      const hasReadyWindow = transformMessage !== null && contentMessage !== null;
+
+      if (!hasReadyWindow) {
+        unavailableTargetIds.push(targetMonitorId);
+        setMonitorError(targetMonitorId, 'Destino espejo no disponible: abre la ventana del monitor destino.');
+        return;
+      }
+
+      const sentTransform = sendToSlave(targetMonitorId, transformMessage);
+      const sentContent = sendToSlave(targetMonitorId, contentMessage);
+
+      if (!sentTransform || !sentContent) {
+        unavailableTargetIds.push(targetMonitorId);
+        return;
+      }
+
+      activeTargetCount += 1;
+      setMonitorError(targetMonitorId, null);
+    });
+
+    mirrorStatus.value = {
+      activeTargetCount,
+      unavailableTargetIds,
+      lastReplicatedAtMs: Date.now(),
+      lastError:
+        unavailableTargetIds.length > 0
+          ? `Modo espejo con degradacion: ${unavailableTargetIds.length} destino(s) no disponibles.`
+          : null
+    };
+  };
+
   const pushCurrentStateToSlave = (monitorId: string) => {
     const state = getMonitorState(monitorId);
 
     const transformMsg = buildMasterMessage(monitorId, 'SET_TRANSFORM', {
       transform: state.transform
     });
-    const imageMsg = buildMasterMessage(monitorId, 'SET_IMAGE', {
-      imageDataUrl: state.imageDataUrl
-    });
-    const mediaMsg = buildMasterMessage(monitorId, 'SET_MEDIA', {
-      item: state.activeMediaItem
-    });
+    const contentMsg = buildContentMessage(monitorId, state);
 
     if (transformMsg) {
       sendToSlave(monitorId, transformMsg);
     }
-    if (imageMsg) {
-      sendToSlave(monitorId, imageMsg);
-    }
-    if (mediaMsg) {
-      sendToSlave(monitorId, mediaMsg);
+    if (contentMsg) {
+      sendToSlave(monitorId, contentMsg);
     }
   };
 
@@ -319,6 +512,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       state.isSlaveReady = true;
       state.lastError = null;
       pushCurrentStateToSlave(monitorId);
+      replicateSourceToMirrorTargets(monitorId);
       return;
     }
 
@@ -339,9 +533,17 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     }
   };
 
-  const onBeforeUnload = () => {
+  const shutdownAllWindows = () => {
     closeAllWindows();
     stopLifecycleWatchdog();
+  };
+
+  const onBeforeUnload = () => {
+    shutdownAllWindows();
+  };
+
+  const onPageHide = () => {
+    shutdownAllWindows();
   };
 
   const refreshMonitorList = () => {
@@ -509,6 +711,8 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     if (message) {
       sendToSlave(monitorId, message);
     }
+
+    replicateSourceToMirrorTargets(monitorId);
   };
 
   const setImageForMonitor = (monitorId: string, imageDataUrl: string | null) => {
@@ -522,6 +726,8 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     if (message) {
       sendToSlave(monitorId, message);
     }
+
+    replicateSourceToMirrorTargets(monitorId);
   };
 
   const setPlaylistItemForMonitor = (monitorId: string, item: MultimediaItem | null): boolean => {
@@ -532,10 +738,13 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       item
     });
     if (!message) {
+      replicateSourceToMirrorTargets(monitorId);
       return false;
     }
 
-    return sendToSlave(monitorId, message);
+    const sent = sendToSlave(monitorId, message);
+    replicateSourceToMirrorTargets(monitorId);
+    return sent;
   };
 
   const requestFullscreen = (monitorId: string) => {
@@ -579,16 +788,17 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
 
   window.addEventListener('message', onMessageFromSlave);
   window.addEventListener('beforeunload', onBeforeUnload);
+  window.addEventListener('pagehide', onPageHide);
 
   onBeforeUnmount(() => {
     window.removeEventListener('message', onMessageFromSlave);
     window.removeEventListener('beforeunload', onBeforeUnload);
+    window.removeEventListener('pagehide', onPageHide);
 
     screenDetailsRef?.removeEventListener('screenschange', refreshMonitorList);
     screenDetailsRef?.removeEventListener('currentscreenchange', refreshMonitorList);
 
-    closeAllWindows();
-    stopLifecycleWatchdog();
+    shutdownAllWindows();
   });
 
   return {
@@ -597,6 +807,8 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     isLoadingMonitors,
     isWindowManagementSupported,
     monitorStates,
+    mirrorConfig,
+    mirrorStatus,
     persistableMonitorStates,
     monitors,
     applyTransform,
@@ -606,6 +818,9 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     openWindowForMonitor,
     requestFullscreen,
     sendVideoSyncCommand,
+    setMirrorEnabled,
+    setMirrorSourceMonitorId,
+    setMirrorTargetMonitorIds,
     setImageForMonitor,
     setPlaylistItemForMonitor
   };

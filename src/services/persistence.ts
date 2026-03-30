@@ -1,4 +1,9 @@
 import { DEFAULT_TRANSFORM, type MonitorTransform } from '../types/broadcaster';
+import {
+  DEFAULT_MIRROR_MODE_CONFIG,
+  type MirrorModeConfig,
+  sanitizeMirrorModeConfig
+} from '../types/mirrorMode';
 import { isMultimediaItem, type MultimediaItem, type PlaylistPlaybackState } from '../types/playlist';
 import { cloneSerializable } from '../utils/cloneSerializable';
 
@@ -38,6 +43,7 @@ export interface PersistedSessionV1 {
   monitors: PersistedMonitorStateMap;
   playlist: MultimediaItem[];
   playback: PlaylistPlaybackState;
+  mirror: MirrorModeConfig;
   layouts: PersistedLayout[];
 }
 
@@ -74,6 +80,7 @@ const createDefaultSession = (): PersistedSessionV1 => ({
     autoplay: false,
     intervalSeconds: DEFAULT_PLAYBACK_INTERVAL_SECONDS
   },
+  mirror: { ...DEFAULT_MIRROR_MODE_CONFIG },
   layouts: []
 });
 
@@ -463,6 +470,7 @@ const parseLegacySession = (value: Record<string, unknown>): PersistedSessionV1 
       monitors: sanitizeMonitorStateMap(value.monitors),
       playlist,
       playback: sanitizePlaybackState(extractLegacyPlaybackState(value), playlist.length),
+      mirror: sanitizeMirrorModeConfig(value.mirror),
       layouts: sanitizeLayouts(value.layouts)
     };
   }
@@ -482,6 +490,7 @@ const parseLegacySession = (value: Record<string, unknown>): PersistedSessionV1 
     monitors: sanitizeMonitorStateMap(value.monitorStates),
     playlist,
     playback: sanitizePlaybackState(extractLegacyPlaybackState(value), playlist.length),
+    mirror: { ...DEFAULT_MIRROR_MODE_CONFIG },
     layouts: []
   };
 };
@@ -500,6 +509,7 @@ const sanitizePersistedSession = (value: unknown): PersistedSessionV1 => {
       monitors: sanitizeMonitorStateMap(value.monitors),
       playlist,
       playback: sanitizePlaybackState(extractLegacyPlaybackState(value), playlist.length),
+      mirror: sanitizeMirrorModeConfig(value.mirror),
       layouts: sanitizeLayouts(value.layouts)
     };
   }

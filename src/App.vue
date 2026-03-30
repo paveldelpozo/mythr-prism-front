@@ -18,6 +18,7 @@ import {
   type PersistedSessionV1
 } from './services/persistence';
 import { DEFAULT_TRANSFORM } from './types/broadcaster';
+import { sanitizeMirrorModeConfig, type MirrorModeConfig } from './types/mirrorMode';
 import type { MultimediaItem, PlaylistPlaybackState } from './types/playlist';
 import { buildVideoSyncPlan } from './types/videoSync';
 
@@ -73,16 +74,22 @@ const {
   isLoadingMonitors,
   isWindowManagementSupported,
   monitorStates,
+  mirrorConfig,
+  mirrorStatus,
   monitors,
   persistableMonitorStates,
   loadMonitors,
   openWindowForMonitor,
   requestFullscreen,
   sendVideoSyncCommand,
+  setMirrorEnabled,
+  setMirrorSourceMonitorId,
+  setMirrorTargetMonitorIds,
   setImageForMonitor,
   setPlaylistItemForMonitor
 } = useMultiMonitorBroadcaster({
-  initialMonitorStateById: persistedSession.monitors
+  initialMonitorStateById: persistedSession.monitors,
+  initialMirrorMode: persistedSession.mirror
 });
 
 const showOnlyProjectable = ref(persistedSession.ui.showOnlyProjectable);
@@ -200,6 +207,9 @@ const buildPersistablePlaylist = (): MultimediaItem[] =>
     })
     .filter((item): item is MultimediaItem => item !== null);
 
+const buildPersistableMirrorMode = (): MirrorModeConfig =>
+  sanitizeMirrorModeConfig(mirrorConfig.value);
+
 const buildPersistableLayouts = (): PersistedLayout[] =>
   layouts.value.map((layout) => ({
     id: layout.id,
@@ -251,6 +261,7 @@ const buildSessionSnapshot = (): PersistedSessionV1 => ({
     autoplay: playlistPlaybackState.value.autoplay,
     intervalSeconds: Math.max(1, Math.round(playlistPlaybackState.value.intervalSeconds))
   },
+  mirror: buildPersistableMirrorMode(),
   layouts: buildPersistableLayouts()
 });
 
@@ -510,8 +521,28 @@ const onLayoutSelectionChange = (layoutId: string | null) => {
   }
 };
 
+const onMirrorEnabledChange = (enabled: boolean) => {
+  setMirrorEnabled(enabled);
+};
+
+const onMirrorSourceMonitorChange = (sourceMonitorId: string | null) => {
+  setMirrorSourceMonitorId(sourceMonitorId);
+};
+
+const onMirrorTargetMonitorIdsChange = (targetMonitorIds: string[]) => {
+  setMirrorTargetMonitorIds(targetMonitorIds);
+};
+
 watch(
-  [showOnlyProjectable, panelPreferences, persistableMonitorStates, playlistItems, playlistPlaybackState, layouts],
+  [
+    showOnlyProjectable,
+    panelPreferences,
+    persistableMonitorStates,
+    playlistItems,
+    playlistPlaybackState,
+    mirrorConfig,
+    layouts
+  ],
   () => {
     sessionSaver.schedule(buildSessionSnapshot());
   },
@@ -664,9 +695,18 @@ onBeforeUnmount(() => {
           :layout-draft-name="layoutDraftName"
           :selected-layout-id="selectedLayoutId"
           :layout-feedback="layoutFeedback"
+          :mirror-enabled="mirrorConfig.enabled"
+          :mirror-source-monitor-id="mirrorConfig.sourceMonitorId"
+          :mirror-target-monitor-ids="mirrorConfig.targetMonitorIds"
+          :mirror-active-target-count="mirrorStatus.activeTargetCount"
+          :mirror-unavailable-target-ids="mirrorStatus.unavailableTargetIds"
+          :mirror-last-error="mirrorStatus.lastError"
           @update:show-only-projectable="showOnlyProjectable = $event"
           @update:layout-draft-name="layoutDraftName = $event"
           @update:selected-layout-id="onLayoutSelectionChange"
+          @update:mirror-enabled="onMirrorEnabledChange"
+          @update:mirror-source-monitor-id="onMirrorSourceMonitorChange"
+          @update:mirror-target-monitor-ids="onMirrorTargetMonitorIdsChange"
           @save-layout="saveCurrentLayout"
           @load-layout="loadSelectedLayout"
           @delete-layout="deleteSelectedLayout"

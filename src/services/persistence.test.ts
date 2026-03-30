@@ -68,6 +68,11 @@ describe('services/persistence', () => {
         autoplay: true,
         intervalSeconds: 0
       },
+      mirror: {
+        enabled: true,
+        sourceMonitorId: 'm1',
+        targetMonitorIds: ['m1', 'm2', 'm2']
+      },
       layouts: [
         {
           id: 'layout-1',
@@ -109,6 +114,9 @@ describe('services/persistence', () => {
     expect(loaded.playback.targetMonitorIds).toEqual(['m1']);
     expect(loaded.playback.currentIndex).toBe(0);
     expect(loaded.playback.intervalSeconds).toBe(1);
+    expect(loaded.mirror.enabled).toBe(true);
+    expect(loaded.mirror.sourceMonitorId).toBe('m1');
+    expect(loaded.mirror.targetMonitorIds).toEqual(['m2']);
     expect(loaded.layouts).toHaveLength(1);
     expect(loaded.layouts[0]?.createdAt).toBe('2026-03-30T12:00:00.000Z');
     expect(loaded.layouts[0]?.updatedAt).toBe('1970-01-01T00:00:00.000Z');
@@ -126,6 +134,7 @@ describe('services/persistence', () => {
 
     expect(loaded.version).toBe(SESSION_SCHEMA_VERSION);
     expect(loaded.ui.showOnlyProjectable).toBe(true);
+    expect(loaded.mirror.enabled).toBe(false);
     expect(loaded.layouts).toEqual([]);
     expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
   });
@@ -169,6 +178,7 @@ describe('services/persistence', () => {
     expect(loaded.monitors.m2.imageDataUrl).toBe('data:image/png;base64,BBB');
     expect(loaded.playback.targetMonitorIds).toEqual(['m2']);
     expect(loaded.playback.autoplay).toBe(true);
+    expect(loaded.mirror.enabled).toBe(false);
     expect(loaded.playlist[0]?.kind).toBe('video');
     expect(loaded.layouts).toEqual([]);
   });
@@ -251,6 +261,11 @@ describe('services/persistence', () => {
         autoplay: true,
         intervalSeconds: 0
       },
+      mirror: {
+        enabled: true,
+        sourceMonitorId: 'm1',
+        targetMonitorIds: ['m1', 'm2']
+      },
       layouts: [
         {
           id: 'layout-invalid',
@@ -275,6 +290,7 @@ describe('services/persistence', () => {
     expect(stored.playback.currentIndex).toBe(0);
     expect(stored.playback.autoplay).toBe(false);
     expect(stored.playback.intervalSeconds).toBe(1);
+    expect(stored.mirror.targetMonitorIds).toEqual(['m2']);
     expect(stored.layouts[0]?.createdAt).toBe('1970-01-01T00:00:00.000Z');
     expect(stored.layouts[0]?.snapshot.playback.currentIndex).toBe(2);
     expect(stored.layouts[0]?.snapshot.playback.intervalSeconds).toBe(1);
