@@ -12,9 +12,12 @@ import {
   createDebouncedSessionSaver,
   loadPersistedSession,
   SESSION_SCHEMA_VERSION,
+  type PersistedLayout,
+  type PersistedMonitorState,
   type PersistedMonitorStateMap,
   type PersistedSessionV1
 } from './services/persistence';
+import { DEFAULT_TRANSFORM } from './types/broadcaster';
 import type { MultimediaItem, PlaylistPlaybackState } from './types/playlist';
 import { buildVideoSyncPlan } from './types/videoSync';
 
@@ -85,6 +88,14 @@ const {
 const showOnlyProjectable = ref(persistedSession.ui.showOnlyProjectable);
 const panelPreferences = ref(persistedSession.ui.panelPreferences);
 const playlistItems = ref<MultimediaItem[]>(persistedSession.playlist);
+const layouts = ref<PersistedLayout[]>(persistedSession.layouts);
+const selectedLayoutId = ref<string | null>(persistedSession.layouts[0]?.id ?? null);
+const layoutDraftName = ref<string>(persistedSession.layouts[0]?.name ?? '');
+const layoutFeedback = ref<string | null>(
+  persistedSession.layouts.length === 0
+    ? 'No hay layouts guardados todavia. Guarda uno para reutilizar configuraciones.'
+    : null
+);
 type MainViewTab = 'monitors' | 'playlist';
 const activeMainViewTab = ref<MainViewTab>('monitors');
 const playlistPlaybackState = ref<PlaylistPlaybackState>(
@@ -189,6 +200,43 @@ const buildPersistablePlaylist = (): MultimediaItem[] =>
     })
     .filter((item): item is MultimediaItem => item !== null);
 
+const buildPersistableLayouts = (): PersistedLayout[] =>
+  layouts.value.map((layout) => ({
+    id: layout.id,
+    name: layout.name,
+    createdAt: layout.createdAt,
+    updatedAt: layout.updatedAt,
+    snapshot: {
+      monitors: Object.entries(layout.snapshot.monitors).reduce<PersistedMonitorStateMap>(
+        (nextMonitors, [monitorId, monitorState]) => {
+          if (monitorId.length === 0) {
+            return nextMonitors;
+          }
+
+          nextMonitors[monitorId] = {
+            transform: {
+              rotate: monitorState.transform.rotate,
+              scale: monitorState.transform.scale,
+              translateX: monitorState.transform.translateX,
+              translateY: monitorState.transform.translateY
+            },
+            imageDataUrl:
+              typeof monitorState.imageDataUrl === 'string' ? monitorState.imageDataUrl : null
+          };
+
+          return nextMonitors;
+        },
+        {}
+      ),
+      playback: {
+        targetMonitorIds: sanitizeTargetMonitorIds(layout.snapshot.playback.targetMonitorIds),
+        currentIndex: Math.max(0, Math.round(layout.snapshot.playback.currentIndex)),
+        autoplay: layout.snapshot.playback.autoplay,
+        intervalSeconds: Math.max(1, Math.round(layout.snapshot.playback.intervalSeconds))
+      }
+    }
+  }));
+
 const buildSessionSnapshot = (): PersistedSessionV1 => ({
   version: SESSION_SCHEMA_VERSION,
   ui: {
@@ -202,7 +250,8 @@ const buildSessionSnapshot = (): PersistedSessionV1 => ({
     currentIndex: Math.max(0, Math.round(playlistPlaybackState.value.currentIndex)),
     autoplay: playlistPlaybackState.value.autoplay,
     intervalSeconds: Math.max(1, Math.round(playlistPlaybackState.value.intervalSeconds))
-  }
+  },
+  layouts: buildPersistableLayouts()
 });
 
 const visibleMonitors = computed(() => {
@@ -236,6 +285,17 @@ const openSelectedSlaveMonitorIds = computed(() =>
   selectedTargetMonitorIds.value.filter((monitorId) => Boolean(monitorStates[monitorId]?.isWindowOpen))
 );
 
+const availableLayouts = computed(() =>
+  layouts.value
+    .map((layout) => ({
+      id: layout.id,
+      name: layout.name,
+      createdAt: layout.createdAt,
+      updatedAt: layout.updatedAt
+    }))
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+);
+
 const videoSyncPlan = computed(() =>
   buildVideoSyncPlan({
     openMonitorIds: openSelectedSlaveMonitorIds.value,
@@ -257,8 +317,201 @@ const uploadImage = (monitorId: string, file: File) => {
   reader.readAsDataURL(file);
 };
 
+const createLayoutId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `layout-${Date.now()}-${Math.round(Math.random() * 1000)}`;
+};
+
+const applyPersistedMonitorState = (monitorId: string, state: PersistedMonitorState) => {
+  applyTransform(monitorId, { type: 'reset' });
+
+  if (state.transform.rotate !== 0) {
+    applyTransform(monitorId, { type: 'rotate', value: state.transform.rotate });
+  }
+
+  if (state.transform.scale !== DEFAULT_TRANSFORM.scale) {
+    applyTransform(monitorId, {
+      type: 'scale',
+      value: Number((state.transform.scale - DEFAULT_TRANSFORM.scale).toFixed(2))
+    });
+  }
+
+  if (state.transform.translateX !== 0 || state.transform.translateY !== 0) {
+    applyTransform(monitorId, {
+      type: 'move',
+      value: {
+        x: state.transform.translateX,
+        y: state.transform.translateY
+      }
+    });
+  }
+
+  setImageForMonitor(monitorId, state.imageDataUrl);
+};
+
+const saveCurrentLayout = () => {
+  const name = layoutDraftName.value.trim();
+  if (name.length === 0) {
+    layoutFeedback.value = 'Ingresa un nombre para guardar el layout.';
+    return;
+  }
+
+  const normalizedName = name.toLocaleLowerCase();
+  const now = new Date().toISOString();
+  const matchingLayout = layouts.value.find(
+    (layout) => layout.name.toLocaleLowerCase() === normalizedName
+  );
+
+  if (matchingLayout && matchingLayout.id !== selectedLayoutId.value) {
+    const shouldOverwrite =
+      typeof window === 'undefined'
+        ? true
+        : window.confirm(
+            `Ya existe un layout llamado "${matchingLayout.name}". ¿Deseas sobrescribirlo?`
+          );
+
+    if (!shouldOverwrite) {
+      layoutFeedback.value = 'Guardado cancelado para evitar sobrescritura accidental.';
+      return;
+    }
+  }
+
+  const nextSnapshot = {
+    monitors: buildPersistableMonitorStateMap(),
+    playback: normalizePlaybackByPlaylist(playlistPlaybackState.value, playlistItems.value.length)
+  };
+
+  if (matchingLayout) {
+    layouts.value = layouts.value.map((layout) =>
+      layout.id === matchingLayout.id
+        ? {
+            ...layout,
+            name,
+            updatedAt: now,
+            snapshot: nextSnapshot
+          }
+        : layout
+    );
+    selectedLayoutId.value = matchingLayout.id;
+    layoutFeedback.value = `Layout "${name}" actualizado.`;
+    return;
+  }
+
+  const id = createLayoutId();
+  const createdLayout: PersistedLayout = {
+    id,
+    name,
+    createdAt: now,
+    updatedAt: now,
+    snapshot: nextSnapshot
+  };
+
+  layouts.value = [createdLayout, ...layouts.value];
+  selectedLayoutId.value = id;
+  layoutFeedback.value = `Layout "${name}" guardado correctamente.`;
+};
+
+const loadSelectedLayout = () => {
+  if (layouts.value.length === 0) {
+    layoutFeedback.value = 'No hay layouts guardados para cargar.';
+    return;
+  }
+
+  if (!selectedLayoutId.value) {
+    layoutFeedback.value = 'Selecciona un layout para cargar.';
+    return;
+  }
+
+  const selectedLayout = layouts.value.find((layout) => layout.id === selectedLayoutId.value);
+  if (!selectedLayout) {
+    layoutFeedback.value = 'El layout seleccionado ya no existe.';
+    return;
+  }
+
+  if (isPlaylistPlaying.value) {
+    pausePlaylist();
+  }
+
+  const loadedPlaybackState = normalizePlaybackByPlaylist(
+    selectedLayout.snapshot.playback,
+    playlistItems.value.length
+  );
+
+  const monitorIdsToApply = Array.from(knownMonitorIds.value);
+  monitorIdsToApply.forEach((monitorId) => {
+    const state = selectedLayout.snapshot.monitors[monitorId] ?? {
+      transform: { ...DEFAULT_TRANSFORM },
+      imageDataUrl: null
+    };
+
+    applyPersistedMonitorState(monitorId, state);
+  });
+
+  playlistPlaybackState.value = loadedPlaybackState;
+  layoutDraftName.value = selectedLayout.name;
+  layoutFeedback.value = `Layout "${selectedLayout.name}" restaurado.`;
+};
+
+const deleteSelectedLayout = () => {
+  if (layouts.value.length === 0) {
+    layoutFeedback.value = 'No hay layouts guardados para eliminar.';
+    return;
+  }
+
+  if (!selectedLayoutId.value) {
+    layoutFeedback.value = 'Selecciona un layout para eliminar.';
+    return;
+  }
+
+  const selectedLayout = layouts.value.find((layout) => layout.id === selectedLayoutId.value);
+  if (!selectedLayout) {
+    layoutFeedback.value = 'El layout seleccionado ya no existe.';
+    return;
+  }
+
+  const shouldDelete =
+    typeof window === 'undefined'
+      ? true
+      : window.confirm(`¿Eliminar el layout "${selectedLayout.name}"? Esta accion no se puede deshacer.`);
+  if (!shouldDelete) {
+    layoutFeedback.value = 'Eliminacion cancelada.';
+    return;
+  }
+
+  layouts.value = layouts.value.filter((layout) => layout.id !== selectedLayout.id);
+
+  if (layouts.value.length === 0) {
+    selectedLayoutId.value = null;
+    layoutDraftName.value = '';
+    layoutFeedback.value = `Layout "${selectedLayout.name}" eliminado. No quedan layouts guardados.`;
+    return;
+  }
+
+  const fallbackLayout = layouts.value[0];
+  selectedLayoutId.value = fallbackLayout?.id ?? null;
+  layoutDraftName.value = fallbackLayout?.name ?? '';
+  layoutFeedback.value = `Layout "${selectedLayout.name}" eliminado.`;
+};
+
+const onLayoutSelectionChange = (layoutId: string | null) => {
+  selectedLayoutId.value = layoutId;
+
+  if (!layoutId) {
+    return;
+  }
+
+  const selectedLayout = layouts.value.find((layout) => layout.id === layoutId);
+  if (selectedLayout) {
+    layoutDraftName.value = selectedLayout.name;
+    layoutFeedback.value = `Layout "${selectedLayout.name}" seleccionado.`;
+  }
+};
+
 watch(
-  [showOnlyProjectable, panelPreferences, persistableMonitorStates, playlistItems, playlistPlaybackState],
+  [showOnlyProjectable, panelPreferences, persistableMonitorStates, playlistItems, playlistPlaybackState, layouts],
   () => {
     sessionSaver.schedule(buildSessionSnapshot());
   },
@@ -317,6 +570,19 @@ watch(
     pausePlaylist();
   }
 );
+
+watch(layouts, (nextLayouts) => {
+  if (nextLayouts.length === 0) {
+    selectedLayoutId.value = null;
+    return;
+  }
+
+  if (selectedLayoutId.value && nextLayouts.some((layout) => layout.id === selectedLayoutId.value)) {
+    return;
+  }
+
+  selectedLayoutId.value = nextLayouts[0]?.id ?? null;
+}, { deep: true });
 
 const flushSessionSaver = () => {
   sessionSaver.flush();
@@ -394,7 +660,16 @@ onBeforeUnmount(() => {
           :show-only-projectable="showOnlyProjectable"
           :total-monitors="monitors.length"
           :can-close-all-windows="canCloseAllWindows"
+          :layouts="availableLayouts"
+          :layout-draft-name="layoutDraftName"
+          :selected-layout-id="selectedLayoutId"
+          :layout-feedback="layoutFeedback"
           @update:show-only-projectable="showOnlyProjectable = $event"
+          @update:layout-draft-name="layoutDraftName = $event"
+          @update:selected-layout-id="onLayoutSelectionChange"
+          @save-layout="saveCurrentLayout"
+          @load-layout="loadSelectedLayout"
+          @delete-layout="deleteSelectedLayout"
           @close-all="closeAllWindows"
           @open-window="openWindowForMonitor"
           @close-window="closeWindow"

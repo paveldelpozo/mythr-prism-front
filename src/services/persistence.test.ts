@@ -67,7 +67,34 @@ describe('services/persistence', () => {
         currentIndex: 999,
         autoplay: true,
         intervalSeconds: 0
-      }
+      },
+      layouts: [
+        {
+          id: 'layout-1',
+          name: 'Escena principal',
+          createdAt: '2026-03-30T12:00:00.000Z',
+          updatedAt: 'invalid-date',
+          snapshot: {
+            monitors: {
+              m1: {
+                transform: {
+                  rotate: 5,
+                  scale: 0,
+                  translateX: 100,
+                  translateY: 200
+                },
+                imageDataUrl: 10
+              }
+            },
+            playback: {
+              targetMonitorIds: ['m1', 'm1', '   '],
+              currentIndex: -5,
+              autoplay: true,
+              intervalSeconds: 0
+            }
+          }
+        }
+      ]
     };
 
     storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(persisted));
@@ -82,6 +109,14 @@ describe('services/persistence', () => {
     expect(loaded.playback.targetMonitorIds).toEqual(['m1']);
     expect(loaded.playback.currentIndex).toBe(0);
     expect(loaded.playback.intervalSeconds).toBe(1);
+    expect(loaded.layouts).toHaveLength(1);
+    expect(loaded.layouts[0]?.createdAt).toBe('2026-03-30T12:00:00.000Z');
+    expect(loaded.layouts[0]?.updatedAt).toBe('1970-01-01T00:00:00.000Z');
+    expect(loaded.layouts[0]?.snapshot.monitors.m1.transform.scale).toBe(0.05);
+    expect(loaded.layouts[0]?.snapshot.monitors.m1.imageDataUrl).toBeNull();
+    expect(loaded.layouts[0]?.snapshot.playback.targetMonitorIds).toEqual(['m1']);
+    expect(loaded.layouts[0]?.snapshot.playback.currentIndex).toBe(0);
+    expect(loaded.layouts[0]?.snapshot.playback.intervalSeconds).toBe(1);
   });
 
   it('hidrata con fallback seguro y limpia storage corrupto', () => {
@@ -91,6 +126,7 @@ describe('services/persistence', () => {
 
     expect(loaded.version).toBe(SESSION_SCHEMA_VERSION);
     expect(loaded.ui.showOnlyProjectable).toBe(true);
+    expect(loaded.layouts).toEqual([]);
     expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
   });
 
@@ -134,6 +170,7 @@ describe('services/persistence', () => {
     expect(loaded.playback.targetMonitorIds).toEqual(['m2']);
     expect(loaded.playback.autoplay).toBe(true);
     expect(loaded.playlist[0]?.kind).toBe('video');
+    expect(loaded.layouts).toEqual([]);
   });
 
   it('migra playback legacy de destino unico a targetMonitorIds', () => {
@@ -158,7 +195,8 @@ describe('services/persistence', () => {
         currentIndex: 0,
         autoplay: false,
         intervalSeconds: 5
-      }
+      },
+      layouts: []
     };
 
     storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(persisted));
@@ -182,7 +220,8 @@ describe('services/persistence', () => {
         currentIndex: 20,
         autoplay: true,
         intervalSeconds: 10
-      }
+      },
+      layouts: []
     };
 
     storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(persisted));
@@ -211,7 +250,24 @@ describe('services/persistence', () => {
         currentIndex: 50,
         autoplay: true,
         intervalSeconds: 0
-      }
+      },
+      layouts: [
+        {
+          id: 'layout-invalid',
+          name: 'Layout invalido',
+          createdAt: 'invalid-date',
+          updatedAt: 'invalid-date',
+          snapshot: {
+            monitors: {},
+            playback: {
+              targetMonitorIds: ['m1'],
+              currentIndex: 2,
+              autoplay: true,
+              intervalSeconds: 0
+            }
+          }
+        }
+      ]
     } as PersistedSessionV1);
     saver.flush();
 
@@ -219,5 +275,79 @@ describe('services/persistence', () => {
     expect(stored.playback.currentIndex).toBe(0);
     expect(stored.playback.autoplay).toBe(false);
     expect(stored.playback.intervalSeconds).toBe(1);
+    expect(stored.layouts[0]?.createdAt).toBe('1970-01-01T00:00:00.000Z');
+    expect(stored.layouts[0]?.snapshot.playback.currentIndex).toBe(2);
+    expect(stored.layouts[0]?.snapshot.playback.intervalSeconds).toBe(1);
+  });
+
+  it('descarta layouts invalidos y duplicados por id', () => {
+    const persisted = {
+      version: SESSION_SCHEMA_VERSION,
+      ui: {
+        showOnlyProjectable: true,
+        panelPreferences: {}
+      },
+      monitors: {},
+      playlist: [],
+      playback: {
+        targetMonitorIds: [],
+        currentIndex: 0,
+        autoplay: false,
+        intervalSeconds: 5
+      },
+      layouts: [
+        {
+          id: 'layout-a',
+          name: 'Layout A',
+          createdAt: '2026-03-30T12:00:00.000Z',
+          updatedAt: '2026-03-30T12:05:00.000Z',
+          snapshot: {
+            monitors: {},
+            playback: {
+              targetMonitorIds: [],
+              currentIndex: 0,
+              autoplay: false,
+              intervalSeconds: 5
+            }
+          }
+        },
+        {
+          id: 'layout-a',
+          name: 'Layout A duplicado',
+          createdAt: '2026-03-30T12:10:00.000Z',
+          updatedAt: '2026-03-30T12:15:00.000Z',
+          snapshot: {
+            monitors: {},
+            playback: {
+              targetMonitorIds: [],
+              currentIndex: 4,
+              autoplay: true,
+              intervalSeconds: 5
+            }
+          }
+        },
+        {
+          id: '',
+          name: 'Sin id',
+          snapshot: {
+            monitors: {},
+            playback: {
+              targetMonitorIds: [],
+              currentIndex: 1,
+              autoplay: false,
+              intervalSeconds: 5
+            }
+          }
+        }
+      ]
+    };
+
+    storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(persisted));
+
+    const loaded = loadPersistedSession();
+
+    expect(loaded.layouts).toHaveLength(1);
+    expect(loaded.layouts[0]?.id).toBe('layout-a');
+    expect(loaded.layouts[0]?.name).toBe('Layout A');
   });
 });

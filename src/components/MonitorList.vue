@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { EyeIcon, EyeSlashIcon, XMarkIcon } from '@heroicons/vue/24/outline';
+import { ArrowDownTrayIcon, EyeIcon, EyeSlashIcon, TrashIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 import MonitorCard from './MonitorCard.vue';
 import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
 
@@ -9,11 +9,24 @@ defineProps<{
   showOnlyProjectable: boolean;
   totalMonitors: number;
   canCloseAllWindows: boolean;
+  layouts: Array<{
+    id: string;
+    name: string;
+    updatedAt: string;
+  }>;
+  layoutDraftName: string;
+  selectedLayoutId: string | null;
+  layoutFeedback: string | null;
 }>();
 
 const emit = defineEmits<{
   'update:showOnlyProjectable': [value: boolean];
+  'update:layoutDraftName': [value: string];
+  'update:selectedLayoutId': [value: string | null];
   closeAll: [];
+  saveLayout: [];
+  loadLayout: [];
+  deleteLayout: [];
   openWindow: [monitorId: string];
   closeWindow: [monitorId: string];
   requestFullscreen: [monitorId: string];
@@ -63,6 +76,94 @@ const emit = defineEmits<{
           Cerrar todas las ventanas
         </button>
       </div>
+    </div>
+
+    <div class="surface-panel space-y-3 px-4 py-3" data-testid="layout-manager-panel">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <p class="section-kicker">Layouts guardados</p>
+        <span class="text-xs text-slate-300/80" data-testid="layout-count">
+          {{ layouts.length === 0 ? 'Sin layouts' : `${layouts.length} guardado(s)` }}
+        </span>
+      </div>
+
+      <div class="form-row">
+        <label class="form-field" for="layout-name-input">
+          Nombre del layout
+          <input
+            id="layout-name-input"
+            data-testid="layout-name-input"
+            type="text"
+            class="form-control"
+            :value="layoutDraftName"
+            placeholder="Ej: Escenario principal"
+            @input="emit('update:layoutDraftName', ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+
+        <label class="form-field" for="layout-select">
+          Layout disponible
+          <select
+            id="layout-select"
+            data-testid="layout-select"
+            class="form-control"
+            :value="selectedLayoutId ?? ''"
+            @change="emit('update:selectedLayoutId', ($event.target as HTMLSelectElement).value || null)"
+          >
+            <option value="">{{ layouts.length === 0 ? 'No hay layouts guardados' : 'Selecciona un layout' }}</option>
+            <option
+              v-for="layout in layouts"
+              :key="layout.id"
+              :value="layout.id"
+            >
+              {{ layout.name }} (actualizado {{ new Date(layout.updatedAt).toLocaleString('es-AR') }})
+            </option>
+          </select>
+        </label>
+      </div>
+
+      <div class="monitor-toolbar-actions">
+        <button
+          type="button"
+          data-testid="layout-save-btn"
+          class="btn-with-icon btn-sm btn-indigo-soft"
+          @click="emit('saveLayout')"
+        >
+          <ArrowDownTrayIcon aria-hidden="true" class="btn-icon" />
+          Guardar layout
+        </button>
+
+        <button
+          type="button"
+          data-testid="layout-load-btn"
+          class="btn-with-icon btn-sm btn-emerald-soft"
+          :disabled="!selectedLayoutId"
+          :aria-disabled="!selectedLayoutId"
+          @click="emit('loadLayout')"
+        >
+          <ArrowDownTrayIcon aria-hidden="true" class="btn-icon" />
+          Cargar layout
+        </button>
+
+        <button
+          type="button"
+          data-testid="layout-delete-btn"
+          class="btn-with-icon btn-sm btn-rose-soft"
+          :disabled="!selectedLayoutId"
+          :aria-disabled="!selectedLayoutId"
+          @click="emit('deleteLayout')"
+        >
+          <TrashIcon aria-hidden="true" class="btn-icon" />
+          Eliminar layout
+        </button>
+      </div>
+
+      <p
+        v-if="layoutFeedback"
+        data-testid="layout-feedback"
+        class="text-xs text-slate-200/90"
+      >
+        {{ layoutFeedback }}
+      </p>
     </div>
 
     <p

@@ -1,7 +1,8 @@
 import { mount } from '@vue/test-utils';
 import { computed, defineComponent, nextTick, reactive, ref, type PropType } from 'vue';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MonitorDescriptor } from './types/broadcaster';
+import type { PersistedSessionV1 } from './services/persistence';
 
 const mockMonitors = ref<MonitorDescriptor[]>([
   {
@@ -59,9 +60,35 @@ const mockMonitorStates = reactive({
   }
 });
 
+const applyTransformSpy = vi.fn();
+const setImageForMonitorSpy = vi.fn();
+const sessionSaverScheduleSpy = vi.fn();
+
+const buildPersistedSession = (
+  overrides: Partial<PersistedSessionV1> = {}
+): PersistedSessionV1 => ({
+  version: 1,
+  ui: {
+    showOnlyProjectable: true,
+    panelPreferences: {}
+  },
+  monitors: {},
+  playlist: [],
+  playback: {
+    targetMonitorIds: [],
+    currentIndex: 0,
+    autoplay: false,
+    intervalSeconds: 5
+  },
+  layouts: [],
+  ...overrides
+});
+
+let mockPersistedSession: PersistedSessionV1 = buildPersistedSession();
+
 vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
   useMultiMonitorBroadcaster: () => ({
-    applyTransform: vi.fn(),
+    applyTransform: applyTransformSpy,
     closeAllWindows: vi.fn(),
     closeWindow: vi.fn(),
     globalError: ref<string | null>(null),
@@ -84,30 +111,16 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
     openWindowForMonitor: vi.fn(),
     requestFullscreen: vi.fn(),
     sendVideoSyncCommand: vi.fn(() => true),
-    setImageForMonitor: vi.fn(),
+    setImageForMonitor: setImageForMonitorSpy,
     setPlaylistItemForMonitor: vi.fn()
   })
 }));
 
 vi.mock('./services/persistence', () => ({
   SESSION_SCHEMA_VERSION: 1,
-  loadPersistedSession: () => ({
-    version: 1,
-    ui: {
-      showOnlyProjectable: true,
-      panelPreferences: {}
-    },
-    monitors: {},
-    playlist: [],
-    playback: {
-      targetMonitorIds: [],
-      currentIndex: 0,
-      autoplay: false,
-      intervalSeconds: 5
-    }
-  }),
+  loadPersistedSession: () => mockPersistedSession,
   createDebouncedSessionSaver: () => ({
-    schedule: vi.fn(),
+    schedule: sessionSaverScheduleSpy,
     flush: vi.fn()
   })
 }));
@@ -143,18 +156,62 @@ const MonitorListStub = defineComponent({
   props: {
     monitors: { type: Array as PropType<Array<{ id: string }>>, required: true },
     showOnlyProjectable: { type: Boolean, required: true },
-    canCloseAllWindows: { type: Boolean, required: true }
+    canCloseAllWindows: { type: Boolean, required: true },
+    layouts: {
+      type: Array as PropType<Array<{ id: string; name: string }>>,
+      required: true
+    },
+    selectedLayoutId: {
+      type: String,
+      default: null
+    },
+    layoutFeedback: {
+      type: String,
+      default: null
+    },
+    layoutDraftName: {
+      type: String,
+      default: ''
+    }
   },
+  emits: ['update:layoutDraftName', 'update:selectedLayoutId', 'saveLayout', 'loadLayout', 'deleteLayout'],
   template: `
     <div>
       <p data-testid="monitorlist-visible-monitors">{{ monitors.length }}</p>
       <p data-testid="monitorlist-filter-enabled">{{ showOnlyProjectable ? 'true' : 'false' }}</p>
       <p data-testid="monitorlist-can-close-all">{{ canCloseAllWindows ? 'true' : 'false' }}</p>
+      <p data-testid="monitorlist-layout-count">{{ layouts.length }}</p>
+      <p data-testid="monitorlist-layout-feedback">{{ layoutFeedback ?? 'null' }}</p>
+      <p data-testid="monitorlist-layout-draft">{{ layoutDraftName }}</p>
+      <button
+        data-testid="layout-set-name"
+        @click="$emit('update:layoutDraftName', 'Escena principal')"
+      >
+        set-layout-name
+      </button>
+      <button
+        data-testid="layout-select-first"
+        :disabled="layouts.length === 0"
+        @click="$emit('update:selectedLayoutId', layouts[0]?.id ?? null)"
+      >
+        select-layout
+      </button>
+      <button data-testid="layout-save-trigger" @click="$emit('saveLayout')">save-layout</button>
+      <button data-testid="layout-load-trigger" @click="$emit('loadLayout')">load-layout</button>
+      <button data-testid="layout-delete-trigger" @click="$emit('deleteLayout')">delete-layout</button>
     </div>
   `
 });
 
 describe('App integration base', () => {
+  beforeEach(() => {
+    mockPersistedSession = buildPersistedSession();
+    applyTransformSpy.mockReset();
+    setImageForMonitorSpy.mockReset();
+    sessionSaverScheduleSpy.mockReset();
+    vi.restoreAllMocks();
+  });
+
   it('inicia con showOnlyProjectable activo por defecto', () => {
     const wrapper = mount(App, {
       global: {
@@ -210,5 +267,127 @@ describe('App integration base', () => {
     await nextTick();
 
     expect(wrapper.get('[data-testid="playlist-target"]').text()).toBe('null');
+  });
+
+  it('guarda un layout desde UI y muestra feedback', async () => {
+    const wrapper = mount(App, {
+      global: {
+        stubs: {
+          MonitorList: MonitorListStub,
+          PlaylistManager: PlaylistManagerStub
+        }
+      }
+    });
+
+    await wrapper.get('[data-testid="layout-set-name"]').trigger('click');
+    await wrapper.get('[data-testid="layout-save-trigger"]').trigger('click');
+    await nextTick();
+
+    expect(wrapper.get('[data-testid="monitorlist-layout-count"]').text()).toBe('1');
+    expect(wrapper.get('[data-testid="monitorlist-layout-feedback"]').text()).toContain('guardado correctamente');
+    expect(wrapper.get('[data-testid="monitorlist-layout-draft"]').text()).toBe('Escena principal');
+  });
+
+  it('carga un layout guardado y aplica snapshot de playback y monitores', async () => {
+    mockPersistedSession = buildPersistedSession({
+      layouts: [
+        {
+          id: 'layout-a',
+          name: 'Layout A',
+          createdAt: '2026-03-30T10:00:00.000Z',
+          updatedAt: '2026-03-30T10:00:00.000Z',
+          snapshot: {
+            monitors: {
+              projector: {
+                transform: { rotate: 15, scale: 1.25, translateX: 30, translateY: -12 },
+                imageDataUrl: 'data:image/png;base64,abc'
+              }
+            },
+            playback: {
+              targetMonitorIds: ['projector'],
+              currentIndex: 2,
+              autoplay: true,
+              intervalSeconds: 9
+            }
+          }
+        }
+      ]
+    });
+
+    const wrapper = mount(App, {
+      global: {
+        stubs: {
+          MonitorList: MonitorListStub,
+          PlaylistManager: PlaylistManagerStub
+        }
+      }
+    });
+
+    await wrapper.get('[data-testid="layout-select-first"]').trigger('click');
+    await wrapper.get('[data-testid="layout-load-trigger"]').trigger('click');
+    await nextTick();
+    await nextTick();
+
+    expect(wrapper.get('[data-testid="monitorlist-layout-feedback"]').text()).toContain('restaurado');
+    expect(wrapper.get('[data-testid="playlist-target"]').text()).toBe('projector');
+    expect(applyTransformSpy).toHaveBeenCalled();
+    expect(setImageForMonitorSpy).toHaveBeenCalledWith('projector', 'data:image/png;base64,abc');
+  });
+
+  it('informa feedback cuando no hay layouts para cargar', async () => {
+    const wrapper = mount(App, {
+      global: {
+        stubs: {
+          MonitorList: MonitorListStub,
+          PlaylistManager: PlaylistManagerStub
+        }
+      }
+    });
+
+    await wrapper.get('[data-testid="layout-load-trigger"]').trigger('click');
+    await nextTick();
+
+    expect(wrapper.get('[data-testid="monitorlist-layout-feedback"]').text()).toContain(
+      'No hay layouts guardados para cargar'
+    );
+  });
+
+  it('elimina un layout desde UI y actualiza estado', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    mockPersistedSession = buildPersistedSession({
+      layouts: [
+        {
+          id: 'layout-a',
+          name: 'Layout A',
+          createdAt: '2026-03-30T10:00:00.000Z',
+          updatedAt: '2026-03-30T10:00:00.000Z',
+          snapshot: {
+            monitors: {},
+            playback: {
+              targetMonitorIds: [],
+              currentIndex: 0,
+              autoplay: false,
+              intervalSeconds: 5
+            }
+          }
+        }
+      ]
+    });
+
+    const wrapper = mount(App, {
+      global: {
+        stubs: {
+          MonitorList: MonitorListStub,
+          PlaylistManager: PlaylistManagerStub
+        }
+      }
+    });
+
+    await wrapper.get('[data-testid="layout-select-first"]').trigger('click');
+    await wrapper.get('[data-testid="layout-delete-trigger"]').trigger('click');
+    await nextTick();
+
+    expect(wrapper.get('[data-testid="monitorlist-layout-count"]').text()).toBe('0');
+    expect(wrapper.get('[data-testid="monitorlist-layout-feedback"]').text()).toContain('eliminado');
   });
 });

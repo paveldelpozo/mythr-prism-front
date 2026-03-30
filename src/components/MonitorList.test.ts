@@ -41,7 +41,11 @@ const mountMonitorList = (canCloseAllWindows: boolean) =>
       states,
       showOnlyProjectable: false,
       totalMonitors: 1,
-      canCloseAllWindows
+      canCloseAllWindows,
+      layouts: [],
+      layoutDraftName: '',
+      selectedLayoutId: null,
+      layoutFeedback: null
     },
     global: {
       stubs: {

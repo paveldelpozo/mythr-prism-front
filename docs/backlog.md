@@ -38,7 +38,7 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 
 | Fase | Progreso |
 | --- | --- |
-| MVP | 62% |
+| MVP | 69% |
 | V1 | 0% |
 | V2 | 0% |
 
@@ -140,16 +140,17 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
     - [x] Medicion de drift y correccion periodica.
     - [x] Prueba manual en setup multi-monitor.
 
-- [ ] **Guardado/restauracion de layouts**
+- [x] **Guardado/restauracion de layouts**
   - Dependencias: modelo de escenas/layout actual.
   - Hecho: se puede guardar un layout nombrado y restaurarlo sin perdida de configuracion.
   - Subtareas:
     - [x] Base de persistencia de sesion/config en `localStorage` (schema versionado + hidratacion segura).
-    - [ ] Esquema de serializacion de layout.
-    - [ ] Acciones guardar/cargar desde UI.
-    - [ ] Validacion de compatibilidad entre versiones.
+    - [x] Esquema de serializacion de layout.
+    - [x] Acciones guardar/cargar desde UI.
+    - [x] Validacion de compatibilidad entre versiones.
 
 - [ ] **Modo espejo**
+  - Estado: `in-progress`.
   - Dependencias: asignacion de salidas/monitores.
   - Hecho: una salida replica otra con estabilidad y control de activacion/desactivacion.
   - Subtareas:
@@ -321,7 +322,9 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 10. [x] **[MVP][P4] Rediseno UI + drag and drop -> Definir lineamientos MVP e integrar DnD con fallback subir/bajar** _(completado)_
 11. [x] **[MVP][P5] Previsualizacion playlist -> Implementar pipeline imagen/video con fallback** _(completado)_
 12. [x] **[MVP][P6] Playlist multi-destino -> Disenar modelo 1:N y comandos de grupo** _(completado)_
-13. [ ] **[MVP] Guardado/restauracion de layouts -> Esquema de serializacion de layout** _(en curso)_
+13. [x] **[MVP] Guardado/restauracion de layouts -> Esquema de serializacion de layout** _(completado)_
+14. [x] **[MVP] Guardado/restauracion de layouts -> Acciones guardar/cargar desde UI** _(completado)_
+15. [ ] **[MVP] Modo espejo -> Selector de origen de espejo** _(en curso)_
 
 ## Notas
 
@@ -339,3 +342,4 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 - 2026-03-30: P3 completado migrando formularios complejos de Playlist a modales accesibles (alta/edicion) con cierre por escape/backdrop y pruebas de apertura/guardado/cancelacion.
 - 2026-03-30: Video sincronizado (paso 1) completado con estrategia host+clientes tipada (`videoSync`) y visualizacion operativa en Playlist para identificar host, clientes y tolerancias antes de implementar mensajes de sync.
 - 2026-03-30: Video sincronizado completado end-to-end con mensajes `play/pause/seek/time`, resincronizacion periodica con tolerancia de drift, integracion con playlist multi-destino y degradacion elegante ante destinos no listos o con fallo parcial.
+- 2026-03-30: completadas acciones de UI para guardar/cargar/eliminar layouts con feedback operativo y proteccion de sobrescritura/eliminacion accidental; se agregaron pruebas de regresion de flujo y se marco el siguiente item de MVP (`Modo espejo`) en curso.

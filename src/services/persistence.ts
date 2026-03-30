@@ -19,15 +19,30 @@ export interface PersistedUiState {
   panelPreferences: Record<string, boolean>;
 }
 
+export interface PersistedLayoutSnapshot {
+  monitors: PersistedMonitorStateMap;
+  playback: PlaylistPlaybackState;
+}
+
+export interface PersistedLayout {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  snapshot: PersistedLayoutSnapshot;
+}
+
 export interface PersistedSessionV1 {
   version: typeof SESSION_SCHEMA_VERSION;
   ui: PersistedUiState;
   monitors: PersistedMonitorStateMap;
   playlist: MultimediaItem[];
   playback: PlaylistPlaybackState;
+  layouts: PersistedLayout[];
 }
 
 const DEFAULT_PLAYBACK_INTERVAL_SECONDS = 5;
+const DEFAULT_LAYOUT_TIMESTAMP = '1970-01-01T00:00:00.000Z';
 
 const clampIndex = (index: number, total: number): number => {
   if (total <= 0) {
@@ -58,7 +73,8 @@ const createDefaultSession = (): PersistedSessionV1 => ({
     currentIndex: 0,
     autoplay: false,
     intervalSeconds: DEFAULT_PLAYBACK_INTERVAL_SECONDS
-  }
+  },
+  layouts: []
 });
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -313,6 +329,97 @@ const sanitizePlaybackState = (
   };
 };
 
+const sanitizeLayoutPlaybackState = (value: unknown): PlaylistPlaybackState => {
+  const fallback = createDefaultSession().playback;
+
+  if (!isRecord(value)) {
+    return fallback;
+  }
+
+  const targetMonitorIds = Array.isArray(value.targetMonitorIds)
+    ? value.targetMonitorIds
+        .filter((monitorId): monitorId is string => typeof monitorId === 'string')
+        .map((monitorId) => monitorId.trim())
+        .filter((monitorId) => monitorId.length > 0)
+    : [];
+
+  const dedupedTargets = Array.from(new Set(targetMonitorIds));
+
+  return {
+    targetMonitorIds: dedupedTargets,
+    currentIndex: Math.max(0, toFiniteInteger(value.currentIndex, fallback.currentIndex)),
+    autoplay: typeof value.autoplay === 'boolean' ? value.autoplay : fallback.autoplay,
+    intervalSeconds: Math.max(1, toFiniteInteger(value.intervalSeconds, fallback.intervalSeconds))
+  };
+};
+
+const sanitizeIsoDateString = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  return new Date(parsed).toISOString();
+};
+
+const sanitizeLayoutSnapshot = (value: unknown): PersistedLayoutSnapshot | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return {
+    monitors: sanitizeMonitorStateMap(value.monitors),
+    playback: sanitizeLayoutPlaybackState(value.playback)
+  };
+};
+
+const sanitizeLayout = (value: unknown): PersistedLayout | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const id = toNonEmptyString(value.id);
+  const name = toNonEmptyString(value.name);
+  const snapshot = sanitizeLayoutSnapshot(value.snapshot);
+
+  if (!id || !name || !snapshot) {
+    return null;
+  }
+
+  return {
+    id,
+    name,
+    createdAt: sanitizeIsoDateString(value.createdAt) ?? DEFAULT_LAYOUT_TIMESTAMP,
+    updatedAt: sanitizeIsoDateString(value.updatedAt) ?? DEFAULT_LAYOUT_TIMESTAMP,
+    snapshot
+  };
+};
+
+const sanitizeLayouts = (value: unknown): PersistedLayout[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const layouts: PersistedLayout[] = [];
+  const existingIds = new Set<string>();
+
+  value.forEach((layoutValue) => {
+    const layout = sanitizeLayout(layoutValue);
+    if (!layout || existingIds.has(layout.id)) {
+      return;
+    }
+
+    existingIds.add(layout.id);
+    layouts.push(layout);
+  });
+
+  return layouts;
+};
+
 const extractLegacyPlaybackState = (value: Record<string, unknown>): unknown => {
   if (isRecord(value.playback)) {
     return value.playback;
@@ -355,7 +462,8 @@ const parseLegacySession = (value: Record<string, unknown>): PersistedSessionV1 
       ui: sanitizeUiState(value.ui),
       monitors: sanitizeMonitorStateMap(value.monitors),
       playlist,
-      playback: sanitizePlaybackState(extractLegacyPlaybackState(value), playlist.length)
+      playback: sanitizePlaybackState(extractLegacyPlaybackState(value), playlist.length),
+      layouts: sanitizeLayouts(value.layouts)
     };
   }
 
@@ -373,7 +481,8 @@ const parseLegacySession = (value: Record<string, unknown>): PersistedSessionV1 
     }),
     monitors: sanitizeMonitorStateMap(value.monitorStates),
     playlist,
-    playback: sanitizePlaybackState(extractLegacyPlaybackState(value), playlist.length)
+    playback: sanitizePlaybackState(extractLegacyPlaybackState(value), playlist.length),
+    layouts: []
   };
 };
 
@@ -390,7 +499,8 @@ const sanitizePersistedSession = (value: unknown): PersistedSessionV1 => {
       ui: sanitizeUiState(value.ui),
       monitors: sanitizeMonitorStateMap(value.monitors),
       playlist,
-      playback: sanitizePlaybackState(extractLegacyPlaybackState(value), playlist.length)
+      playback: sanitizePlaybackState(extractLegacyPlaybackState(value), playlist.length),
+      layouts: sanitizeLayouts(value.layouts)
     };
   }
 
