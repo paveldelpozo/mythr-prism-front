@@ -20,6 +20,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppCheckbox from './ui/AppCheckbox.vue';
 import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
 import type { MediaItemKind, MultimediaItem, PlaylistPlaybackState } from '../types/playlist';
+import { buildVideoSyncPlan, type VideoSyncPlan } from '../types/videoSync';
 
 const DEFAULT_IMAGE_DURATION_MS = 5000;
 const IMAGE_DATA_URL_PREFIX = 'data:image/';
@@ -31,6 +32,7 @@ const props = defineProps<{
   monitors: MonitorDescriptor[];
   monitorStates: MonitorStateMap;
   playbackState: PlaylistPlaybackState;
+  videoSyncPlan?: VideoSyncPlan;
   playbackFeedback: string;
   isPlaying: boolean;
 }>();
@@ -177,6 +179,29 @@ const selectedMonitorReady = (): boolean => {
 
   const monitorState = props.monitorStates[monitorId];
   return Boolean(monitorState?.isWindowOpen);
+};
+
+const effectiveVideoSyncPlan = computed<VideoSyncPlan>(() => {
+  if (props.videoSyncPlan) {
+    return props.videoSyncPlan;
+  }
+
+  const openMonitorIds = Object.entries(props.monitorStates)
+    .filter(([, state]) => state.isWindowOpen)
+    .map(([monitorId]) => monitorId);
+
+  return buildVideoSyncPlan({
+    openMonitorIds,
+    preferredHostMonitorId: props.playbackState.targetMonitorId
+  });
+});
+
+const monitorLabelById = (monitorId: string | null): string => {
+  if (!monitorId) {
+    return 'sin host';
+  }
+
+  return props.monitors.find((monitor) => monitor.id === monitorId)?.label ?? monitorId;
 };
 
 const readFileAsDataUrl = (file: File): Promise<string> =>
@@ -702,6 +727,26 @@ onBeforeUnmount(() => {
         <span class="text-xs" :class="selectedMonitorReady() ? 'text-emerald-200' : 'text-amber-200'">
           {{ selectedMonitorReady() ? 'Monitor listo para reproducir.' : 'El monitor objetivo requiere ventana abierta.' }}
         </span>
+      </div>
+
+      <div
+        data-testid="video-sync-strategy"
+        class="mt-3 rounded-lg border border-cyan-300/30 bg-cyan-950/20 px-3 py-2 text-xs text-cyan-100"
+      >
+        <p class="font-semibold uppercase tracking-[0.12em] text-cyan-200/90">Sync host + clientes</p>
+        <p v-if="effectiveVideoSyncPlan.reason === 'ok'" class="mt-1 text-cyan-100/95">
+          Host: {{ monitorLabelById(effectiveVideoSyncPlan.hostMonitorId) }} · Clientes:
+          {{ effectiveVideoSyncPlan.clientMonitorIds.length }} · Lead:
+          {{ effectiveVideoSyncPlan.strategy.commandLeadMs }}ms · Drift max:
+          {{ effectiveVideoSyncPlan.strategy.driftToleranceMs }}ms
+        </p>
+        <p v-else-if="effectiveVideoSyncPlan.reason === 'single-open-monitor'" class="mt-1 text-cyan-100/95">
+          Solo hay una ventana abierta ({{ monitorLabelById(effectiveVideoSyncPlan.hostMonitorId) }}).
+          Se usara como host hasta sumar clientes.
+        </p>
+        <p v-else class="mt-1 text-cyan-100/95">
+          No hay ventanas abiertas para sincronizar. Abre al menos dos para activar host + clientes.
+        </p>
       </div>
 
       <div class="mt-3 flex flex-wrap gap-2">

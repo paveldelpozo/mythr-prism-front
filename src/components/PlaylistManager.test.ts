@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import PlaylistManager from './PlaylistManager.vue';
 import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
 import type { MultimediaItem, PlaylistPlaybackState } from '../types/playlist';
+import type { VideoSyncPlan } from '../types/videoSync';
 
 const createMonitor = (id: string, label: string): MonitorDescriptor => ({
   id,
@@ -80,6 +81,20 @@ const createFileList = (file: File): FileList => {
 
   return fileList as FileList;
 };
+
+const createVideoSyncPlan = (overrides?: Partial<VideoSyncPlan>): VideoSyncPlan => ({
+  strategy: {
+    commandLeadMs: 800,
+    driftToleranceMs: 80,
+    resyncIntervalMs: 4000
+  },
+  hostMonitorId: 'm1',
+  clientMonitorIds: ['m2'],
+  eligibleMonitorIds: ['m1', 'm2'],
+  canSynchronize: true,
+  reason: 'ok',
+  ...overrides
+});
 
 const openAddModal = async (wrapper: ReturnType<typeof mount>) => {
   await wrapper.get('[data-testid="open-add-item-modal"]').trigger('click');
@@ -409,6 +424,25 @@ describe('components/PlaylistManager', () => {
     expect(wrapper.get('[data-testid="open-add-item-modal"]').text()).toBe('Agregar item');
     expect(wrapper.get('[data-testid="open-edit-item-modal-a"]').text()).toBe('Editar');
     expect(wrapper.text().toLowerCase()).not.toContain('editar en modal');
+  });
+
+  it('muestra estrategia de sincronizacion host + clientes cuando recibe plan', () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [createImage('a', 'A')],
+        monitors: [createMonitor('m1', 'Monitor 1'), createMonitor('m2', 'Monitor 2')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState({ targetMonitorId: 'm1' }),
+        videoSyncPlan: createVideoSyncPlan(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    const strategy = wrapper.get('[data-testid="video-sync-strategy"]');
+    expect(strategy.text()).toContain('Sync host + clientes');
+    expect(strategy.text()).toContain('Host: Monitor 1');
+    expect(strategy.text()).toContain('Clientes: 1');
   });
 
   it('muestra iconos decorativos en botones clave sin perder etiquetas', () => {

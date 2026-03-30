@@ -18,6 +18,7 @@ import {
   type PersistedSessionV1
 } from './services/persistence';
 import type { MultimediaItem, PlaylistPlaybackState } from './types/playlist';
+import { buildVideoSyncPlan } from './types/videoSync';
 
 const persistedSession = loadPersistedSession();
 
@@ -215,6 +216,19 @@ const openSlaveWindowsCount = computed(() =>
 );
 
 const canCloseAllWindows = computed(() => openSlaveWindowsCount.value > 0);
+
+const openSlaveMonitorIds = computed(() =>
+  Object.entries(monitorStates)
+    .filter(([, state]) => state.isWindowOpen)
+    .map(([monitorId]) => monitorId)
+);
+
+const videoSyncPlan = computed(() =>
+  buildVideoSyncPlan({
+    openMonitorIds: openSlaveMonitorIds.value,
+    preferredHostMonitorId: playlistPlaybackState.value.targetMonitorId
+  })
+);
 
 const uploadImage = (monitorId: string, file: File) => {
   const reader = new FileReader();
@@ -423,6 +437,7 @@ onBeforeUnmount(() => {
           v-model:playback-state="playlistPlaybackState"
           :monitors="visibleMonitors"
           :monitor-states="monitorStates"
+          :video-sync-plan="videoSyncPlan"
           :playback-feedback="playlistPlaybackFeedback"
           :is-playing="isPlaylistPlaying"
           @playback:start="startPlaylist"

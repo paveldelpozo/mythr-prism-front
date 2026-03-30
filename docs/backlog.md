@@ -27,7 +27,7 @@ Nota UX (2026-03-30): en formularios de alta/edicion de Playlist se refino el la
 
 | Fase | Progreso |
 | --- | --- |
-| MVP | 25% |
+| MVP | 26% |
 | V1 | 0% |
 | V2 | 0% |
 
@@ -121,7 +121,7 @@ Nota UX (2026-03-30): en formularios de alta/edicion de Playlist se refino el la
   - Dependencias: playlist multimedia, reloj/timestamp compartido.
   - Hecho: multiples monitores reproducen el mismo video con desfase maximo aceptable.
   - Subtareas:
-    - [ ] Definir estrategia de sincronizacion (host + clientes).
+    - [x] Definir estrategia de sincronizacion (host + clientes).
     - [ ] Implementar mensajes de sync (play/pause/seek/time).
     - [ ] Medicion de drift y correccion periodica.
     - [ ] Prueba manual en setup multi-monitor.
@@ -299,8 +299,8 @@ Nota UX (2026-03-30): en formularios de alta/edicion de Playlist se refino el la
 2. [x] **[MVP] Playlist multimedia -> UI para alta/edicion/reordenado** _(completado)_
 3. [x] **[MVP] Playlist multimedia -> Motor de reproduccion secuencial con avance manual/automatico** _(completado)_
 4. [x] **[MVP] Playlist multimedia -> Persistencia local de playlist** _(completado)_
-5. [ ] **[MVP] Video sincronizado -> Definir estrategia de sincronizacion (host + clientes)** _(en curso)_
-6. [ ] **[MVP] Video sincronizado -> Implementar mensajes de sync (play/pause/seek/time)** _(pendiente)_
+5. [x] **[MVP] Video sincronizado -> Definir estrategia de sincronizacion (host + clientes)** _(completado)_
+6. [ ] **[MVP] Video sincronizado -> Implementar mensajes de sync (play/pause/seek/time)** _(en curso)_
 7. [x] **[MVP][P1] Cerrar todas las ventanas -> Unificar criterio de "ventana abierta" + habilitacion de boton global** _(completado)_
 8. [x] **[MVP][P2] Reorganizar interfaz principal -> Definir IA de Monitores/Playlist y reglas responsive** _(completado)_
 9. [x] **[MVP][P3] Formularios complejos en dialogos -> Migrar primer formulario de alto impacto** _(completado)_
@@ -322,3 +322,4 @@ Nota UX (2026-03-30): en formularios de alta/edicion de Playlist se refino el la
 - 2026-03-30: P1 completado con habilitacion/deshabilitacion del boton global de cierre segun ventanas abiertas y test de regresion del header.
 - 2026-03-30: P2 completado con separacion de Monitores/Playlist mediante tabs en la vista principal, manteniendo flujo existente y agregando pruebas de UI basicas para navegacion entre secciones.
 - 2026-03-30: P3 completado migrando formularios complejos de Playlist a modales accesibles (alta/edicion) con cierre por escape/backdrop y pruebas de apertura/guardado/cancelacion.
+- 2026-03-30: Video sincronizado (paso 1) completado con estrategia host+clientes tipada (`videoSync`) y visualizacion operativa en Playlist para identificar host, clientes y tolerancias antes de implementar mensajes de sync.
