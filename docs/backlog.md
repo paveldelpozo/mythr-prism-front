@@ -21,7 +21,7 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 
 | Fase | Progreso |
 | --- | --- |
-| MVP | 7% |
+| MVP | 11% |
 | V1 | 0% |
 | V2 | 0% |
 
@@ -38,17 +38,17 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
     - [x] Motor de reproduccion secuencial con avance manual/automatico.
     - [x] Persistencia local de playlist.
 
-- [ ] **Cerrar todas las ventanas (habilitacion por estado)**
+- [x] **Cerrar todas las ventanas (habilitacion por estado)**
   - Prioridad: `P1`.
   - Objetivo: evitar acciones vacias y mejorar control operativo mostrando el boton solo habilitado cuando exista al menos una ventana abierta.
   - Dependencias/riesgos: depende de fuente de verdad confiable para ventanas activas; riesgo de estado desincronizado tras cierre manual del navegador.
   - Criterio de aceptacion: boton `Cerrar todas las ventanas` deshabilitado con 0 ventanas abiertas y habilitado automaticamente con >=1.
   - DoD: comportamiento validado en flujo abrir/cerrar/reabrir ventanas y sin regresion en comandos de cierre individuales.
   - Subtareas:
-    - [ ] Unificar criterio de "ventana abierta" en estado serializable de sesion.
-    - [ ] Conectar estado derivado al boton global de cierre.
-    - [ ] Sincronizar cambios por cierre manual de ventanas secundarias.
-    - [ ] Agregar prueba de regresion de habilitacion/deshabilitacion.
+    - [x] Unificar criterio de "ventana abierta" en estado serializable de sesion.
+    - [x] Conectar estado derivado al boton global de cierre.
+    - [x] Sincronizar cambios por cierre manual de ventanas secundarias.
+    - [x] Agregar prueba de regresion de habilitacion/deshabilitacion.
 
 - [ ] **Reorganizar interfaz principal (Monitores/Playlist)**
   - Prioridad: `P2`.
@@ -294,8 +294,8 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 4. [x] **[MVP] Playlist multimedia -> Persistencia local de playlist** _(completado)_
 5. [ ] **[MVP] Video sincronizado -> Definir estrategia de sincronizacion (host + clientes)** _(en curso)_
 6. [ ] **[MVP] Video sincronizado -> Implementar mensajes de sync (play/pause/seek/time)** _(pendiente)_
-7. [ ] **[MVP][P1] Cerrar todas las ventanas -> Unificar criterio de "ventana abierta" + habilitacion de boton global** _(proximo)_
-8. [ ] **[MVP][P2] Reorganizar interfaz principal -> Definir IA de Monitores/Playlist y reglas responsive** _(proximo)_
+7. [x] **[MVP][P1] Cerrar todas las ventanas -> Unificar criterio de "ventana abierta" + habilitacion de boton global** _(completado)_
+8. [ ] **[MVP][P2] Reorganizar interfaz principal -> Definir IA de Monitores/Playlist y reglas responsive** _(en curso)_
 9. [ ] **[MVP][P3] Formularios complejos en dialogos -> Migrar primer formulario de alto impacto** _(proximo)_
 10. [ ] **[MVP][P4] Rediseno UI + drag and drop -> Definir lineamientos MVP e integrar DnD con fallback subir/bajar** _(proximo)_
 11. [ ] **[MVP][P5] Previsualizacion playlist -> Implementar pipeline imagen/video con fallback** _(proximo)_
@@ -312,3 +312,4 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 - 2026-03-27: persistencia robusta de playlist/playback completada con hidratacion defensiva (indice/autoplay), migracion minima de claves legacy de playback y saneamiento de monitor objetivo tras redeteccion.
 - 2026-03-27: bugfix de reactividad en `App.vue` para monitor objetivo, separando watchers de validacion/pausa y eliminando dependencia `deep` sobre `monitorStates` que provocaba ciclo recursivo al actualizar playback.
 - 2026-03-30: se incorporan 6 iniciativas MVP adicionales (P1..P6) para UX/operacion y se ajusta secuencia del sprint sin marcar nuevos completados.
+- 2026-03-30: P1 completado con habilitacion/deshabilitacion del boton global de cierre segun ventanas abiertas y test de regresion del header.

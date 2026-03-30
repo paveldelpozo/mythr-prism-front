@@ -200,6 +200,15 @@ const isTargetMonitorWindowOpen = computed(() => {
   return Boolean(monitorStates[targetMonitorId]?.isWindowOpen);
 });
 
+const openSlaveWindowsCount = computed(() =>
+  Object.values(monitorStates).reduce(
+    (total, state) => total + (state.isWindowOpen ? 1 : 0),
+    0
+  )
+);
+
+const canCloseAllWindows = computed(() => openSlaveWindowsCount.value > 0);
+
 const uploadImage = (monitorId: string, file: File) => {
   const reader = new FileReader();
   reader.onload = (event) => {
@@ -296,7 +305,7 @@ onBeforeUnmount(() => {
     <div class="app-bg-shape app-bg-shape--two" />
 
     <div class="relative mx-auto max-w-7xl space-y-6">
-      <AppHeader :has-monitors="hasDetectedMonitors" @close-all="closeAllWindows" />
+      <AppHeader :can-close-all-windows="canCloseAllWindows" @close-all="closeAllWindows" />
 
       <PlaylistManager
         v-model:items="playlistItems"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineProps<{
-  hasMonitors: boolean;
+  canCloseAllWindows: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -16,9 +16,10 @@ const emit = defineEmits<{
     </div>
 
     <button
-      v-if="hasMonitors"
       type="button"
-      class="rounded-xl border border-rose-300/40 bg-rose-500/15 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/25"
+      class="rounded-xl border border-rose-300/40 bg-rose-500/15 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:border-slate-300/25 disabled:bg-slate-500/10 disabled:text-slate-300/70 disabled:hover:bg-slate-500/10"
+      :disabled="!canCloseAllWindows"
+      :aria-disabled="!canCloseAllWindows"
       @click="emit('closeAll')"
     >
       Cerrar todas las ventanas
