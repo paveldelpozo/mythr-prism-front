@@ -26,11 +26,35 @@ const emit = defineEmits<{
 }>();
 
 const panelTitleId = computed(() => `whiteboard-modal-title-${props.monitorId}`);
+const monitorAspectRatio = computed(() => {
+  const match = props.monitorResolutionLabel.match(/(\d+)\s*x\s*(\d+)/i);
+  if (!match) {
+    return 16 / 9;
+  }
+
+  const width = Number.parseInt(match[1], 10);
+  const height = Number.parseInt(match[2], 10);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return 16 / 9;
+  }
+
+  return width / height;
+});
 const canvasHost = ref<HTMLElement | null>(null);
 const drawingCanvas = ref<HTMLCanvasElement | null>(null);
 const modalCloseButton = ref<HTMLButtonElement | null>(null);
+const widthPopoverWrap = ref<HTMLElement | null>(null);
+const widthPopoverButton = ref<HTMLButtonElement | null>(null);
+const widthPopoverPanel = ref<HTMLElement | null>(null);
+const widthPopoverPosition = ref<{ top: number; left: number; minWidth: number } | null>(null);
 const isPointerDown = ref(false);
+const isShiftPressed = ref(false);
+const isWidthPopoverOpen = ref(false);
+const lastPointerPoint = ref<WhiteboardPoint | null>(null);
 const bodyScrollSnapshot = ref<{ overflow: string; paddingRight: string } | null>(null);
+const WIDTH_PRESET_OPTIONS = [2, 4, 8, 12, 16, 24, 32, 48] as const;
+const WIDTH_POPOVER_OFFSET_PX = 8;
+const WIDTH_POPOVER_VIEWPORT_PADDING_PX = 8;
 
 const TOOL_OPTIONS: ReadonlyArray<{ value: WhiteboardTool; label: string }> = [
   { value: 'draw', label: 'Lapiz' },
@@ -76,10 +100,146 @@ const selectTool = (tool: WhiteboardTool) => {
   activeTool.value = tool;
 };
 
+const closeWidthPopover = () => {
+  isWidthPopoverOpen.value = false;
+};
+
+const toggleWidthPopover = () => {
+  isWidthPopoverOpen.value = !isWidthPopoverOpen.value;
+};
+
+const widthPopoverStyle = computed(() => {
+  if (!widthPopoverPosition.value) {
+    return {
+      visibility: 'hidden'
+    };
+  }
+
+  return {
+    top: `${widthPopoverPosition.value.top}px`,
+    left: `${widthPopoverPosition.value.left}px`,
+    minWidth: `${widthPopoverPosition.value.minWidth}px`
+  };
+});
+
+const updateWidthPopoverPosition = () => {
+  if (!isWidthPopoverOpen.value || !widthPopoverButton.value) {
+    return;
+  }
+
+  const buttonRect = widthPopoverButton.value.getBoundingClientRect();
+  const panel = widthPopoverPanel.value;
+  const panelWidth = panel?.offsetWidth ?? buttonRect.width;
+  const panelHeight = panel?.offsetHeight ?? 0;
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const preferredTop = buttonRect.bottom + WIDTH_POPOVER_OFFSET_PX;
+  const maxLeft = Math.max(
+    WIDTH_POPOVER_VIEWPORT_PADDING_PX,
+    viewportWidth - panelWidth - WIDTH_POPOVER_VIEWPORT_PADDING_PX
+  );
+  const clampedLeft = Math.min(Math.max(buttonRect.left, WIDTH_POPOVER_VIEWPORT_PADDING_PX), maxLeft);
+  const fitsBelow = preferredTop + panelHeight <= viewportHeight - WIDTH_POPOVER_VIEWPORT_PADDING_PX;
+  const top = fitsBelow
+    ? preferredTop
+    : Math.max(
+        WIDTH_POPOVER_VIEWPORT_PADDING_PX,
+        buttonRect.top - panelHeight - WIDTH_POPOVER_OFFSET_PX
+      );
+
+  widthPopoverPosition.value = {
+    top,
+    left: clampedLeft,
+    minWidth: buttonRect.width
+  };
+};
+
+const selectWidth = (value: number) => {
+  selectedWidth.value = value;
+  closeWidthPopover();
+};
+
 const toCanvasPoint = (point: WhiteboardPoint, width: number, height: number) => ({
   x: point.x * width,
   y: point.y * height
 });
+
+const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+
+const shouldLockAspectRatio = (tool: WhiteboardTool) => tool === 'rect' || tool === 'circle';
+const shouldSnapLineAngle = (tool: WhiteboardTool) => tool === 'line' || tool === 'arrow';
+const ANGLE_SNAP_STEP = Math.PI / 4;
+
+const getConstrainedPoint = (point: WhiteboardPoint, shiftPressed: boolean): WhiteboardPoint => {
+  const stroke = activeStroke.value;
+  const canvas = drawingCanvas.value;
+  if (!stroke || !canvas || !shiftPressed) {
+    return point;
+  }
+
+  const start = stroke.points[0];
+  if (!start) {
+    return point;
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return point;
+  }
+
+  const dxPx = (point.x - start.x) * rect.width;
+  const dyPx = (point.y - start.y) * rect.height;
+
+  if (shouldSnapLineAngle(stroke.tool)) {
+    const distancePx = Math.hypot(dxPx, dyPx);
+    if (distancePx <= 0) {
+      return point;
+    }
+
+    const snappedAngle = Math.round(Math.atan2(dyPx, dxPx) / ANGLE_SNAP_STEP) * ANGLE_SNAP_STEP;
+    return {
+      x: clamp01(start.x + (Math.cos(snappedAngle) * distancePx) / rect.width),
+      y: clamp01(start.y + (Math.sin(snappedAngle) * distancePx) / rect.height)
+    };
+  }
+
+  if (!shouldLockAspectRatio(stroke.tool)) {
+    return point;
+  }
+
+  const sidePx = Math.max(Math.abs(dxPx), Math.abs(dyPx));
+  if (sidePx <= 0) {
+    return point;
+  }
+
+  const directionX = dxPx < 0 ? -1 : 1;
+  const directionY = dyPx < 0 ? -1 : 1;
+
+  return {
+    x: clamp01(start.x + (directionX * sidePx) / rect.width),
+    y: clamp01(start.y + (directionY * sidePx) / rect.height)
+  };
+};
+
+const syncLivePreviewState = () => {
+  emit('stateChange', props.monitorId, sanitizeWhiteboardState({ strokes: editableStrokes.value }));
+  renderCanvas();
+};
+
+const updateActivePoint = (point: WhiteboardPoint, shiftPressed: boolean, syncPreview: boolean) => {
+  appendPoint(getConstrainedPoint(point, shiftPressed));
+  if (syncPreview) {
+    syncLivePreviewState();
+  }
+};
+
+const refreshShiftConstrainedPreview = () => {
+  if (!isPointerDown.value || !lastPointerPoint.value) {
+    return;
+  }
+
+  updateActivePoint(lastPointerPoint.value, isShiftPressed.value, true);
+};
 
 const drawFreehandStroke = (
   ctx: CanvasRenderingContext2D,
@@ -297,6 +457,8 @@ const startDrawing = (event: PointerEvent) => {
   }
 
   isPointerDown.value = true;
+  isShiftPressed.value = event.shiftKey;
+  lastPointerPoint.value = point;
   event.preventDefault();
   beginStroke(point);
   renderCanvas();
@@ -312,10 +474,10 @@ const continueDrawing = (event: PointerEvent) => {
     return;
   }
 
-  appendPoint(point);
+  isShiftPressed.value = event.shiftKey;
+  lastPointerPoint.value = point;
+  updateActivePoint(point, event.shiftKey, true);
   event.preventDefault();
-  emit('stateChange', props.monitorId, sanitizeWhiteboardState({ strokes: editableStrokes.value }));
-  renderCanvas();
 };
 
 const stopDrawing = (event?: PointerEvent) => {
@@ -326,11 +488,14 @@ const stopDrawing = (event?: PointerEvent) => {
   if (event) {
     const point = toPointFromPointer(event);
     if (point) {
-      appendPoint(point);
+      isShiftPressed.value = event.shiftKey;
+      lastPointerPoint.value = point;
+      updateActivePoint(point, event.shiftKey, false);
     }
   }
 
   isPointerDown.value = false;
+  lastPointerPoint.value = null;
   commitStroke();
   renderCanvas();
 };
@@ -350,9 +515,60 @@ const closeModal = () => {
 };
 
 const onWindowKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Shift') {
+    if (!isShiftPressed.value) {
+      isShiftPressed.value = true;
+      refreshShiftConstrainedPreview();
+    }
+    return;
+  }
+
   if (event.key === 'Escape') {
+    if (isWidthPopoverOpen.value) {
+      closeWidthPopover();
+      return;
+    }
+
     closeModal();
   }
+};
+
+const onWindowPointerDown = (event: PointerEvent) => {
+  if (!isWidthPopoverOpen.value) {
+    return;
+  }
+
+  const target = event.target;
+  if (!(target instanceof Node)) {
+    return;
+  }
+
+  if (
+    widthPopoverWrap.value?.contains(target) ||
+    widthPopoverButton.value?.contains(target) ||
+    widthPopoverPanel.value?.contains(target)
+  ) {
+    return;
+  }
+
+  closeWidthPopover();
+};
+
+const onWindowKeyup = (event: KeyboardEvent) => {
+  if (event.key !== 'Shift') {
+    return;
+  }
+
+  if (!isShiftPressed.value) {
+    return;
+  }
+
+  isShiftPressed.value = false;
+  refreshShiftConstrainedPreview();
+};
+
+const onWindowLayoutChange = () => {
+  updateWidthPopoverPosition();
 };
 
 watch(
@@ -371,10 +587,25 @@ watch([activeTool, selectedColor, selectedWidth], () => {
   renderCanvas();
 });
 
+watch(isWidthPopoverOpen, (isOpen) => {
+  if (!isOpen) {
+    widthPopoverPosition.value = null;
+    return;
+  }
+
+  void nextTick(() => {
+    updateWidthPopoverPosition();
+  });
+});
+
 onMounted(() => {
   lockBodyScroll();
   window.addEventListener('keydown', onWindowKeydown);
+  window.addEventListener('keyup', onWindowKeyup);
+  window.addEventListener('pointerdown', onWindowPointerDown);
+  window.addEventListener('scroll', onWindowLayoutChange, true);
   window.addEventListener('resize', configureCanvasSize);
+  window.addEventListener('resize', onWindowLayoutChange);
 
   void nextTick(() => {
     modalCloseButton.value?.focus();
@@ -386,14 +617,18 @@ onMounted(() => {
 onBeforeUnmount(() => {
   unlockBodyScroll();
   window.removeEventListener('keydown', onWindowKeydown);
+  window.removeEventListener('keyup', onWindowKeyup);
+  window.removeEventListener('pointerdown', onWindowPointerDown);
+  window.removeEventListener('scroll', onWindowLayoutChange, true);
   window.removeEventListener('resize', configureCanvasSize);
+  window.removeEventListener('resize', onWindowLayoutChange);
 });
 </script>
 
 <template>
   <div class="app-modal-overlay" data-testid="whiteboard-modal-overlay" @click.self="closeModal">
     <section
-      class="app-modal-panel app-modal-panel--lg"
+      class="app-modal-panel app-modal-panel--xl app-modal-panel--tall"
       role="dialog"
       aria-modal="true"
       :aria-labelledby="panelTitleId"
@@ -419,9 +654,14 @@ onBeforeUnmount(() => {
         </button>
       </header>
 
-      <div class="app-modal-body space-y-4">
-        <div class="whiteboard-toolbar" role="toolbar" aria-label="Herramientas de pizarra" data-testid="whiteboard-toolbar">
-          <div class="whiteboard-toolbar-group" role="group" aria-label="Herramientas de dibujo">
+      <div class="app-modal-body app-modal-body--whiteboard">
+        <div
+          class="whiteboard-toolbar whiteboard-toolbar--single-line"
+          role="toolbar"
+          aria-label="Herramientas de pizarra"
+          data-testid="whiteboard-toolbar"
+        >
+          <div class="whiteboard-toolbar-track" data-testid="whiteboard-toolbar-track">
             <button
               v-for="toolOption in TOOL_OPTIONS"
               :key="toolOption.value"
@@ -429,6 +669,7 @@ onBeforeUnmount(() => {
               class="whiteboard-toolbar-btn"
               :class="{ 'whiteboard-toolbar-btn--active': activeTool === toolOption.value }"
               :aria-label="toolOption.label"
+              :title="toolOption.label"
               :aria-pressed="activeTool === toolOption.value"
               :data-testid="`whiteboard-tool-${toolOption.value}`"
               @click="selectTool(toolOption.value)"
@@ -454,41 +695,46 @@ onBeforeUnmount(() => {
                 <path d="M6 7h12M8.5 10h7M10 13h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
                 <path d="M9 6l-2 12h10L15 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
               </svg>
-              <span>{{ toolOption.label }}</span>
             </button>
-          </div>
 
-          <div class="whiteboard-toolbar-group" role="group" aria-label="Ajustes de trazo">
-            <label class="whiteboard-toolbar-control" for="whiteboard-color">
-              <span class="whiteboard-toolbar-control-label">Color</span>
+            <label class="whiteboard-toolbar-color-chip" for="whiteboard-color" title="Color de trazo">
+              <span class="sr-only">Color de trazo</span>
               <input
                 id="whiteboard-color"
                 v-model="selectedColor"
                 data-testid="whiteboard-color-input"
                 type="color"
                 class="whiteboard-toolbar-color-input"
+                aria-label="Color de trazo"
                 :disabled="activeTool === 'erase'"
               />
             </label>
-            <label class="whiteboard-toolbar-control whiteboard-toolbar-control--width" for="whiteboard-width">
-              <span class="whiteboard-toolbar-control-label">Grosor {{ selectedWidth }} px</span>
-              <input
-                id="whiteboard-width"
-                v-model.number="selectedWidth"
-                data-testid="whiteboard-width-input"
-                type="range"
-                min="1"
-                max="48"
-                class="whiteboard-toolbar-range"
-              />
-            </label>
-          </div>
 
-          <div class="whiteboard-toolbar-group" role="group" aria-label="Acciones">
+            <div ref="widthPopoverWrap" class="whiteboard-toolbar-popover-wrap">
+              <button
+                ref="widthPopoverButton"
+                type="button"
+                class="whiteboard-toolbar-btn"
+                :class="{ 'whiteboard-toolbar-btn--active': isWidthPopoverOpen }"
+                :aria-label="`Grosor actual ${selectedWidth} px`"
+                :title="`Grosor actual ${selectedWidth} px`"
+                :aria-expanded="isWidthPopoverOpen"
+                aria-haspopup="dialog"
+                data-testid="whiteboard-width-toggle"
+                @click="toggleWidthPopover"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" class="whiteboard-toolbar-icon">
+                  <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-linecap="round" :stroke-width="Math.max(1, selectedWidth / 8)" />
+                </svg>
+              </button>
+
+            </div>
+
             <button
               type="button"
               class="whiteboard-toolbar-btn"
               aria-label="Deshacer ultimo trazo"
+              title="Deshacer ultimo trazo"
               data-testid="whiteboard-undo"
               @click="onUndo"
             >
@@ -496,12 +742,12 @@ onBeforeUnmount(() => {
                 <path d="M8 9L4 13l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                 <path d="M5 13h8a5 5 0 010 10h-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
               </svg>
-              <span>Undo</span>
             </button>
             <button
               type="button"
               class="whiteboard-toolbar-btn whiteboard-toolbar-btn--danger"
               aria-label="Limpiar pizarra"
+              title="Limpiar pizarra"
               data-testid="whiteboard-clear"
               @click="onClear"
             >
@@ -510,36 +756,66 @@ onBeforeUnmount(() => {
                 <path d="M8 6l1 13h6l1-13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
                 <path d="M10 10v6M14 10v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
               </svg>
-              <span>Limpiar</span>
             </button>
           </div>
         </div>
 
-        <div
-          ref="canvasHost"
-          class="whiteboard-editor-stage"
-          :style="{ aspectRatio: monitorResolutionLabel.replace('x', ' / ') }"
-          data-testid="whiteboard-canvas-stage"
-        >
-          <img
-            v-if="referenceImageDataUrl"
-            :src="referenceImageDataUrl"
-            :alt="`Referencia de ${monitorLabel}`"
-            class="whiteboard-editor-reference"
-          />
-          <div v-else class="whiteboard-editor-empty">Sin miniatura de referencia. Puedes dibujar igualmente.</div>
+        <Teleport to="body">
+          <div
+            v-if="isWidthPopoverOpen"
+            ref="widthPopoverPanel"
+            class="whiteboard-toolbar-popover whiteboard-toolbar-popover--floating"
+            :style="widthPopoverStyle"
+            role="dialog"
+            aria-label="Seleccionar grosor"
+            data-testid="whiteboard-width-popover"
+          >
+            <button
+              v-for="widthOption in WIDTH_PRESET_OPTIONS"
+              :key="widthOption"
+              type="button"
+              class="whiteboard-width-option"
+              :class="{ 'whiteboard-width-option--active': selectedWidth === widthOption }"
+              :aria-label="`Grosor ${widthOption} px`"
+              :title="`Grosor ${widthOption} px`"
+              :aria-pressed="selectedWidth === widthOption"
+              :data-testid="`whiteboard-width-option-${widthOption}`"
+              @click="selectWidth(widthOption)"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" class="whiteboard-toolbar-icon">
+                <path d="M4 12h16" fill="none" stroke="currentColor" stroke-linecap="round" :stroke-width="Math.max(1, widthOption / 2)" />
+              </svg>
+            </button>
+          </div>
+        </Teleport>
 
-          <canvas
-            ref="drawingCanvas"
-            class="whiteboard-editor-canvas"
-            :class="canvasCursorClass"
-            data-testid="whiteboard-canvas"
-            @pointerdown="startDrawing"
-            @pointermove="continueDrawing"
-            @pointerup="stopDrawing"
-            @pointerleave="stopDrawing"
-            @pointercancel="stopDrawing"
-          />
+        <div class="whiteboard-editor-workspace">
+          <div
+            ref="canvasHost"
+            class="whiteboard-editor-stage"
+            :style="{ '--whiteboard-stage-aspect-ratio': `${monitorAspectRatio}` }"
+            data-testid="whiteboard-canvas-stage"
+          >
+            <img
+              v-if="referenceImageDataUrl"
+              :src="referenceImageDataUrl"
+              :alt="`Referencia de ${monitorLabel}`"
+              class="whiteboard-editor-reference"
+            />
+            <div v-else class="whiteboard-editor-empty">Sin miniatura de referencia. Puedes dibujar igualmente.</div>
+
+            <canvas
+              ref="drawingCanvas"
+              class="whiteboard-editor-canvas"
+              :class="canvasCursorClass"
+              data-testid="whiteboard-canvas"
+              @pointerdown="startDrawing"
+              @pointermove="continueDrawing"
+              @pointerup="stopDrawing"
+              @pointerleave="stopDrawing"
+              @pointercancel="stopDrawing"
+            />
+          </div>
         </div>
       </div>
 

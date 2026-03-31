@@ -332,12 +332,25 @@
     max-width: min(calc(100vw - 2rem), 56rem);
   }
 
+  .app-modal-panel--xl {
+    max-width: min(calc(100vw - 2rem), 72rem);
+  }
+
+  .app-modal-panel--tall {
+    min-height: 80vh;
+    min-height: 80dvh;
+  }
+
   .app-modal-header {
     @apply sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-700/70 bg-slate-900/95 px-4 py-3;
   }
 
   .app-modal-body {
     @apply min-h-0 flex-1 overflow-auto px-4 py-3;
+  }
+
+  .app-modal-body--whiteboard {
+    @apply flex flex-col gap-4;
   }
 
   .app-modal-footer {
@@ -360,8 +373,16 @@
     @apply mt-2 rounded-lg border border-slate-700/70 bg-slate-900/70 px-3 py-2;
   }
 
+  .whiteboard-editor-workspace {
+    @apply flex flex-1 items-center justify-center overflow-hidden rounded-xl border border-slate-700/70 bg-slate-950/45 p-3;
+    min-height: 20rem;
+  }
+
   .whiteboard-editor-stage {
-    @apply relative w-full overflow-hidden rounded-xl border border-slate-700/70 bg-slate-950/55;
+    @apply relative mx-auto w-full overflow-hidden rounded-lg border border-slate-700/70 bg-slate-950/55;
+    aspect-ratio: var(--whiteboard-stage-aspect-ratio, 16 / 9);
+    max-height: 100%;
+    max-width: 100%;
     min-height: 16rem;
   }
 
@@ -369,16 +390,16 @@
     @apply rounded-xl border border-slate-700/70 bg-slate-950/45 p-2;
   }
 
-  .whiteboard-toolbar-group {
-    @apply flex flex-wrap items-center gap-2;
+  .whiteboard-toolbar--single-line {
+    @apply overflow-x-auto;
   }
 
-  .whiteboard-toolbar-group + .whiteboard-toolbar-group {
-    @apply mt-2 border-t border-slate-700/60 pt-2;
+  .whiteboard-toolbar-track {
+    @apply flex min-w-max items-center gap-2;
   }
 
   .whiteboard-toolbar-btn {
-    @apply btn-with-icon rounded-lg border border-slate-600/70 bg-slate-900/75 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-indigo-300/45 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/70;
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-600/70 bg-slate-900/75 text-slate-100 transition hover:border-indigo-300/45 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/70;
   }
 
   .whiteboard-toolbar-btn--active {
@@ -393,24 +414,33 @@
     @apply h-4 w-4 shrink-0;
   }
 
-  .whiteboard-toolbar-control {
-    @apply min-w-[7.5rem] rounded-lg border border-slate-700/75 bg-slate-900/70 px-2.5 py-2;
-  }
-
-  .whiteboard-toolbar-control-label {
-    @apply block text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300;
+  .whiteboard-toolbar-color-chip {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-600/70 bg-slate-900/75;
   }
 
   .whiteboard-toolbar-color-input {
-    @apply mt-1 h-9 w-full rounded-md border border-slate-600 bg-slate-900;
+    @apply h-6 w-6 cursor-pointer rounded-md border border-slate-500 bg-slate-900 p-0;
   }
 
-  .whiteboard-toolbar-range {
-    @apply mt-1 w-full;
+  .whiteboard-toolbar-popover-wrap {
+    @apply relative;
   }
 
-  .whiteboard-toolbar-control--width {
-    @apply min-w-[12rem] flex-1;
+  .whiteboard-toolbar-popover {
+    @apply surface-panel absolute left-0 top-[calc(100%+0.5rem)] z-20 grid grid-cols-4 gap-1 p-1.5 shadow-2xl;
+  }
+
+  .whiteboard-toolbar-popover--floating {
+    @apply fixed;
+    z-index: 80;
+  }
+
+  .whiteboard-width-option {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-600/70 bg-slate-900/75 text-slate-100 transition hover:border-indigo-300/45 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/70;
+  }
+
+  .whiteboard-width-option--active {
+    @apply border-indigo-300/60 bg-indigo-500/25 text-indigo-50;
   }
 
   .whiteboard-editor-reference {
