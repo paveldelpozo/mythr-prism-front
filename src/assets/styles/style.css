@@ -337,7 +337,6 @@
   }
 
   .app-modal-panel--tall {
-    min-height: 80vh;
     min-height: 80dvh;
   }
 
