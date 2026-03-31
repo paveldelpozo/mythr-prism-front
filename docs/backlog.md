@@ -7,6 +7,7 @@ Ultima actualizacion: 2026-03-31
 Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para proyeccion/control de contenido multi-monitor.
 
 Nota Mantenimiento (2026-03-31): se completo la reestructuracion a monorepo PNPM; el frontend se movio a `mythr-prism-front/`, se agrego scaffold `mythr-prism-back/` y la orquestacion global queda en la raiz (`README.md`, `package.json`, `pnpm-workspace.yaml`). Este backlog continua en `mythr-prism-front/docs/backlog.md`.
+Nota Roadmap (2026-03-31): cierre formal de MVP completado al 100%; a partir de este punto el foco operativo pasa a V1.
 
 Nota UX (2026-03-30): en Playlist se reforzo comportamiento operativo de modales con overlay fijo + bloqueo de scroll de fondo, y se aplico truncado visual de `source` largos (incluye data URI) manteniendo valor completo por `title`.
 Nota Bugfix/UX (2026-03-30): se robustecio el manejo de fullscreen en ventanas esclavas frente a salidas forzadas por navegador/SO (ej. al abrir file picker en la ventana principal): ahora se detecta perdida externa via `fullscreenchange`, se conserva la intencion de fullscreen por monitor, se habilita CTA de reactivacion rapida en la esclava (`Reactivar Fullscreen`) y el master muestra feedback explicito con los monitores afectados.
@@ -191,6 +192,13 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
     - [x] Sincronizacion de overlay en monitor objetivo.
 
 ## V1
+
+### Arranque V1 (checklist corto)
+
+- [ ] Tomar la primera feature V1 desde rama `feature/<nombre>` creada desde `development`.
+- [ ] Priorizar un item de alto impacto y bajo riesgo para primer corte (recomendado: `Flash ID monitores`).
+- [ ] Definir criterio de aceptacion y validacion minima antes de marcar `in-progress`.
+- [ ] Integrar por merge a `development`; luego promover `development` -> `main` al cerrar el lote.
 
 - [ ] **Flash ID monitores**
   - Dependencias: deteccion/listado de monitores.
