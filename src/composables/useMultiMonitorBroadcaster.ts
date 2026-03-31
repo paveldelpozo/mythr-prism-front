@@ -69,10 +69,11 @@ const toMonitorId = (screen: ScreenDetailed, index: number): string =>
 const createDescriptor = (
   screen: ScreenDetailed,
   index: number,
-  isMasterAppScreen: boolean
+  isMasterAppScreen: boolean,
+  customName: string | null
 ): MonitorDescriptor => ({
   id: toMonitorId(screen, index),
-  label: screen.label?.trim() || `Monitor ${index + 1}`,
+  label: (customName ?? screen.label?.trim()) || `Monitor ${index + 1}`,
   width: screen.width,
   height: screen.height,
   left: screen.left,
@@ -132,6 +133,13 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
   const monitorImageRenderSourceById = new Map<string, string | null>();
   const blobUrlUsageCountBySource = new Map<string, number>();
   const initialMonitorStateById = options.initialMonitorStateById ?? {};
+  const monitorCustomNameById = reactive<Record<string, string>>({});
+
+  Object.entries(initialMonitorStateById).forEach(([monitorId, state]) => {
+    if (state.customName) {
+      monitorCustomNameById[monitorId] = state.customName;
+    }
+  });
   const mirrorConfig = ref<MirrorModeConfig>(
     sanitizeMirrorModeConfig(options.initialMirrorMode ?? DEFAULT_MIRROR_MODE_CONFIG)
   );
@@ -158,6 +166,10 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
 
     state.transform = { ...persistedState.transform };
     state.imageDataUrl = persistedState.imageDataUrl;
+
+    if (persistedState.customName) {
+      monitorCustomNameById[monitorId] = persistedState.customName;
+    }
   };
 
   const getMonitorState = (monitorId: string) => {
@@ -191,7 +203,8 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     Object.entries(monitorStates).forEach(([monitorId, state]) => {
       serializableStates[monitorId] = {
         transform: { ...state.transform },
-        imageDataUrl: state.imageDataUrl
+        imageDataUrl: state.imageDataUrl,
+        customName: monitorCustomNameById[monitorId] ?? null
       };
     });
 
@@ -383,6 +396,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       setMonitorImageRenderSource(monitorId, null);
       delete monitorStates[monitorId];
       delete monitorThumbnails[monitorId];
+      delete monitorCustomNameById[monitorId];
     });
 
     mirrorConfig.value = sanitizeMirrorModeConfig(mirrorConfig.value, {
@@ -625,11 +639,40 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     const fallbackScreenIndex = screens.findIndex((screen) => matchesFallbackScreen(screen, window.screen));
     const masterScreenIndex = currentScreenIndex >= 0 ? currentScreenIndex : fallbackScreenIndex;
 
-    const nextMonitors = screens.map((screen, index) =>
-      createDescriptor(screen, index, index === masterScreenIndex)
-    );
+    const nextMonitors = screens.map((screen, index) => {
+      const monitorId = toMonitorId(screen, index);
+      const customName = monitorCustomNameById[monitorId] ?? null;
+
+      return createDescriptor(screen, index, index === masterScreenIndex, customName);
+    });
     monitors.value = nextMonitors;
     syncMonitorStateShape(nextMonitors);
+  };
+
+  const setMonitorCustomName = (monitorId: string, nextName: string) => {
+    const safeName = nextName.trim().slice(0, 80);
+
+    if (safeName.length === 0) {
+      delete monitorCustomNameById[monitorId];
+    } else {
+      monitorCustomNameById[monitorId] = safeName;
+    }
+
+    const monitorIndex = monitors.value.findIndex((monitor) => monitor.id === monitorId);
+    if (monitorIndex < 0) {
+      return;
+    }
+
+    const monitor = monitors.value[monitorIndex];
+    if (!monitor) {
+      return;
+    }
+
+    const fallbackLabel = monitor.raw.label?.trim() || `Monitor ${monitorIndex + 1}`;
+    monitors.value[monitorIndex] = {
+      ...monitor,
+      label: safeName.length > 0 ? safeName : fallbackLabel
+    };
   };
 
   const loadMonitors = async () => {
@@ -962,6 +1005,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     setMirrorEnabled,
     setMirrorSourceMonitorId,
     setMirrorTargetMonitorIds,
+    setMonitorCustomName,
     setImageForMonitor,
     setPlaylistItemForMonitor
   };

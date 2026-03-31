@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
+import { defineComponent } from 'vue';
 import type { MonitorDescriptor, MonitorStateMap, MonitorThumbnailStateMap } from '../types/broadcaster';
 import MonitorList from './MonitorList.vue';
 
@@ -44,6 +45,12 @@ const thumbnails: MonitorThumbnailStateMap = {
   }
 };
 
+const MonitorCardStub = defineComponent({
+  name: 'MonitorCard',
+  emits: ['renameMonitor'],
+  template: `<button data-testid="monitor-card-rename" @click="$emit('renameMonitor', 'monitor-1', 'Escenario')">rename</button>`
+});
+
 const mountMonitorList = (canCloseAllWindows: boolean) =>
   mount(MonitorList, {
     props: {
@@ -66,7 +73,7 @@ const mountMonitorList = (canCloseAllWindows: boolean) =>
     },
     global: {
       stubs: {
-        MonitorCard: true
+        MonitorCard: MonitorCardStub
       }
     }
   });
@@ -133,18 +140,11 @@ describe('MonitorList', () => {
     expect(wrapper.get('[data-testid="fullscreen-loss-feedback"]').text()).toContain('Monitor 1');
   });
 
-  it('muestra miniatura cuando existe captura para el monitor', async () => {
+  it('propaga evento de renombrado desde la tarjeta', async () => {
     const wrapper = mountMonitorList(true);
 
-    await wrapper.setProps({
-      thumbnails: {
-        'monitor-1': {
-          imageDataUrl: 'data:image/jpeg;base64,THUMB',
-          capturedAtMs: Date.now()
-        }
-      }
-    });
+    await wrapper.get('[data-testid="monitor-card-rename"]').trigger('click');
 
-    expect(wrapper.get('[data-testid="monitor-thumbnail-image-monitor-1"]').attributes('src')).toContain('THUMB');
+    expect(wrapper.emitted('renameMonitor')?.[0]).toEqual(['monitor-1', 'Escenario']);
   });
 });

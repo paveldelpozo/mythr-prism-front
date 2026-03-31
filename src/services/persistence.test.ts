@@ -110,6 +110,7 @@ describe('services/persistence', () => {
     expect(loaded.ui.panelPreferences).toEqual({ monitor: true });
     expect(loaded.monitors.m1.transform.scale).toBe(0.05);
     expect(loaded.monitors.m1.imageDataUrl).toBeNull();
+    expect(loaded.monitors.m1.customName).toBeNull();
     expect(loaded.playlist).toHaveLength(1);
     expect(loaded.playback.targetMonitorIds).toEqual(['m1']);
     expect(loaded.playback.currentIndex).toBe(0);
@@ -176,6 +177,7 @@ describe('services/persistence', () => {
 
     expect(loaded.ui.showOnlyProjectable).toBe(false);
     expect(loaded.monitors.m2.imageDataUrl).toBe('data:image/png;base64,BBB');
+    expect(loaded.monitors.m2.customName).toBeNull();
     expect(loaded.playback.targetMonitorIds).toEqual(['m2']);
     expect(loaded.playback.autoplay).toBe(true);
     expect(loaded.mirror.enabled).toBe(false);
@@ -365,5 +367,47 @@ describe('services/persistence', () => {
     expect(loaded.layouts).toHaveLength(1);
     expect(loaded.layouts[0]?.id).toBe('layout-a');
     expect(loaded.layouts[0]?.name).toBe('Layout A');
+  });
+
+  it('persiste y sanea customName de monitor', () => {
+    storage.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify({
+        version: SESSION_SCHEMA_VERSION,
+        ui: {
+          showOnlyProjectable: true,
+          panelPreferences: {}
+        },
+        monitors: {
+          m1: {
+            transform: {
+              rotate: 0,
+              scale: 1,
+              translateX: 0,
+              translateY: 0
+            },
+            imageDataUrl: null,
+            customName: '   Pantalla principal de escenario con nombre largo para clamping 1234567890   '
+          }
+        },
+        playlist: [],
+        playback: {
+          targetMonitorIds: [],
+          currentIndex: 0,
+          autoplay: false,
+          intervalSeconds: 5
+        },
+        mirror: {
+          enabled: false,
+          sourceMonitorId: null,
+          targetMonitorIds: []
+        },
+        layouts: []
+      })
+    );
+
+    const loaded = loadPersistedSession();
+
+    expect(loaded.monitors.m1?.customName).toBe('Pantalla principal de escenario con nombre largo para clamping 1234567890');
   });
 });

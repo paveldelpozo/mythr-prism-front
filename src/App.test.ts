@@ -71,6 +71,7 @@ const setImageForMonitorSpy = vi.fn();
 const setMirrorEnabledSpy = vi.fn();
 const setMirrorSourceMonitorIdSpy = vi.fn();
 const setMirrorTargetMonitorIdsSpy = vi.fn();
+const setMonitorCustomNameSpy = vi.fn();
 const sessionSaverScheduleSpy = vi.fn();
 
 const buildPersistedSession = (
@@ -125,11 +126,13 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
     persistableMonitorStates: computed(() => ({
       master: {
         transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
-        imageDataUrl: null
+        imageDataUrl: null,
+        customName: null
       },
       projector: {
         transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
-        imageDataUrl: null
+        imageDataUrl: null,
+        customName: null
       }
     })),
     loadMonitors: vi.fn(async () => undefined),
@@ -139,6 +142,7 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
     setMirrorEnabled: setMirrorEnabledSpy,
     setMirrorSourceMonitorId: setMirrorSourceMonitorIdSpy,
     setMirrorTargetMonitorIds: setMirrorTargetMonitorIdsSpy,
+    setMonitorCustomName: setMonitorCustomNameSpy,
     setImageForMonitor: setImageForMonitorSpy,
     setPlaylistItemForMonitor: vi.fn()
   })
@@ -220,6 +224,7 @@ const MonitorListStub = defineComponent({
     'update:mirrorEnabled',
     'update:mirrorSourceMonitorId',
     'update:mirrorTargetMonitorIds',
+    'renameMonitor',
     'saveLayout',
     'loadLayout',
     'deleteLayout'
@@ -253,6 +258,7 @@ const MonitorListStub = defineComponent({
       <button data-testid="mirror-disable-trigger" @click="$emit('update:mirrorEnabled', false)">disable-mirror</button>
       <button data-testid="mirror-source-trigger" @click="$emit('update:mirrorSourceMonitorId', 'master')">source-mirror</button>
       <button data-testid="mirror-targets-trigger" @click="$emit('update:mirrorTargetMonitorIds', ['projector'])">targets-mirror</button>
+      <button data-testid="monitor-rename-trigger" @click="$emit('renameMonitor', 'projector', 'Pantalla escenario')">rename-monitor</button>
     </div>
   `
 });
@@ -265,6 +271,7 @@ describe('App integration base', () => {
     setMirrorEnabledSpy.mockReset();
     setMirrorSourceMonitorIdSpy.mockReset();
     setMirrorTargetMonitorIdsSpy.mockReset();
+    setMonitorCustomNameSpy.mockReset();
     sessionSaverScheduleSpy.mockReset();
     vi.restoreAllMocks();
   });
@@ -357,7 +364,8 @@ describe('App integration base', () => {
             monitors: {
               projector: {
                 transform: { rotate: 15, scale: 1.25, translateX: 30, translateY: -12 },
-                imageDataUrl: 'data:image/png;base64,abc'
+                imageDataUrl: 'data:image/png;base64,abc',
+                customName: null
               }
             },
             playback: {
@@ -446,6 +454,21 @@ describe('App integration base', () => {
 
     expect(wrapper.get('[data-testid="monitorlist-layout-count"]').text()).toBe('0');
     expect(wrapper.get('[data-testid="monitorlist-layout-feedback"]').text()).toContain('eliminado');
+  });
+
+  it('propaga renombrado de monitor hacia el broadcaster', async () => {
+    const wrapper = mount(App, {
+      global: {
+        stubs: {
+          MonitorList: MonitorListStub,
+          PlaylistManager: PlaylistManagerStub
+        }
+      }
+    });
+
+    await wrapper.get('[data-testid="monitor-rename-trigger"]').trigger('click');
+
+    expect(setMonitorCustomNameSpy).toHaveBeenCalledWith('projector', 'Pantalla escenario');
   });
 
   it('permite activar/desactivar modo espejo y configurar origen/destinos', async () => {

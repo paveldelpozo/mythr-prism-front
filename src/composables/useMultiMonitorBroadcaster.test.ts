@@ -243,6 +243,20 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
     expect(api.mirrorStatus.value.lastError).toContain('degradacion');
   });
 
+  it('permite renombrar monitor y exponer customName persistible', async () => {
+    const { sourceMonitorId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+
+    api.setMonitorCustomName(sourceMonitorId, 'Escenario frontal');
+
+    const renamed = api.monitors.value.find((monitor) => monitor.id === sourceMonitorId);
+
+    expect(renamed?.label).toBe('Escenario frontal');
+    expect(api.persistableMonitorStates.value[sourceMonitorId]?.customName).toBe('Escenario frontal');
+  });
+
   it('replica imagen al destino espejo enviando SET_IMAGE sin limpiar con SET_MEDIA null', async () => {
     const { popups, sourceMonitorId, mirrorTargetId } = setupWindowManagementMocks();
     const api = createHarness();

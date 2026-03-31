@@ -88,6 +88,7 @@ const {
   setMirrorEnabled,
   setMirrorSourceMonitorId,
   setMirrorTargetMonitorIds,
+  setMonitorCustomName,
   setImageForMonitor,
   setPlaylistItemForMonitor
 } = useMultiMonitorBroadcaster({
@@ -156,7 +157,8 @@ const buildPersistableMonitorStateMap = (): PersistedMonitorStateMap => {
         translateX: state.transform.translateX,
         translateY: state.transform.translateY
       },
-      imageDataUrl: typeof state.imageDataUrl === 'string' ? state.imageDataUrl : null
+      imageDataUrl: typeof state.imageDataUrl === 'string' ? state.imageDataUrl : null,
+      customName: typeof state.customName === 'string' ? state.customName : null
     };
   });
 
@@ -234,7 +236,8 @@ const buildPersistableLayouts = (): PersistedLayout[] =>
               translateY: monitorState.transform.translateY
             },
             imageDataUrl:
-              typeof monitorState.imageDataUrl === 'string' ? monitorState.imageDataUrl : null
+              typeof monitorState.imageDataUrl === 'string' ? monitorState.imageDataUrl : null,
+            customName: typeof monitorState.customName === 'string' ? monitorState.customName : null
           };
 
           return nextMonitors;
@@ -394,6 +397,7 @@ const applyPersistedMonitorState = (monitorId: string, state: PersistedMonitorSt
   }
 
   setImageForMonitor(monitorId, state.imageDataUrl);
+  setMonitorCustomName(monitorId, state.customName ?? '');
 };
 
 const saveCurrentLayout = () => {
@@ -488,7 +492,8 @@ const loadSelectedLayout = () => {
   monitorIdsToApply.forEach((monitorId) => {
     const state = selectedLayout.snapshot.monitors[monitorId] ?? {
       transform: { ...DEFAULT_TRANSFORM },
-      imageDataUrl: null
+      imageDataUrl: null,
+      customName: null
     };
 
     applyPersistedMonitorState(monitorId, state);
@@ -752,6 +757,7 @@ onBeforeUnmount(() => {
           @request-fullscreen="requestFullscreen"
           @upload-image="uploadImage"
           @clear-image="(id) => setImageForMonitor(id, null)"
+          @rename-monitor="setMonitorCustomName"
           @transform="applyTransform"
         />
       </section>

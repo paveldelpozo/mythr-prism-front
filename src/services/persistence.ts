@@ -15,6 +15,7 @@ const MIN_SCALE = 0.05;
 export interface PersistedMonitorState {
   transform: MonitorTransform;
   imageDataUrl: string | null;
+  customName: string | null;
 }
 
 export type PersistedMonitorStateMap = Record<string, PersistedMonitorState>;
@@ -141,17 +142,28 @@ const sanitizeTransform = (value: unknown): MonitorTransform => {
 const sanitizeImageDataUrl = (value: unknown): string | null =>
   typeof value === 'string' ? value : null;
 
+const sanitizeMonitorCustomName = (value: unknown): string | null => {
+  const safeName = toNonEmptyString(value);
+  if (!safeName) {
+    return null;
+  }
+
+  return safeName.slice(0, 80);
+};
+
 const sanitizeMonitorState = (value: unknown): PersistedMonitorState => {
   if (!isRecord(value)) {
     return {
       transform: { ...DEFAULT_TRANSFORM },
-      imageDataUrl: null
+      imageDataUrl: null,
+      customName: null
     };
   }
 
   return {
     transform: sanitizeTransform(value.transform),
-    imageDataUrl: sanitizeImageDataUrl(value.imageDataUrl)
+    imageDataUrl: sanitizeImageDataUrl(value.imageDataUrl),
+    customName: sanitizeMonitorCustomName(value.customName)
   };
 };
 

@@ -178,6 +178,20 @@
     @apply border-slate-700/70 bg-slate-900/45;
   }
 
+  .monitor-card-preview {
+    @apply mb-2 flex w-full items-center justify-center overflow-hidden rounded-xl border border-slate-700/75 bg-slate-900/80;
+    height: clamp(9rem, 24vw, 11.5rem);
+    max-height: 11.5rem;
+  }
+
+  .monitor-card-preview-media {
+    @apply h-full w-full object-contain;
+  }
+
+  .monitor-card-preview-empty {
+    @apply px-3 text-center text-xs text-slate-300/85;
+  }
+
   .monitor-thumbnail-grid {
     @apply grid gap-3 md:grid-cols-2 xl:grid-cols-3;
   }
