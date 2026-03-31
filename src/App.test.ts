@@ -146,6 +146,7 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
     loadMonitors: vi.fn(async () => undefined),
     openWindowForMonitor: vi.fn(),
     requestFullscreen: vi.fn(),
+    flashMonitorId: vi.fn(() => true),
     sendVideoSyncCommand: vi.fn(() => true),
     setMirrorEnabled: setMirrorEnabledSpy,
     setMirrorSourceMonitorId: setMirrorSourceMonitorIdSpy,

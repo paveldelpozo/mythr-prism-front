@@ -87,6 +87,7 @@ const dispatchSlaveMessage = (
   type:
     | 'SET_IMAGE'
     | 'SET_MEDIA'
+    | 'FLASH_MONITOR_ID'
     | 'SET_TRANSFORM'
     | 'WHITEBOARD_SET_STATE'
     | 'WHITEBOARD_CLEAR'
@@ -177,6 +178,27 @@ describe('services/slaveWindowHtml mirror rendering', () => {
 
     expect(exitFullscreenMock).not.toHaveBeenCalled();
     expect(loadSpy).not.toHaveBeenCalled();
+  });
+
+  it('muestra flash temporal para identificar monitor y lo oculta al vencer timeout', () => {
+    vi.useFakeTimers();
+
+    mountSlaveRuntime();
+
+    dispatchSlaveMessage('FLASH_MONITOR_ID', {
+      monitorLabel: 'Escenario lateral',
+      durationMs: 1400
+    });
+
+    const flash = document.getElementById('monitorIdentifyFlash') as HTMLElement;
+    const flashLabel = document.getElementById('monitorIdentifyFlashLabel') as HTMLElement;
+
+    expect(flash.classList.contains('is-active')).toBe(true);
+    expect(flashLabel.textContent).toContain('Escenario lateral');
+
+    vi.advanceTimersByTime(1400);
+
+    expect(flash.classList.contains('is-active')).toBe(false);
   });
 
   it('reporta salida externa de fullscreen y permite reactivacion en un clic', async () => {

@@ -88,6 +88,7 @@ const {
   loadMonitors,
   openWindowForMonitor,
   requestFullscreen,
+  flashMonitorId,
   sendVideoSyncCommand,
   setMirrorEnabled,
   setMirrorSourceMonitorId,
@@ -807,6 +808,7 @@ onBeforeUnmount(() => {
           @open-window="openWindowForMonitor"
           @close-window="closeWindow"
           @request-fullscreen="requestFullscreen"
+          @flash-monitor-id="flashMonitorId"
           @upload-image="uploadImage"
           @clear-image="(id) => setImageForMonitor(id, null)"
           @open-whiteboard="openWhiteboardEditor"

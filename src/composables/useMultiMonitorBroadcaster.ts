@@ -68,6 +68,7 @@ type VideoSyncPayloadByType = {
 const MIN_SCALE = 0.05;
 const LIFE_CHECK_INTERVAL_MS = 1000;
 const BLOB_URL_PREFIX = 'blob:';
+const MONITOR_ID_FLASH_DURATION_MS = 2200;
 
 const toMonitorId = (screen: ScreenDetailed, index: number): string =>
   `${index}-${screen.left}-${screen.top}-${screen.width}x${screen.height}`;
@@ -992,6 +993,28 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     state.lastError = 'Se envio la solicitud. Debes hacer clic en la ventana esclava para activar fullscreen.';
   };
 
+  const flashMonitorId = (monitorId: string) => {
+    const monitor = monitors.value.find((item) => item.id === monitorId);
+    const state = getMonitorState(monitorId);
+
+    if (!monitor || !state.isWindowOpen) {
+      state.lastError = 'Abre la ventana del monitor para poder identificarla visualmente.';
+      return false;
+    }
+
+    const message = buildMasterMessage(monitorId, 'FLASH_MONITOR_ID', {
+      monitorLabel: monitor.label,
+      durationMs: MONITOR_ID_FLASH_DURATION_MS
+    });
+
+    if (!message) {
+      state.lastError = 'No hay una ventana activa para identificar este monitor.';
+      return false;
+    }
+
+    return sendToSlave(monitorId, message);
+  };
+
   const sendVideoSyncCommand = <TType extends VideoSyncCommandType>(
     monitorId: string,
     type: TType,
@@ -1097,6 +1120,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     loadMonitors,
     openWindowForMonitor,
     requestFullscreen,
+    flashMonitorId,
     sendVideoSyncCommand,
     clearWhiteboardForMonitor,
     setMirrorEnabled,

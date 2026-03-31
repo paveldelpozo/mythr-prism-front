@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   ArrowTopRightOnSquareIcon,
+  BoltIcon,
   InformationCircleIcon,
   PaintBrushIcon,
   PencilSquareIcon,
@@ -25,6 +26,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   openWindow: [monitorId: string];
   requestFullscreen: [monitorId: string];
+  flashMonitorId: [monitorId: string];
   closeWindow: [monitorId: string];
   uploadImage: [monitorId: string, file: File];
   clearImage: [monitorId: string];
@@ -279,25 +281,41 @@ onBeforeUnmount(() => {
 
     <p class="mb-4 mt-2 text-[11px] text-slate-300/75">{{ thumbnailCapturedAtLabel }}</p>
 
-    <button
+    <div
       v-if="!monitor.isMasterAppScreen"
-      type="button"
-      class="btn-with-icon btn-sm btn-emerald-soft mb-3 w-full"
-      data-testid="monitor-open-whiteboard"
-      :disabled="!state.isWindowOpen"
-      :title="state.isWindowOpen ? 'Abrir pizarra' : 'Abre la ventana del monitor para usar la pizarra'"
-      :aria-label="state.isWindowOpen ? 'Abrir pizarra' : 'Abrir pizarra (deshabilitado: ventana cerrada)'"
-      @click="emit('openWhiteboard', monitor.id)"
+      class="monitor-card-actions"
+      data-testid="monitor-card-actions"
     >
-      <PaintBrushIcon aria-hidden="true" class="btn-icon" />
-      Abrir pizarra
-    </button>
+      <button
+        type="button"
+        class="monitor-action-btn btn-emerald-soft"
+        data-testid="monitor-open-whiteboard"
+        :disabled="!state.isWindowOpen"
+        :title="state.isWindowOpen ? 'Abrir pizarra' : 'Abre la ventana del monitor para usar la pizarra'"
+        :aria-label="state.isWindowOpen ? 'Abrir pizarra' : 'Abrir pizarra (deshabilitado: ventana cerrada)'"
+        @click="emit('openWhiteboard', monitor.id)"
+      >
+        <PaintBrushIcon aria-hidden="true" class="btn-icon" />
+      </button>
+
+      <button
+        type="button"
+        class="monitor-action-btn btn-indigo-soft"
+        data-testid="monitor-flash-id"
+        :disabled="!state.isWindowOpen"
+        :title="state.isWindowOpen ? 'Destacar pantalla para identificar monitor' : 'Abre la ventana del monitor para identificarlo'"
+        :aria-label="state.isWindowOpen ? 'Identificar monitor' : 'Identificar monitor (deshabilitado: ventana cerrada)'"
+        @click="emit('flashMonitorId', monitor.id)"
+      >
+        <BoltIcon aria-hidden="true" class="btn-icon" />
+      </button>
+    </div>
 
     <button
       v-if="!state.isWindowOpen"
       data-testid="monitor-open-window"
       type="button"
-      class="btn-with-icon btn-md btn-indigo-soft mb-4 w-full border"
+      class="btn-with-icon btn-sm btn-indigo-soft mb-3 w-full"
       @click="emit('openWindow', monitor.id)"
     >
       <ArrowTopRightOnSquareIcon aria-hidden="true" class="btn-icon" />

@@ -48,7 +48,7 @@ describe('MonitorControls', () => {
     expect(wrapper.find('[data-testid="monitor-content-editor-modal"]').exists()).toBe(false);
   });
 
-  it('muestra accion visible para cerrar ventana', async () => {
+  it('muestra acciones compactas icon-only con tooltip', async () => {
     const wrapper = mount(MonitorControls, {
       props: {
         monitorId: 'monitor-1',
@@ -58,9 +58,23 @@ describe('MonitorControls', () => {
       }
     });
 
-    const closeButton = wrapper.get('[data-testid="monitor-close-window"]');
+    const toolbar = wrapper.get('[data-testid="monitor-action-toolbar"]');
+    expect(toolbar.classes()).toContain('monitor-action-toolbar');
 
-    expect(closeButton.text()).toContain('Cerrar ventana');
+    const editButton = wrapper.get('[data-testid="monitor-open-content-editor"]');
+    expect(editButton.text().trim()).toBe('');
+    expect(editButton.attributes('title')).toBe('Editar contenido');
+    expect(editButton.attributes('aria-label')).toBe('Editar contenido');
+
+    const fullscreenButton = wrapper.get('[data-testid="monitor-request-fullscreen"]');
+    expect(fullscreenButton.text().trim()).toBe('');
+    expect(fullscreenButton.attributes('title')).toBe('Solicitar fullscreen');
+    expect(fullscreenButton.attributes('aria-label')).toBe('Solicitar fullscreen');
+
+    const closeButton = wrapper.get('[data-testid="monitor-close-window"]');
+    expect(closeButton.text().trim()).toBe('');
+    expect(closeButton.attributes('title')).toBe('Cerrar ventana');
+    expect(closeButton.attributes('aria-label')).toBe('Cerrar ventana');
 
     await closeButton.trigger('click');
 
