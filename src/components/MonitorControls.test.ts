@@ -19,6 +19,25 @@ const createDataTransfer = (file: File): DataTransfer =>
   }) as unknown as DataTransfer;
 
 describe('MonitorControls', () => {
+  it('muestra accion visible para cerrar ventana', async () => {
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state: createDefaultMonitorState(),
+        isFileImportBlocked: false,
+        fileImportBlockedMessage: 'bloqueado'
+      }
+    });
+
+    const closeButton = wrapper.get('[data-testid="monitor-close-window"]');
+
+    expect(closeButton.text()).toContain('Cerrar ventana');
+
+    await closeButton.trigger('click');
+
+    expect(wrapper.emitted('closeWindow')).toEqual([['monitor-1']]);
+  });
+
   it('no emite uploadImage al hacer click en el input sin change', async () => {
 const wrapper = mount(MonitorControls, {
       props: {

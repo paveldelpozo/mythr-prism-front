@@ -19,6 +19,7 @@ export type MasterMessageType =
 export type SlaveMessageType =
   | 'SLAVE_READY'
   | 'FULLSCREEN_STATUS'
+  | 'THUMBNAIL_SNAPSHOT'
   | 'PONG'
   | 'SLAVE_CLOSING'
   | 'SLAVE_ERROR';
@@ -41,6 +42,11 @@ export interface FullscreenStatusPayload {
 
 export interface MasterInitPayload {
   monitorLabel: string;
+}
+
+export interface ThumbnailSnapshotPayload {
+  imageDataUrl: string | null;
+  capturedAtMs: number;
 }
 
 export interface VideoSyncPlayPayload {
@@ -79,6 +85,7 @@ export type MasterToSlaveMessage =
 export type SlaveToMasterMessage =
   | MessageEnvelope<'SLAVE_READY', { timestamp: number }>
   | MessageEnvelope<'FULLSCREEN_STATUS', FullscreenStatusPayload>
+  | MessageEnvelope<'THUMBNAIL_SNAPSHOT', ThumbnailSnapshotPayload>
   | MessageEnvelope<'PONG', { timestamp: number }>
   | MessageEnvelope<'SLAVE_CLOSING', { timestamp: number }>
   | MessageEnvelope<'SLAVE_ERROR', { message: string }>;

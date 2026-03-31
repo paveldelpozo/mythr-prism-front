@@ -76,6 +76,7 @@ const {
   isLoadingMonitors,
   isWindowManagementSupported,
   monitorStates,
+  monitorThumbnails,
   mirrorConfig,
   mirrorStatus,
   monitors,
@@ -720,6 +721,7 @@ onBeforeUnmount(() => {
           v-else
           :monitors="visibleMonitors"
           :states="monitorStates"
+          :thumbnails="monitorThumbnails"
           :show-only-projectable="showOnlyProjectable"
           :total-monitors="monitors.length"
           :can-close-all-windows="canCloseAllWindows"

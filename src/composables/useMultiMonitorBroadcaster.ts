@@ -5,6 +5,7 @@ import {
   DEFAULT_TRANSFORM,
   type MonitorDescriptor,
   type MonitorRuntimeState,
+  type MonitorThumbnailStateMap,
   type MonitorStateMap,
   type MonitorTransform
 } from '../types/broadcaster';
@@ -126,6 +127,7 @@ const matchesFallbackScreen = (screen: ScreenDetailed, target: Screen): boolean 
 export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOptions = {}) => {
   const monitors = ref<MonitorDescriptor[]>([]);
   const monitorStates = reactive<MonitorStateMap>({});
+  const monitorThumbnails = reactive<MonitorThumbnailStateMap>({});
   const windowsRegistry = new Map<string, WindowRegistryEntry>();
   const monitorImageRenderSourceById = new Map<string, string | null>();
   const blobUrlUsageCountBySource = new Map<string, number>();
@@ -164,6 +166,23 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       applyPersistedState(monitorId);
     }
     return monitorStates[monitorId];
+  };
+
+  const getMonitorThumbnail = (monitorId: string) => {
+    if (!monitorThumbnails[monitorId]) {
+      monitorThumbnails[monitorId] = {
+        imageDataUrl: null,
+        capturedAtMs: null
+      };
+    }
+
+    return monitorThumbnails[monitorId];
+  };
+
+  const setMonitorThumbnail = (monitorId: string, imageDataUrl: string | null, capturedAtMs: number | null) => {
+    const thumbnail = getMonitorThumbnail(monitorId);
+    thumbnail.imageDataUrl = imageDataUrl;
+    thumbnail.capturedAtMs = capturedAtMs;
   };
 
   const persistableMonitorStates = computed<PersistedMonitorStateMap>(() => {
@@ -296,6 +315,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     state.lostFullscreenUnexpectedly = false;
     state.lastFullscreenExitAtMs = null;
     state.requiresFullscreenInteraction = true;
+    setMonitorThumbnail(monitorId, null, null);
   };
 
   const closeWindow = (monitorId: string) => {
@@ -362,6 +382,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       closeWindow(monitorId);
       setMonitorImageRenderSource(monitorId, null);
       delete monitorStates[monitorId];
+      delete monitorThumbnails[monitorId];
     });
 
     mirrorConfig.value = sanitizeMirrorModeConfig(mirrorConfig.value, {
@@ -562,6 +583,18 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
 
     if (message.type === 'SLAVE_CLOSING') {
       cleanupMonitorWindow(monitorId);
+      return;
+    }
+
+    if (message.type === 'THUMBNAIL_SNAPSHOT') {
+      const imageDataUrl = typeof message.payload.imageDataUrl === 'string'
+        ? message.payload.imageDataUrl
+        : null;
+      const capturedAtMs = Number.isFinite(message.payload.capturedAtMs)
+        ? Math.max(0, Math.round(message.payload.capturedAtMs))
+        : Date.now();
+
+      setMonitorThumbnail(monitorId, imageDataUrl, imageDataUrl ? capturedAtMs : null);
       return;
     }
 
@@ -814,6 +847,8 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     const renderSource = options.renderSource === undefined
       ? imageDataUrl
       : options.renderSource;
+
+    setMonitorThumbnail(monitorId, null, null);
     setMonitorImageRenderSource(monitorId, renderSource);
 
     const message = buildMasterMessage(monitorId, 'SET_IMAGE', {
@@ -837,6 +872,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
   const setPlaylistItemForMonitor = (monitorId: string, item: MultimediaItem | null): boolean => {
     const state = getMonitorState(monitorId);
     state.activeMediaItem = item;
+    setMonitorThumbnail(monitorId, null, null);
 
     const message = buildMasterMessage(monitorId, 'SET_MEDIA', {
       item
@@ -911,6 +947,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     isLoadingMonitors,
     isWindowManagementSupported,
     monitorStates,
+    monitorThumbnails,
     mirrorConfig,
     mirrorStatus,
     persistableMonitorStates,

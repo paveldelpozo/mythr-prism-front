@@ -178,6 +178,18 @@
     @apply border-slate-700/70 bg-slate-900/45;
   }
 
+  .monitor-thumbnail-grid {
+    @apply grid gap-3 md:grid-cols-2 xl:grid-cols-3;
+  }
+
+  .monitor-thumbnail-card {
+    @apply rounded-xl border border-slate-700/70 bg-slate-950/45 p-3;
+  }
+
+  .monitor-thumbnail-viewport {
+    @apply flex h-28 items-center justify-center overflow-hidden rounded-lg border border-slate-700/75 bg-slate-900/80;
+  }
+
   .control-btn {
     @apply rounded-lg border border-slate-600/80 bg-slate-800/80 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-indigo-300/40 hover:bg-indigo-500/30;
   }

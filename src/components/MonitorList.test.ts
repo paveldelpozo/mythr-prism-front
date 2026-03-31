@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
+import type { MonitorDescriptor, MonitorStateMap, MonitorThumbnailStateMap } from '../types/broadcaster';
 import MonitorList from './MonitorList.vue';
 
 const monitors: MonitorDescriptor[] = [
@@ -37,11 +37,19 @@ const states: MonitorStateMap = {
   }
 };
 
+const thumbnails: MonitorThumbnailStateMap = {
+  'monitor-1': {
+    imageDataUrl: null,
+    capturedAtMs: null
+  }
+};
+
 const mountMonitorList = (canCloseAllWindows: boolean) =>
   mount(MonitorList, {
     props: {
       monitors,
       states,
+      thumbnails,
       showOnlyProjectable: false,
       totalMonitors: 1,
       canCloseAllWindows,
@@ -123,5 +131,20 @@ describe('MonitorList', () => {
     });
 
     expect(wrapper.get('[data-testid="fullscreen-loss-feedback"]').text()).toContain('Monitor 1');
+  });
+
+  it('muestra miniatura cuando existe captura para el monitor', async () => {
+    const wrapper = mountMonitorList(true);
+
+    await wrapper.setProps({
+      thumbnails: {
+        'monitor-1': {
+          imageDataUrl: 'data:image/jpeg;base64,THUMB',
+          capturedAtMs: Date.now()
+        }
+      }
+    });
+
+    expect(wrapper.get('[data-testid="monitor-thumbnail-image-monitor-1"]').attributes('src')).toContain('THUMB');
   });
 });

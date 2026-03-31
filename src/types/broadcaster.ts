@@ -37,6 +37,13 @@ export interface MonitorRuntimeState {
   lastError: string | null;
 }
 
+export interface MonitorThumbnailState {
+  imageDataUrl: string | null;
+  capturedAtMs: number | null;
+}
+
+export type MonitorThumbnailStateMap = Record<string, MonitorThumbnailState>;
+
 export type MonitorStateMap = Record<string, MonitorRuntimeState>;
 
 export const DEFAULT_TRANSFORM: MonitorTransform = {

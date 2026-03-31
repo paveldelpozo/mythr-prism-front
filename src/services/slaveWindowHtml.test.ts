@@ -112,6 +112,14 @@ afterEach(() => {
 });
 
 describe('services/slaveWindowHtml mirror rendering', () => {
+  it('no expone controles visibles para cerrar ventana desde el slave', () => {
+    mountSlaveRuntime();
+
+    expect(document.body.textContent).not.toContain('Cerrar ventana');
+    expect(document.getElementById('closeButton')).toBeNull();
+    expect(document.getElementById('quickCloseButton')).toBeNull();
+  });
+
   it('abandona estado "Esperando contenido" al recibir SET_IMAGE valido', async () => {
     mountSlaveRuntime();
 
@@ -281,6 +289,54 @@ describe('services/slaveWindowHtml mirror rendering', () => {
     expect(closingMessages.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('emite THUMBNAIL_SNAPSHOT periodico con limite de frecuencia por monitor', async () => {
+    vi.useFakeTimers();
+
+    const drawImageMock = vi.fn();
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage: drawImageMock
+    } as unknown as CanvasRenderingContext2D);
+    const toDataUrlSpy = vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL')
+      .mockReturnValueOnce('data:image/jpeg;base64,thumb-1')
+      .mockReturnValueOnce('data:image/jpeg;base64,thumb-2')
+      .mockReturnValue('data:image/jpeg;base64,thumb-3');
+
+    const { openerPostMessage, instanceToken } = mountSlaveRuntime();
+
+    dispatchSlaveMessage('SET_IMAGE', {
+      imageDataUrl: 'data:image/png;base64,AAA'
+    });
+    vi.advanceTimersByTime(0);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const image = document.getElementById('image') as HTMLImageElement;
+    Object.defineProperty(image, 'naturalWidth', {
+      configurable: true,
+      get: () => 1920
+    });
+    Object.defineProperty(image, 'naturalHeight', {
+      configurable: true,
+      get: () => 1080
+    });
+
+    vi.advanceTimersByTime(2100);
+
+    const thumbnailSnapshots = openerPostMessage.mock.calls
+      .map(([message]) => message)
+      .filter(
+        (message) => message.type === 'THUMBNAIL_SNAPSHOT'
+          && message.instanceToken === instanceToken
+          && typeof message.payload?.imageDataUrl === 'string'
+      );
+
+    expect(getContextSpy).toHaveBeenCalled();
+    expect(toDataUrlSpy).toHaveBeenCalled();
+    expect(drawImageMock).toHaveBeenCalled();
+    expect(thumbnailSnapshots.length).toBeGreaterThanOrEqual(2);
+    expect(thumbnailSnapshots.length).toBeLessThanOrEqual(3);
+  });
+
   it('ignora payload SET_MEDIA invalido sin limpiar contenido activo', async () => {
     const { openerPostMessage } = mountSlaveRuntime();
 
@@ -319,7 +375,6 @@ describe('services/slaveWindowHtml mirror rendering', () => {
     const { openerPostMessage, setFullscreenElement } = mountSlaveRuntime();
     const button = document.getElementById('fullscreenButton') as HTMLButtonElement;
     const wrapper = document.getElementById('wrapper') as HTMLElement;
-    const closeButton = document.getElementById('closeButton') as HTMLButtonElement;
 
     await button.click();
     setFullscreenElement(document.documentElement);
@@ -346,7 +401,9 @@ describe('services/slaveWindowHtml mirror rendering', () => {
       timestamp: Date.now()
     });
 
-    closeButton.click();
+    dispatchSlaveMessage('REQUEST_CLOSE', {
+      reason: 'Operator close command'
+    });
 
     expect(wrapper.style.transform).toContain('translate(25px, -8px)');
     expect(closeSpy).toHaveBeenCalledTimes(1);
@@ -382,15 +439,10 @@ describe('services/slaveWindowHtml mirror rendering', () => {
     expect(closingMessages.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('mantiene cierre operativo desde UI local y desde REQUEST_CLOSE', () => {
+  it('mantiene cierre operativo desde REQUEST_CLOSE', () => {
     const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => undefined);
     const { openerPostMessage } = mountSlaveRuntime();
 
-    const closeButton = document.getElementById('closeButton') as HTMLButtonElement;
-    const quickCloseButton = document.getElementById('quickCloseButton') as HTMLButtonElement;
-
-    closeButton.click();
-    quickCloseButton.click();
     dispatchSlaveMessage('REQUEST_CLOSE', {
       reason: 'Operator close command'
     });

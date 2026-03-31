@@ -12,8 +12,8 @@ defineProps<{
 
 const emit = defineEmits<{
   openWindow: [monitorId: string];
-  closeWindow: [monitorId: string];
   requestFullscreen: [monitorId: string];
+  closeWindow: [monitorId: string];
   uploadImage: [monitorId: string, file: File];
   clearImage: [monitorId: string];
   transform: [
@@ -81,8 +81,8 @@ const emit = defineEmits<{
       :state="state"
       :is-file-import-blocked="isFileImportBlocked"
       :file-import-blocked-message="fileImportBlockedMessage"
-      @close-window="emit('closeWindow', $event)"
       @request-fullscreen="emit('requestFullscreen', $event)"
+      @close-window="emit('closeWindow', $event)"
       @upload-image="(id, file) => emit('uploadImage', id, file)"
       @clear-image="emit('clearImage', $event)"
       @transform="(id, action) => emit('transform', id, action)"

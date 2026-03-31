@@ -11,7 +11,7 @@ import {
 import { computed } from 'vue';
 import MonitorCard from './MonitorCard.vue';
 import AppCheckbox from './ui/AppCheckbox.vue';
-import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
+import type { MonitorDescriptor, MonitorStateMap, MonitorThumbnailStateMap } from '../types/broadcaster';
 
 const emit = defineEmits<{
   'update:showOnlyProjectable': [value: boolean];
@@ -25,8 +25,8 @@ const emit = defineEmits<{
   loadLayout: [];
   deleteLayout: [];
   openWindow: [monitorId: string];
-  closeWindow: [monitorId: string];
   requestFullscreen: [monitorId: string];
+  closeWindow: [monitorId: string];
   uploadImage: [monitorId: string, file: File];
   clearImage: [monitorId: string];
   transform: [
@@ -38,6 +38,7 @@ const emit = defineEmits<{
 const props = defineProps<{
   monitors: MonitorDescriptor[];
   states: MonitorStateMap;
+  thumbnails: MonitorThumbnailStateMap;
   showOnlyProjectable: boolean;
   totalMonitors: number;
   canCloseAllWindows: boolean;
@@ -94,6 +95,14 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
 
   emit('update:mirrorTargetMonitorIds', Array.from(new Set(nextTargetIds)));
 };
+
+const thumbnailCapturedAtLabel = (capturedAtMs: number | null): string => {
+  if (!capturedAtMs) {
+    return 'Sin captura';
+  }
+
+  return `Actualizada ${new Date(capturedAtMs).toLocaleTimeString('es-AR')}`;
+};
 </script>
 
 <template>
@@ -143,6 +152,42 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
       Fullscreen se desactivo fuera de la app en: {{ fullscreenLossLabels.join(', ') }}.
       Pide reactivacion rapida con "Reactivar fullscreen".
     </p>
+
+    <div class="surface-panel space-y-3 px-4 py-3" data-testid="monitor-thumbnail-grid">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <p class="section-kicker">Miniaturas en vivo</p>
+        <span class="text-xs text-slate-300/80">Refresh max. 1 captura/seg por monitor</span>
+      </div>
+
+      <div class="monitor-thumbnail-grid">
+        <article
+          v-for="monitor in props.monitors"
+          :key="`thumbnail-${monitor.id}`"
+          :data-testid="`monitor-thumbnail-card-${monitor.id}`"
+          class="monitor-thumbnail-card"
+        >
+          <header class="mb-2 flex items-center justify-between gap-2">
+            <p class="truncate text-xs font-semibold text-slate-100" :title="monitor.label">{{ monitor.label }}</p>
+            <span class="text-[11px] text-slate-300/75">
+              {{ thumbnailCapturedAtLabel(props.thumbnails[monitor.id]?.capturedAtMs ?? null) }}
+            </span>
+          </header>
+
+          <div class="monitor-thumbnail-viewport">
+            <img
+              v-if="props.thumbnails[monitor.id]?.imageDataUrl"
+              :data-testid="`monitor-thumbnail-image-${monitor.id}`"
+              :src="props.thumbnails[monitor.id]?.imageDataUrl ?? ''"
+              :alt="`Miniatura de ${monitor.label}`"
+              class="h-full w-full object-contain"
+            />
+            <p v-else :data-testid="`monitor-thumbnail-empty-${monitor.id}`" class="text-center text-xs text-slate-300/80">
+              {{ props.states[monitor.id]?.isWindowOpen ? 'Esperando captura...' : 'Abre la ventana para ver miniatura' }}
+            </p>
+          </div>
+        </article>
+      </div>
+    </div>
 
     <div class="surface-panel space-y-3 px-4 py-3" data-testid="layout-manager-panel">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -326,8 +371,8 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
         :is-file-import-blocked="props.isFileImportBlocked"
         :file-import-blocked-message="props.fileImportBlockedMessage"
         @open-window="emit('openWindow', $event)"
-        @close-window="emit('closeWindow', $event)"
         @request-fullscreen="emit('requestFullscreen', $event)"
+        @close-window="emit('closeWindow', $event)"
         @upload-image="(id, file) => emit('uploadImage', id, file)"
         @clear-image="emit('clearImage', $event)"
         @transform="(id, action) => emit('transform', id, action)"

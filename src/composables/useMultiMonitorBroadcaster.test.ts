@@ -162,6 +162,34 @@ const dispatchFullscreenStatusFromPopup = ({
   );
 };
 
+const dispatchThumbnailSnapshotFromPopup = ({
+  popup,
+  monitorId,
+  instanceToken,
+  imageDataUrl
+}: {
+  popup: PopupWindowMock;
+  monitorId: string;
+  instanceToken: string;
+  imageDataUrl: string | null;
+}) => {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      source: popup,
+      data: {
+        channel: 'MMIB_V3_CHANNEL',
+        type: 'THUMBNAIL_SNAPSHOT',
+        instanceToken,
+        monitorId,
+        payload: {
+          imageDataUrl,
+          capturedAtMs: Date.now()
+        }
+      }
+    })
+  );
+};
+
 beforeEach(() => {
   vi.restoreAllMocks();
 });
@@ -421,6 +449,30 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
 
     expect(api.monitorStates[mirrorTargetId]?.isWindowOpen).toBe(true);
     expect(api.monitorStates[mirrorTargetId]?.isSlaveReady).toBe(true);
+  });
+
+  it('actualiza miniatura del monitor al recibir THUMBNAIL_SNAPSHOT valido', async () => {
+    const { popups, mirrorTargetId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(mirrorTargetId);
+
+    const popup = popups[0];
+    const firstSentMessage = popup?.postMessage.mock.calls[0]?.[0] as
+      | { instanceToken?: string }
+      | undefined;
+    const instanceToken = firstSentMessage?.instanceToken as string;
+
+    dispatchThumbnailSnapshotFromPopup({
+      popup,
+      monitorId: mirrorTargetId,
+      instanceToken,
+      imageDataUrl: 'data:image/jpeg;base64,THUMB_MONITOR'
+    });
+
+    expect(api.monitorThumbnails[mirrorTargetId]?.imageDataUrl).toContain('THUMB_MONITOR');
+    expect(typeof api.monitorThumbnails[mirrorTargetId]?.capturedAtMs).toBe('number');
   });
 
   it('libera blob URL runtime cuando se reemplaza o limpia imagen', () => {

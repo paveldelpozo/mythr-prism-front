@@ -52,7 +52,7 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 
 | Fase | Progreso |
 | --- | --- |
-| MVP | 77% |
+| MVP | 85% |
 | V1 | 0% |
 | V2 | 0% |
 
@@ -172,14 +172,14 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
     - [x] Pipeline de render compartido/duplicado.
     - [x] Pruebas de rendimiento basicas.
 
-- [ ] **Thumbnails**
-  - Estado: `in-progress`.
+- [x] **Thumbnails**
+  - Estado: `completed`.
   - Dependencias: pipeline de render por salida.
   - Hecho: la UI muestra previews actualizadas de cada monitor sin bloquear interaccion.
   - Subtareas:
-    - [ ] Captura periodica de frame reducido.
-    - [ ] Grid de miniaturas en panel de control.
-    - [ ] Estrategia de refresh y limite de frecuencia.
+    - [x] Captura periodica de frame reducido.
+    - [x] Grid de miniaturas en panel de control.
+    - [x] Estrategia de refresh y limite de frecuencia.
 
 - [ ] **Lower thirds**
   - Dependencias: compositor de capas.
@@ -340,7 +340,7 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 13. [x] **[MVP] Guardado/restauracion de layouts -> Esquema de serializacion de layout** _(completado)_
 14. [x] **[MVP] Guardado/restauracion de layouts -> Acciones guardar/cargar desde UI** _(completado)_
 15. [x] **[MVP] Modo espejo -> Selector de origen de espejo** _(completado)_
-16. [ ] **[MVP] Thumbnails -> Captura periodica de frame reducido** _(en curso)_
+16. [x] **[MVP] Thumbnails -> Captura periodica de frame reducido** _(completado)_
 
 ## Notas
 
@@ -360,3 +360,4 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 - 2026-03-30: Video sincronizado completado end-to-end con mensajes `play/pause/seek/time`, resincronizacion periodica con tolerancia de drift, integracion con playlist multi-destino y degradacion elegante ante destinos no listos o con fallo parcial.
 - 2026-03-30: completadas acciones de UI para guardar/cargar/eliminar layouts con feedback operativo y proteccion de sobrescritura/eliminacion accidental; se agregaron pruebas de regresion de flujo y se marco el siguiente item de MVP (`Modo espejo`) en curso.
 - 2026-03-30: Modo espejo completado end-to-end con UI de activacion/origen/destinos, replicacion de estado (transform/media/imagen) origen->destinos, prevencion de ciclos y degradacion operativa con feedback cuando destinos espejo no estan disponibles.
+- 2026-03-31: Thumbnails completado para MVP operativo actual: runtime esclavo emite captura reducida periodica con limite de frecuencia, el master mantiene estado de miniaturas por monitor no persistente y Monitores incorpora grid de previews en vivo con fallback claro.

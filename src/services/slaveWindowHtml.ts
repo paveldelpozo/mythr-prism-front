@@ -105,25 +105,6 @@ export const createSlaveWindowHtml = ({
         opacity: 0.7;
         cursor: wait;
       }
-      #closeButton,
-      #quickCloseButton {
-        border: 1px solid rgba(148, 163, 184, 0.5);
-        border-radius: 999px;
-        background: rgba(15, 23, 42, 0.9);
-        color: #f8fafc;
-        padding: 10px 16px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      #closeButton {
-        margin-top: 10px;
-      }
-      #quickCloseButton {
-        position: fixed;
-        top: 16px;
-        right: 16px;
-        z-index: 20;
-      }
       #hint {
         display: block;
         margin-top: 12px;
@@ -148,29 +129,31 @@ export const createSlaveWindowHtml = ({
           Para activar modo de proyeccion completa, haz clic en el boton desde esta misma ventana.
         </p>
         <button id="fullscreenButton" type="button">Activar Fullscreen</button>
-        <button id="closeButton" type="button">Cerrar ventana</button>
         <small id="hint">El navegador exige interaccion del usuario en esta pantalla.</small>
       </div>
     </div>
-    <button id="quickCloseButton" type="button" aria-label="Cerrar ventana">Cerrar ventana</button>
 
     <script>
       (function () {
         const FULLSCREEN_REQUEST_TIMEOUT_MS = 3000;
         const FULLSCREEN_REPORT_THROTTLE_MS = 200;
         const IMAGE_APPLY_DEFER_MS = 0;
+        const THUMBNAIL_CAPTURE_INTERVAL_MS = 1000;
+        const THUMBNAIL_MAX_WIDTH = 320;
+        const THUMBNAIL_IMAGE_QUALITY = 0.55;
+        const THUMBNAIL_CAPTURE_ERROR_BACKOFF_MS = 4000;
         const TRACE_BUFFER_LIMIT = 120;
         const MESSAGE_CHANNEL = ${channelLiteral};
         const monitorId = ${monitorIdLiteral};
         const instanceToken = ${tokenLiteral};
         const overlay = document.getElementById('overlay');
         const button = document.getElementById('fullscreenButton');
-        const closeButton = document.getElementById('closeButton');
-        const quickCloseButton = document.getElementById('quickCloseButton');
         const wrapper = document.getElementById('wrapper');
         const image = document.getElementById('image');
         const video = document.getElementById('video');
         const empty = document.getElementById('empty');
+        const thumbnailCanvas = document.createElement('canvas');
+        let thumbnailContext = null;
         let clipEndAtSeconds = null;
         let syncActionTimeoutId = null;
         let fullscreenIntentActive = false;
@@ -183,6 +166,9 @@ export const createSlaveWindowHtml = ({
         let lastFullscreenReportAtMs = 0;
         let pendingFullscreenReportTimeoutId = null;
         let pendingFullscreenReport = null;
+        let thumbnailCaptureTimeoutId = null;
+        let thumbnailCaptureBlockedUntilMs = 0;
+        let lastThumbnailDataUrl = null;
         let imageRenderRequestId = 0;
         const traceBuffer = [];
         let isTraceConsoleEnabled = false;
@@ -247,6 +233,100 @@ export const createSlaveWindowHtml = ({
           }
         };
 
+        const clearScheduledThumbnailCapture = () => {
+          if (thumbnailCaptureTimeoutId !== null) {
+            window.clearTimeout(thumbnailCaptureTimeoutId);
+            thumbnailCaptureTimeoutId = null;
+          }
+        };
+
+        const postThumbnailSnapshot = (imageDataUrl) => {
+          if (imageDataUrl === lastThumbnailDataUrl) {
+            return;
+          }
+
+          lastThumbnailDataUrl = imageDataUrl;
+          postToMaster('THUMBNAIL_SNAPSHOT', {
+            imageDataUrl,
+            capturedAtMs: Date.now()
+          });
+        };
+
+        const getThumbnailSourceElement = () => {
+          if (video.style.display !== 'none' && video.videoWidth > 0 && video.videoHeight > 0) {
+            return {
+              element: video,
+              width: video.videoWidth,
+              height: video.videoHeight
+            };
+          }
+
+          if (image.style.display !== 'none' && image.naturalWidth > 0 && image.naturalHeight > 0) {
+            return {
+              element: image,
+              width: image.naturalWidth,
+              height: image.naturalHeight
+            };
+          }
+
+          return null;
+        };
+
+        const captureThumbnailSnapshot = () => {
+          const now = Date.now();
+          if (now < thumbnailCaptureBlockedUntilMs) {
+            return;
+          }
+
+          const source = getThumbnailSourceElement();
+          if (!source) {
+            postThumbnailSnapshot(null);
+            return;
+          }
+
+          const targetWidth = Math.max(1, Math.min(THUMBNAIL_MAX_WIDTH, source.width));
+          const targetHeight = Math.max(1, Math.round((source.height / source.width) * targetWidth));
+
+          if (!thumbnailContext) {
+            try {
+              thumbnailContext = thumbnailCanvas.getContext('2d');
+            } catch {
+              thumbnailContext = null;
+            }
+
+            if (!thumbnailContext) {
+              postThumbnailSnapshot(null);
+              return;
+            }
+          }
+
+          thumbnailCanvas.width = targetWidth;
+          thumbnailCanvas.height = targetHeight;
+
+          try {
+            thumbnailContext.drawImage(source.element, 0, 0, targetWidth, targetHeight);
+            const imageDataUrl = thumbnailCanvas.toDataURL('image/jpeg', THUMBNAIL_IMAGE_QUALITY);
+            postThumbnailSnapshot(imageDataUrl);
+          } catch {
+            thumbnailCaptureBlockedUntilMs = Date.now() + THUMBNAIL_CAPTURE_ERROR_BACKOFF_MS;
+            postThumbnailSnapshot(null);
+          }
+        };
+
+        const scheduleThumbnailCapture = (delayMs) => {
+          clearScheduledThumbnailCapture();
+
+          thumbnailCaptureTimeoutId = window.setTimeout(() => {
+            thumbnailCaptureTimeoutId = null;
+            captureThumbnailSnapshot();
+            scheduleThumbnailCapture(THUMBNAIL_CAPTURE_INTERVAL_MS);
+          }, Math.max(0, delayMs));
+        };
+
+        const requestThumbnailRefresh = (delayMs = 0) => {
+          scheduleThumbnailCapture(delayMs);
+        };
+
         const stopVideoPlayback = (resetSource) => {
           clearScheduledSyncAction();
 
@@ -269,6 +349,7 @@ export const createSlaveWindowHtml = ({
 
           empty.style.display = 'block';
           empty.textContent = 'Esperando contenido...';
+          requestThumbnailRefresh(0);
         };
 
         const hasVisibleMedia = () =>
@@ -360,6 +441,7 @@ export const createSlaveWindowHtml = ({
                 image.style.display = 'block';
                 empty.style.display = 'none';
                 trace('SET_IMAGE:applied', { requestId });
+                requestThumbnailRefresh(0);
               });
           }, IMAGE_APPLY_DEFER_MS);
         };
@@ -381,6 +463,7 @@ export const createSlaveWindowHtml = ({
           video.src = item.source;
           video.style.display = 'block';
           empty.style.display = 'none';
+          requestThumbnailRefresh(0);
 
           void video.play().catch(() => {
             empty.style.display = 'block';
@@ -437,6 +520,7 @@ export const createSlaveWindowHtml = ({
           }
 
           isClosingWindow = true;
+          clearScheduledThumbnailCapture();
           trace('REQUEST_CLOSE:received', {
             inFullscreen: Boolean(document.fullscreenElement)
           });
@@ -585,8 +669,6 @@ export const createSlaveWindowHtml = ({
         };
 
         button.addEventListener('click', enterFullscreenFromClick);
-        closeButton.addEventListener('click', closeSlaveWindow);
-        quickCloseButton.addEventListener('click', closeSlaveWindow);
 
         window.addEventListener('message', (event) => {
           const message = event.data;
@@ -755,6 +837,7 @@ export const createSlaveWindowHtml = ({
           reportFullscreenStatus(statusMessage, 'fullscreenchange');
         });
         window.addEventListener('beforeunload', () => {
+          clearScheduledThumbnailCapture();
           if (pendingFullscreenReportTimeoutId !== null) {
             window.clearTimeout(pendingFullscreenReportTimeoutId);
             pendingFullscreenReportTimeoutId = null;
@@ -766,6 +849,7 @@ export const createSlaveWindowHtml = ({
         video.addEventListener('loadedmetadata', onVideoLoadedMetadata);
         video.addEventListener('timeupdate', onVideoTimeUpdate);
 
+        scheduleThumbnailCapture(THUMBNAIL_CAPTURE_INTERVAL_MS);
         postToMaster('SLAVE_READY', { timestamp: Date.now() });
         reportFullscreenStatus('Ventana inicializada', 'init', true);
       })();

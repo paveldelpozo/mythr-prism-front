@@ -277,12 +277,14 @@ const fullscreenActionLabel = computed(() => {
 
       <button
         type="button"
+        data-testid="monitor-close-window"
         class="btn-with-icon btn-sm btn-rose-soft"
         @click="emit('closeWindow', monitorId)"
       >
         <XMarkIcon aria-hidden="true" class="btn-icon" />
         Cerrar ventana
       </button>
+
     </div>
 
     <p class="text-xs text-slate-300/80">
