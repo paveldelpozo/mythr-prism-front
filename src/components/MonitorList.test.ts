@@ -147,4 +147,14 @@ describe('MonitorList', () => {
 
     expect(wrapper.emitted('renameMonitor')?.[0]).toEqual(['monitor-1', 'Escenario']);
   });
+
+  it('mantiene el orden de secciones requerido en el tab Monitores', () => {
+    const wrapper = mountMonitorList(true);
+
+    const sectionOrder = wrapper
+      .findAll('[data-monitor-section]')
+      .map((section) => section.attributes('data-monitor-section'));
+
+    expect(sectionOrder).toEqual(['availability', 'cards', 'mirror', 'layouts']);
+  });
 });

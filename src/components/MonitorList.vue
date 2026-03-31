@@ -101,7 +101,11 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
 
 <template>
   <section class="space-y-4">
-    <div class="glass-panel flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+    <div
+      class="glass-panel flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+      data-testid="monitor-availability-panel"
+      data-monitor-section="availability"
+    >
       <div>
         <p class="section-kicker">Monitores disponibles</p>
         <p class="mt-1 text-sm text-slate-200/90">
@@ -147,7 +151,104 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
       Pide reactivacion rapida con "Reactivar fullscreen".
     </p>
 
-    <div class="surface-panel space-y-3 px-4 py-3" data-testid="layout-manager-panel">
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-2" data-testid="monitor-cards-section" data-monitor-section="cards">
+      <MonitorCard
+        v-for="monitor in props.monitors"
+        :key="monitor.id"
+        :monitor="monitor"
+        :state="props.states[monitor.id]"
+        :thumbnail="props.thumbnails[monitor.id] ?? { imageDataUrl: null, capturedAtMs: null }"
+        :is-file-import-blocked="props.isFileImportBlocked"
+        :file-import-blocked-message="props.fileImportBlockedMessage"
+        @open-window="emit('openWindow', $event)"
+        @request-fullscreen="emit('requestFullscreen', $event)"
+        @close-window="emit('closeWindow', $event)"
+        @upload-image="(id, file) => emit('uploadImage', id, file)"
+        @clear-image="emit('clearImage', $event)"
+        @rename-monitor="(id, name) => emit('renameMonitor', id, name)"
+        @transform="(id, action) => emit('transform', id, action)"
+      />
+    </div>
+
+    <div class="surface-panel space-y-3 px-4 py-3" data-testid="mirror-mode-panel" data-monitor-section="mirror">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <p class="section-kicker">Modo espejo</p>
+        <span class="text-xs text-slate-300/80" data-testid="mirror-target-count">
+          {{ props.mirrorTargetMonitorIds.length }} destino(s) configurado(s)
+        </span>
+      </div>
+
+      <button
+        id="mirror-mode-enabled"
+        data-testid="mirror-mode-toggle-btn"
+        type="button"
+        class="btn-with-icon btn-sm rounded-xl border px-4"
+        :class="props.mirrorEnabled
+          ? 'border-rose-300/40 bg-rose-500/20 text-rose-100 hover:bg-rose-500/30'
+          : 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'"
+        :aria-pressed="props.mirrorEnabled"
+        @click="emit('update:mirrorEnabled', !props.mirrorEnabled)"
+      >
+        <StopIcon v-if="props.mirrorEnabled" aria-hidden="true" class="btn-icon" />
+        <PlayIcon v-else aria-hidden="true" class="btn-icon" />
+        {{ mirrorActionLabel }}
+      </button>
+
+      <label class="form-field" for="mirror-source-select">
+        Monitor origen
+        <select
+          id="mirror-source-select"
+          data-testid="mirror-source-select"
+          class="form-control"
+          :value="props.mirrorSourceMonitorId ?? ''"
+          @change="emit('update:mirrorSourceMonitorId', ($event.target as HTMLSelectElement).value || null)"
+        >
+          <option value="">Selecciona un origen</option>
+          <option
+            v-for="monitor in props.monitors"
+            :key="monitor.id"
+            :value="monitor.id"
+          >
+            {{ monitor.label }}
+          </option>
+        </select>
+      </label>
+
+      <div class="space-y-2">
+        <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300/80">Destinos espejo</p>
+        <p v-if="mirrorDestinationOptions.length === 0" class="text-xs text-slate-300/80">
+          Selecciona un origen para habilitar destinos espejo.
+        </p>
+        <div v-else class="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <AppCheckbox
+            v-for="monitor in mirrorDestinationOptions"
+            :id="`mirror-target-${monitor.id}`"
+            :key="monitor.id"
+            :model-value="selectedMirrorTargetIdSet.has(monitor.id)"
+            :label="monitor.label"
+            :disabled="!props.mirrorSourceMonitorId"
+            @update:model-value="onMirrorTargetToggle(monitor.id, $event)"
+          />
+        </div>
+      </div>
+
+      <p class="text-xs text-slate-200/90" data-testid="mirror-feedback">
+        <template v-if="!props.mirrorEnabled">Modo espejo desactivado.</template>
+        <template v-else-if="!props.mirrorSourceMonitorId">Define un monitor origen para comenzar la replicacion.</template>
+        <template v-else>
+          Origen: {{ monitorLabelById(props.mirrorSourceMonitorId) }}. Destinos activos: {{ props.mirrorActiveTargetCount }}/{{ props.mirrorTargetMonitorIds.length }}.
+        </template>
+      </p>
+
+      <p v-if="unavailableMirrorTargetLabels.length > 0" class="text-xs text-amber-200/90" data-testid="mirror-unavailable-feedback">
+        Destinos no disponibles: {{ unavailableMirrorTargetLabels.join(', ') }}.
+      </p>
+      <p v-if="props.mirrorLastError" class="text-xs text-amber-200/90" data-testid="mirror-last-error">
+        {{ props.mirrorLastError }}
+      </p>
+    </div>
+
+    <div class="surface-panel space-y-3 px-4 py-3" data-testid="layout-manager-panel" data-monitor-section="layouts">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <p class="section-kicker">Layouts guardados</p>
         <span class="text-xs text-slate-300/80" data-testid="layout-count">
@@ -235,84 +336,6 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
       </p>
     </div>
 
-    <div class="surface-panel space-y-3 px-4 py-3" data-testid="mirror-mode-panel">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <p class="section-kicker">Modo espejo</p>
-        <span class="text-xs text-slate-300/80" data-testid="mirror-target-count">
-          {{ props.mirrorTargetMonitorIds.length }} destino(s) configurado(s)
-        </span>
-      </div>
-
-      <button
-        id="mirror-mode-enabled"
-        data-testid="mirror-mode-toggle-btn"
-        type="button"
-        class="btn-with-icon btn-sm rounded-xl border px-4"
-        :class="props.mirrorEnabled
-          ? 'border-rose-300/40 bg-rose-500/20 text-rose-100 hover:bg-rose-500/30'
-          : 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'"
-        :aria-pressed="props.mirrorEnabled"
-        @click="emit('update:mirrorEnabled', !props.mirrorEnabled)"
-      >
-        <StopIcon v-if="props.mirrorEnabled" aria-hidden="true" class="btn-icon" />
-        <PlayIcon v-else aria-hidden="true" class="btn-icon" />
-        {{ mirrorActionLabel }}
-      </button>
-
-      <label class="form-field" for="mirror-source-select">
-        Monitor origen
-        <select
-          id="mirror-source-select"
-          data-testid="mirror-source-select"
-          class="form-control"
-          :value="props.mirrorSourceMonitorId ?? ''"
-          @change="emit('update:mirrorSourceMonitorId', ($event.target as HTMLSelectElement).value || null)"
-        >
-          <option value="">Selecciona un origen</option>
-          <option
-            v-for="monitor in props.monitors"
-            :key="monitor.id"
-            :value="monitor.id"
-          >
-            {{ monitor.label }}
-          </option>
-        </select>
-      </label>
-
-      <div class="space-y-2">
-        <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300/80">Destinos espejo</p>
-        <p v-if="mirrorDestinationOptions.length === 0" class="text-xs text-slate-300/80">
-          Selecciona un origen para habilitar destinos espejo.
-        </p>
-        <div v-else class="grid grid-cols-1 gap-2 md:grid-cols-2">
-          <AppCheckbox
-            v-for="monitor in mirrorDestinationOptions"
-            :id="`mirror-target-${monitor.id}`"
-            :key="monitor.id"
-            :model-value="selectedMirrorTargetIdSet.has(monitor.id)"
-            :label="monitor.label"
-            :disabled="!props.mirrorSourceMonitorId"
-            @update:model-value="onMirrorTargetToggle(monitor.id, $event)"
-          />
-        </div>
-      </div>
-
-      <p class="text-xs text-slate-200/90" data-testid="mirror-feedback">
-        <template v-if="!props.mirrorEnabled">Modo espejo desactivado.</template>
-        <template v-else-if="!props.mirrorSourceMonitorId">Define un monitor origen para comenzar la replicacion.</template>
-        <template v-else>
-          Origen: {{ monitorLabelById(props.mirrorSourceMonitorId) }}. Destinos activos: {{ props.mirrorActiveTargetCount }}/{{ props.mirrorTargetMonitorIds.length }}.
-        </template>
-      </p>
-
-      <p v-if="unavailableMirrorTargetLabels.length > 0" class="text-xs text-amber-200/90" data-testid="mirror-unavailable-feedback">
-        Destinos no disponibles: {{ unavailableMirrorTargetLabels.join(', ') }}.
-      </p>
-      <p v-if="props.mirrorLastError" class="text-xs text-amber-200/90" data-testid="mirror-last-error">
-        {{ props.mirrorLastError }}
-      </p>
-    </div>
-
     <p
       v-if="props.showOnlyProjectable && props.monitors.length === 0"
       class="app-alert app-alert--amber"
@@ -320,23 +343,5 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
       No hay monitores proyectables disponibles. La ventana principal esta ocupando el unico monitor detectado.
     </p>
 
-    <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
-      <MonitorCard
-        v-for="monitor in props.monitors"
-        :key="monitor.id"
-        :monitor="monitor"
-        :state="props.states[monitor.id]"
-        :thumbnail="props.thumbnails[monitor.id] ?? { imageDataUrl: null, capturedAtMs: null }"
-        :is-file-import-blocked="props.isFileImportBlocked"
-        :file-import-blocked-message="props.fileImportBlockedMessage"
-        @open-window="emit('openWindow', $event)"
-        @request-fullscreen="emit('requestFullscreen', $event)"
-        @close-window="emit('closeWindow', $event)"
-        @upload-image="(id, file) => emit('uploadImage', id, file)"
-        @clear-image="emit('clearImage', $event)"
-        @rename-monitor="(id, name) => emit('renameMonitor', id, name)"
-        @transform="(id, action) => emit('transform', id, action)"
-      />
-    </div>
   </section>
 </template>

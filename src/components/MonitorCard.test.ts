@@ -57,15 +57,42 @@ const mountCard = (overrides?: Partial<{ state: MonitorRuntimeState; thumbnail: 
   });
 
 describe('MonitorCard', () => {
-  it('muestra boton Estado y despliega panel de informacion', async () => {
+  it('abre y cierra el popover de Estado con el boton', async () => {
     const wrapper = mountCard();
 
-    expect(wrapper.find('[data-testid="monitor-info-panel"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="monitor-info-popover"]').exists()).toBe(false);
 
     await wrapper.get('[data-testid="monitor-info-toggle"]').trigger('click');
 
     expect(wrapper.get('[data-testid="monitor-info-toggle"]').attributes('aria-expanded')).toBe('true');
-    expect(wrapper.get('[data-testid="monitor-info-panel"]').text()).toContain('Handshake: Conectado');
+    expect(wrapper.get('[data-testid="monitor-info-popover"]').text()).toContain('Handshake: Conectado');
+
+    await wrapper.get('[data-testid="monitor-info-toggle"]').trigger('click');
+    expect(wrapper.find('[data-testid="monitor-info-popover"]').exists()).toBe(false);
+  });
+
+  it('cierra el popover de Estado al presionar Escape', async () => {
+    const wrapper = mountCard();
+
+    await wrapper.get('[data-testid="monitor-info-toggle"]').trigger('click');
+    expect(wrapper.find('[data-testid="monitor-info-popover"]').exists()).toBe(true);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-testid="monitor-info-popover"]').exists()).toBe(false);
+  });
+
+  it('cierra el popover de Estado al hacer click fuera', async () => {
+    const wrapper = mountCard();
+
+    await wrapper.get('[data-testid="monitor-info-toggle"]').trigger('click');
+    expect(wrapper.find('[data-testid="monitor-info-popover"]').exists()).toBe(true);
+
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-testid="monitor-info-popover"]').exists()).toBe(false);
   });
 
   it('renderiza miniatura en vivo con contenedor uniforme y media contain', () => {
@@ -79,12 +106,38 @@ describe('MonitorCard', () => {
     expect(previewImage.attributes('src')).toContain('THUMB');
   });
 
-  it('emite renombrado de pantalla al confirmar input', async () => {
+  it('muestra boton de editar junto al nombre y no renderiza input inline', () => {
     const wrapper = mountCard();
 
-    const renameInput = wrapper.get('[data-testid="monitor-rename-input"]');
+    expect(wrapper.get('[data-testid="monitor-rename-open"]').text()).toContain('Editar');
+    expect(wrapper.find('[data-testid="monitor-rename-input"]').exists()).toBe(false);
+  });
+
+  it('abre y cierra modal de renombrado por boton de cierre y Escape', async () => {
+    const wrapper = mountCard();
+
+    expect(wrapper.find('[data-testid="monitor-rename-modal"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="monitor-rename-open"]').trigger('click');
+    expect(wrapper.get('[data-testid="monitor-rename-modal"]').exists()).toBe(true);
+
+    await wrapper.get('[data-testid="monitor-rename-modal-close"]').trigger('click');
+    expect(wrapper.find('[data-testid="monitor-rename-modal"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="monitor-rename-open"]').trigger('click');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-testid="monitor-rename-modal"]').exists()).toBe(false);
+  });
+
+  it('emite renombrado de pantalla al guardar desde modal', async () => {
+    const wrapper = mountCard();
+
+    await wrapper.get('[data-testid="monitor-rename-open"]').trigger('click');
+    const renameInput = wrapper.get('[data-testid="monitor-rename-modal-input"]');
     await renameInput.setValue('Proyector Sala A');
-    await renameInput.trigger('blur');
+    await wrapper.get('[data-testid="monitor-rename-modal-save"]').trigger('click');
 
     expect(wrapper.emitted('renameMonitor')?.[0]).toEqual(['monitor-1', 'Proyector Sala A']);
   });

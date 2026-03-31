@@ -170,6 +170,10 @@
     @apply rounded-2xl border p-5 shadow-glow transition-all;
   }
 
+  .monitor-card-title-row {
+    @apply flex flex-wrap items-center justify-between gap-2;
+  }
+
   .monitor-card--open {
     @apply border-indigo-400/45 bg-slate-900/70;
   }
@@ -190,6 +194,14 @@
 
   .monitor-card-preview-empty {
     @apply px-3 text-center text-xs text-slate-300/85;
+  }
+
+  .monitor-status-popover-wrap {
+    @apply relative;
+  }
+
+  .monitor-status-popover {
+    @apply surface-panel-xl absolute right-0 top-[calc(100%+0.5rem)] z-20 w-64 space-y-1 shadow-2xl;
   }
 
   .monitor-thumbnail-grid {
