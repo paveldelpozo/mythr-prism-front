@@ -51,7 +51,7 @@ const bodyScrollSnapshot = ref<{
   overflow: string;
   paddingRight: string;
 } | null>(null);
-const effectiveFileImportBlocked = computed(() => props.isFileImportBlocked === true);
+const effectiveFileImportBlocked = computed(() => props.isFileImportBlocked);
 const effectiveFileImportBlockedMessage = computed(() =>
   props.fileImportBlockedMessage ?? 'Para importar archivo, sal del fullscreen o usa Drag & Drop / pegar imagen.'
 );
