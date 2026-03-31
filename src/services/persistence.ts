@@ -175,7 +175,7 @@ const sanitizeMonitorStateMap = (value: unknown): PersistedMonitorStateMap => {
   const map: PersistedMonitorStateMap = {};
 
   Object.entries(value).forEach(([monitorId, monitorState]) => {
-    if (typeof monitorId !== 'string' || monitorId.length === 0) {
+    if (!monitorId || monitorId.length === 0) {
       return;
     }
 
@@ -193,7 +193,7 @@ const sanitizePanelPreferences = (value: unknown): Record<string, boolean> => {
   const panelPreferences: Record<string, boolean> = {};
 
   Object.entries(value).forEach(([key, panelEnabled]) => {
-    if (typeof key !== 'string' || typeof panelEnabled !== 'boolean') {
+    if (!key || key.length === 0 || typeof panelEnabled !== 'boolean') {
       return;
     }
 
