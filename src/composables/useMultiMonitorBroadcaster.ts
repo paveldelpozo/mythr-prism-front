@@ -29,6 +29,12 @@ import {
 import type { PersistedMonitorStateMap } from '../services/persistence';
 import { cloneSerializable } from '../utils/cloneSerializable';
 import type { MultimediaItem } from '../types/playlist';
+import {
+  createEmptyWhiteboardState,
+  sanitizeWhiteboardState,
+  type MonitorWhiteboardStateMap,
+  type WhiteboardState
+} from '../types/whiteboard';
 
 type TransformAction =
   | { type: 'rotate'; value: number }
@@ -129,6 +135,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
   const monitors = ref<MonitorDescriptor[]>([]);
   const monitorStates = reactive<MonitorStateMap>({});
   const monitorThumbnails = reactive<MonitorThumbnailStateMap>({});
+  const monitorWhiteboards = reactive<MonitorWhiteboardStateMap>({});
   const windowsRegistry = new Map<string, WindowRegistryEntry>();
   const monitorImageRenderSourceById = new Map<string, string | null>();
   const blobUrlUsageCountBySource = new Map<string, number>();
@@ -191,6 +198,14 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     return monitorThumbnails[monitorId];
   };
 
+  const getMonitorWhiteboard = (monitorId: string): WhiteboardState => {
+    if (!monitorWhiteboards[monitorId]) {
+      monitorWhiteboards[monitorId] = createEmptyWhiteboardState();
+    }
+
+    return monitorWhiteboards[monitorId];
+  };
+
   const setMonitorThumbnail = (monitorId: string, imageDataUrl: string | null, capturedAtMs: number | null) => {
     const thumbnail = getMonitorThumbnail(monitorId);
     thumbnail.imageDataUrl = imageDataUrl;
@@ -242,6 +257,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       const targetState = getMonitorState(targetMonitorId);
       targetState.imageDataUrl = null;
       targetState.activeMediaItem = null;
+      monitorWhiteboards[targetMonitorId] = createEmptyWhiteboardState();
       setMonitorImageRenderSource(targetMonitorId, null);
 
       const clearMessage = buildMasterMessage(targetMonitorId, 'SET_IMAGE', {
@@ -252,8 +268,13 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
         return;
       }
 
+      const clearWhiteboardMessage = buildMasterMessage(targetMonitorId, 'WHITEBOARD_CLEAR', {
+        reason: 'mirror-disabled'
+      });
+
       const sent = sendToSlave(targetMonitorId, clearMessage);
-      if (sent) {
+      const sentWhiteboard = clearWhiteboardMessage ? sendToSlave(targetMonitorId, clearWhiteboardMessage) : true;
+      if (sent && sentWhiteboard) {
         setMonitorError(targetMonitorId, null);
       }
     });
@@ -385,6 +406,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
 
     nextMonitors.forEach((monitor) => {
       getMonitorState(monitor.id);
+      getMonitorWhiteboard(monitor.id);
     });
 
     Object.keys(monitorStates).forEach((monitorId) => {
@@ -396,6 +418,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       setMonitorImageRenderSource(monitorId, null);
       delete monitorStates[monitorId];
       delete monitorThumbnails[monitorId];
+      delete monitorWhiteboards[monitorId];
       delete monitorCustomNameById[monitorId];
     });
 
@@ -459,6 +482,14 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     });
   };
 
+  const buildWhiteboardStateMessage = (
+    monitorId: string,
+    state: WhiteboardState
+  ): Extract<MasterToSlaveMessage, { type: 'WHITEBOARD_SET_STATE' }> | null =>
+    buildMasterMessage(monitorId, 'WHITEBOARD_SET_STATE', {
+      state: sanitizeWhiteboardState(state)
+    });
+
   const shouldReplicateFromSource = (sourceMonitorId: string): boolean => {
     if (!mirrorConfig.value.enabled) {
       return false;
@@ -494,6 +525,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       targetState.transform = { ...sourceState.transform };
       targetState.imageDataUrl = sourceState.imageDataUrl;
       targetState.activeMediaItem = sourceState.activeMediaItem;
+      monitorWhiteboards[targetMonitorId] = sanitizeWhiteboardState(getMonitorWhiteboard(sourceMonitorId));
       setMonitorImageRenderSource(
         targetMonitorId,
         resolveImageRenderSource(sourceMonitorId, sourceState)
@@ -503,8 +535,15 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
         transform: targetState.transform
       });
       const contentMessage = buildContentMessage(targetMonitorId, targetState);
+      const whiteboardMessage = buildWhiteboardStateMessage(
+        targetMonitorId,
+        monitorWhiteboards[targetMonitorId]
+      );
 
-      const hasReadyWindow = transformMessage !== null && contentMessage !== null;
+      const hasReadyWindow =
+        transformMessage !== null
+        && contentMessage !== null
+        && whiteboardMessage !== null;
 
       if (!hasReadyWindow) {
         unavailableTargetIds.push(targetMonitorId);
@@ -514,8 +553,9 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
 
       const sentTransform = sendToSlave(targetMonitorId, transformMessage);
       const sentContent = sendToSlave(targetMonitorId, contentMessage);
+      const sentWhiteboard = sendToSlave(targetMonitorId, whiteboardMessage);
 
-      if (!sentTransform || !sentContent) {
+      if (!sentTransform || !sentContent || !sentWhiteboard) {
         unavailableTargetIds.push(targetMonitorId);
         return;
       }
@@ -548,6 +588,14 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     }
     if (contentMsg) {
       sendToSlave(monitorId, contentMsg);
+    }
+
+    const whiteboardMessage = buildWhiteboardStateMessage(
+      monitorId,
+      getMonitorWhiteboard(monitorId)
+    );
+    if (whiteboardMessage) {
+      sendToSlave(monitorId, whiteboardMessage);
     }
   };
 
@@ -971,6 +1019,53 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     return sendToSlave(monitorId, message);
   };
 
+  const setWhiteboardStateForMonitor = (monitorId: string, nextState: WhiteboardState) => {
+    const sanitizedState = sanitizeWhiteboardState(nextState);
+    monitorWhiteboards[monitorId] = sanitizedState;
+
+    const message = buildWhiteboardStateMessage(monitorId, sanitizedState);
+    if (message) {
+      sendToSlave(monitorId, message);
+    }
+
+    replicateSourceToMirrorTargets(monitorId);
+  };
+
+  const clearWhiteboardForMonitor = (monitorId: string) => {
+    monitorWhiteboards[monitorId] = createEmptyWhiteboardState();
+
+    const message = buildMasterMessage(monitorId, 'WHITEBOARD_CLEAR', {
+      reason: 'operator-clear'
+    });
+
+    if (message) {
+      sendToSlave(monitorId, message);
+    }
+
+    replicateSourceToMirrorTargets(monitorId);
+  };
+
+  const undoWhiteboardForMonitor = (monitorId: string) => {
+    const currentState = getMonitorWhiteboard(monitorId);
+    if (currentState.strokes.length === 0) {
+      return;
+    }
+
+    monitorWhiteboards[monitorId] = {
+      strokes: currentState.strokes.slice(0, -1)
+    };
+
+    const message = buildMasterMessage(monitorId, 'WHITEBOARD_UNDO', {
+      reason: 'operator-undo'
+    });
+
+    if (message) {
+      sendToSlave(monitorId, message);
+    }
+
+    replicateSourceToMirrorTargets(monitorId);
+  };
+
   window.addEventListener('message', onMessageFromSlave);
   window.addEventListener('beforeunload', onBeforeUnload);
 
@@ -991,6 +1086,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     isWindowManagementSupported,
     monitorStates,
     monitorThumbnails,
+    monitorWhiteboards,
     mirrorConfig,
     mirrorStatus,
     persistableMonitorStates,
@@ -1002,11 +1098,14 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     openWindowForMonitor,
     requestFullscreen,
     sendVideoSyncCommand,
+    clearWhiteboardForMonitor,
     setMirrorEnabled,
     setMirrorSourceMonitorId,
     setMirrorTargetMonitorIds,
     setMonitorCustomName,
     setImageForMonitor,
+    setWhiteboardStateForMonitor,
+    undoWhiteboardForMonitor,
     setPlaylistItemForMonitor
   };
 };

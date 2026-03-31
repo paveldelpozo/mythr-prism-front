@@ -47,8 +47,13 @@ const thumbnails: MonitorThumbnailStateMap = {
 
 const MonitorCardStub = defineComponent({
   name: 'MonitorCard',
-  emits: ['renameMonitor'],
-  template: `<button data-testid="monitor-card-rename" @click="$emit('renameMonitor', 'monitor-1', 'Escenario')">rename</button>`
+  emits: ['renameMonitor', 'openWhiteboard'],
+  template: `
+    <div>
+      <button data-testid="monitor-card-rename" @click="$emit('renameMonitor', 'monitor-1', 'Escenario')">rename</button>
+      <button data-testid="monitor-card-whiteboard" @click="$emit('openWhiteboard', 'monitor-1')">whiteboard</button>
+    </div>
+  `
 });
 
 const mountMonitorList = (canCloseAllWindows: boolean) =>
@@ -146,6 +151,14 @@ describe('MonitorList', () => {
     await wrapper.get('[data-testid="monitor-card-rename"]').trigger('click');
 
     expect(wrapper.emitted('renameMonitor')?.[0]).toEqual(['monitor-1', 'Escenario']);
+  });
+
+  it('propaga evento para abrir pizarra desde la tarjeta', async () => {
+    const wrapper = mountMonitorList(true);
+
+    await wrapper.get('[data-testid="monitor-card-whiteboard"]').trigger('click');
+
+    expect(wrapper.emitted('openWhiteboard')?.[0]).toEqual(['monitor-1']);
   });
 
   it('mantiene el orden de secciones requerido en el tab Monitores', () => {

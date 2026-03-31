@@ -6,6 +6,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppHeader from './components/AppHeader.vue';
 import MonitorList from './components/MonitorList.vue';
 import PlaylistManager from './components/PlaylistManager.vue';
+import WhiteboardEditorModal from './components/WhiteboardEditorModal.vue';
 import { useMultiMonitorBroadcaster } from './composables/useMultiMonitorBroadcaster';
 import { usePlaylistPlayback } from './composables/usePlaylistPlayback';
 import {
@@ -21,6 +22,7 @@ import { DEFAULT_TRANSFORM } from './types/broadcaster';
 import { sanitizeMirrorModeConfig, type MirrorModeConfig } from './types/mirrorMode';
 import type { MultimediaItem, PlaylistPlaybackState } from './types/playlist';
 import { buildVideoSyncPlan } from './types/videoSync';
+import type { WhiteboardState } from './types/whiteboard';
 
 const FILE_IMPORT_BLOCK_MESSAGE = 'Para importar archivo, sal del fullscreen o usa Drag & Drop / pegar imagen.';
 
@@ -70,6 +72,7 @@ const normalizePlaybackByPlaylist = (
 const {
   applyTransform,
   closeAllWindows,
+  clearWhiteboardForMonitor,
   closeWindow,
   globalError,
   hasDetectedMonitors,
@@ -77,6 +80,7 @@ const {
   isWindowManagementSupported,
   monitorStates,
   monitorThumbnails,
+  monitorWhiteboards,
   mirrorConfig,
   mirrorStatus,
   monitors,
@@ -90,6 +94,8 @@ const {
   setMirrorTargetMonitorIds,
   setMonitorCustomName,
   setImageForMonitor,
+  setWhiteboardStateForMonitor,
+  undoWhiteboardForMonitor,
   setPlaylistItemForMonitor
 } = useMultiMonitorBroadcaster({
   initialMonitorStateById: persistedSession.monitors,
@@ -113,6 +119,7 @@ const playlistPlaybackState = ref<PlaylistPlaybackState>(
   normalizePlaybackByPlaylist(persistedSession.playback, persistedSession.playlist.length)
 );
 const sessionSaver = createDebouncedSessionSaver();
+const activeWhiteboardMonitorId = ref<string | null>(null);
 
 const {
   feedback: playlistPlaybackFeedback,
@@ -323,6 +330,40 @@ const videoSyncPlan = computed(() =>
     preferredHostMonitorId: selectedTargetMonitorIds.value[0] ?? null
   })
 );
+
+const activeWhiteboardMonitor = computed(() =>
+  monitors.value.find((monitor) => monitor.id === activeWhiteboardMonitorId.value) ?? null
+);
+
+const activeWhiteboardReferenceImage = computed(() => {
+  const monitorId = activeWhiteboardMonitorId.value;
+  if (!monitorId) {
+    return null;
+  }
+
+  return monitorThumbnails[monitorId]?.imageDataUrl ?? null;
+});
+
+const activeWhiteboardState = computed(() => {
+  const monitorId = activeWhiteboardMonitorId.value;
+  if (!monitorId) {
+    return { strokes: [] };
+  }
+
+  return monitorWhiteboards[monitorId] ?? { strokes: [] };
+});
+
+const openWhiteboardEditor = (monitorId: string) => {
+  activeWhiteboardMonitorId.value = monitorId;
+};
+
+const closeWhiteboardEditor = () => {
+  activeWhiteboardMonitorId.value = null;
+};
+
+const onWhiteboardStateChange = (monitorId: string, state: WhiteboardState) => {
+  setWhiteboardStateForMonitor(monitorId, state);
+};
 
 const uploadImage = (monitorId: string, file: File) => {
   if (hasActiveFullscreenSlave.value) {
@@ -653,6 +694,17 @@ watch(layouts, (nextLayouts) => {
   selectedLayoutId.value = nextLayouts[0]?.id ?? null;
 }, { deep: true });
 
+watch(monitors, (nextMonitors) => {
+  if (!activeWhiteboardMonitorId.value) {
+    return;
+  }
+
+  const stillExists = nextMonitors.some((monitor) => monitor.id === activeWhiteboardMonitorId.value);
+  if (!stillExists) {
+    activeWhiteboardMonitorId.value = null;
+  }
+}, { deep: true });
+
 const flushSessionSaver = () => {
   sessionSaver.flush();
 };
@@ -757,6 +809,7 @@ onBeforeUnmount(() => {
           @request-fullscreen="requestFullscreen"
           @upload-image="uploadImage"
           @clear-image="(id) => setImageForMonitor(id, null)"
+          @open-whiteboard="openWhiteboardEditor"
           @rename-monitor="setMonitorCustomName"
           @transform="applyTransform"
         />
@@ -793,6 +846,19 @@ onBeforeUnmount(() => {
       >
         {{ globalError }}
       </section>
+
+      <WhiteboardEditorModal
+        v-if="activeWhiteboardMonitor"
+        :monitor-id="activeWhiteboardMonitor.id"
+        :monitor-label="activeWhiteboardMonitor.label"
+        :monitor-resolution-label="`${activeWhiteboardMonitor.width}x${activeWhiteboardMonitor.height}`"
+        :reference-image-data-url="activeWhiteboardReferenceImage"
+        :state="activeWhiteboardState"
+        @close="closeWhiteboardEditor"
+        @state-change="onWhiteboardStateChange"
+        @clear="clearWhiteboardForMonitor"
+        @undo="undoWhiteboardForMonitor"
+      />
     </div>
   </main>
 </template>

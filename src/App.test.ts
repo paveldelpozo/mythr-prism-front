@@ -72,6 +72,9 @@ const setMirrorEnabledSpy = vi.fn();
 const setMirrorSourceMonitorIdSpy = vi.fn();
 const setMirrorTargetMonitorIdsSpy = vi.fn();
 const setMonitorCustomNameSpy = vi.fn();
+const setWhiteboardStateForMonitorSpy = vi.fn();
+const clearWhiteboardForMonitorSpy = vi.fn();
+const undoWhiteboardForMonitorSpy = vi.fn();
 const sessionSaverScheduleSpy = vi.fn();
 
 const buildPersistedSession = (
@@ -105,12 +108,17 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
   useMultiMonitorBroadcaster: () => ({
     applyTransform: applyTransformSpy,
     closeAllWindows: vi.fn(),
+    clearWhiteboardForMonitor: clearWhiteboardForMonitorSpy,
     closeWindow: vi.fn(),
     globalError: ref<string | null>(null),
     hasDetectedMonitors: computed(() => mockMonitors.value.length > 0),
     isLoadingMonitors: ref(false),
     isWindowManagementSupported: true,
     monitorStates: mockMonitorStates,
+    monitorWhiteboards: reactive({
+      master: { strokes: [] },
+      projector: { strokes: [] }
+    }),
     mirrorConfig: ref({
       enabled: false,
       sourceMonitorId: null,
@@ -144,6 +152,8 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
     setMirrorTargetMonitorIds: setMirrorTargetMonitorIdsSpy,
     setMonitorCustomName: setMonitorCustomNameSpy,
     setImageForMonitor: setImageForMonitorSpy,
+    setWhiteboardStateForMonitor: setWhiteboardStateForMonitorSpy,
+    undoWhiteboardForMonitor: undoWhiteboardForMonitorSpy,
     setPlaylistItemForMonitor: vi.fn()
   })
 }));
@@ -224,6 +234,7 @@ const MonitorListStub = defineComponent({
     'update:mirrorEnabled',
     'update:mirrorSourceMonitorId',
     'update:mirrorTargetMonitorIds',
+    'openWhiteboard',
     'renameMonitor',
     'saveLayout',
     'loadLayout',
@@ -272,6 +283,9 @@ describe('App integration base', () => {
     setMirrorSourceMonitorIdSpy.mockReset();
     setMirrorTargetMonitorIdsSpy.mockReset();
     setMonitorCustomNameSpy.mockReset();
+    setWhiteboardStateForMonitorSpy.mockReset();
+    clearWhiteboardForMonitorSpy.mockReset();
+    undoWhiteboardForMonitorSpy.mockReset();
     sessionSaverScheduleSpy.mockReset();
     vi.restoreAllMocks();
   });

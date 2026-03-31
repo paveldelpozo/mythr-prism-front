@@ -84,7 +84,16 @@ const mountSlaveRuntime = ({
 };
 
 const dispatchSlaveMessage = (
-  type: 'SET_IMAGE' | 'SET_MEDIA' | 'SET_TRANSFORM' | 'REQUEST_CLOSE' | 'REQUEST_FULLSCREEN' | 'PING',
+  type:
+    | 'SET_IMAGE'
+    | 'SET_MEDIA'
+    | 'SET_TRANSFORM'
+    | 'WHITEBOARD_SET_STATE'
+    | 'WHITEBOARD_CLEAR'
+    | 'WHITEBOARD_UNDO'
+    | 'REQUEST_CLOSE'
+    | 'REQUEST_FULLSCREEN'
+    | 'PING',
   payload: Record<string, unknown>
 ) => {
   window.dispatchEvent(
@@ -294,6 +303,19 @@ describe('services/slaveWindowHtml mirror rendering', () => {
 
     const drawImageMock = vi.fn();
     const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      save: vi.fn(),
+      restore: vi.fn(),
+      setTransform: vi.fn(),
+      clearRect: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      lineCap: 'round',
+      lineJoin: 'round',
+      strokeStyle: '#ef4444',
+      lineWidth: 1,
+      globalCompositeOperation: 'source-over',
       drawImage: drawImageMock
     } as unknown as CanvasRenderingContext2D);
     const toDataUrlSpy = vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL')
@@ -454,5 +476,134 @@ describe('services/slaveWindowHtml mirror rendering', () => {
       .filter((message) => message.type === 'SLAVE_CLOSING');
 
     expect(closingMessages.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('aplica trazos al overlay de pizarra con WHITEBOARD_SET_STATE', () => {
+    const lineToSpy = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      save: vi.fn(),
+      restore: vi.fn(),
+      setTransform: vi.fn(),
+      clearRect: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: lineToSpy,
+      stroke: vi.fn(),
+      lineCap: 'round',
+      lineJoin: 'round',
+      strokeStyle: '#ef4444',
+      lineWidth: 1,
+      globalCompositeOperation: 'source-over',
+      rect: vi.fn(),
+      ellipse: vi.fn(),
+      drawImage: vi.fn()
+    } as unknown as CanvasRenderingContext2D);
+    mountSlaveRuntime();
+
+    dispatchSlaveMessage('WHITEBOARD_SET_STATE', {
+      state: {
+        strokes: [
+          {
+            tool: 'draw',
+            color: '#ef4444',
+            width: 6,
+            points: [
+              { x: 0.1, y: 0.1 },
+              { x: 0.8, y: 0.7 }
+            ]
+          }
+        ]
+      }
+    });
+
+    expect(lineToSpy).toHaveBeenCalled();
+  });
+
+  it('renderiza linea, flecha, rectangulo y circulo desde WHITEBOARD_SET_STATE', () => {
+    const lineToSpy = vi.fn();
+    const rectSpy = vi.fn();
+    const ellipseSpy = vi.fn();
+
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      save: vi.fn(),
+      restore: vi.fn(),
+      setTransform: vi.fn(),
+      clearRect: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: lineToSpy,
+      stroke: vi.fn(),
+      rect: rectSpy,
+      ellipse: ellipseSpy,
+      lineCap: 'round',
+      lineJoin: 'round',
+      strokeStyle: '#ef4444',
+      lineWidth: 1,
+      globalCompositeOperation: 'source-over',
+      drawImage: vi.fn()
+    } as unknown as CanvasRenderingContext2D);
+
+    mountSlaveRuntime();
+
+    dispatchSlaveMessage('WHITEBOARD_SET_STATE', {
+      state: {
+        strokes: [
+          {
+            tool: 'line',
+            color: '#38bdf8',
+            width: 4,
+            points: [
+              { x: 0.1, y: 0.1 },
+              { x: 0.9, y: 0.2 }
+            ]
+          },
+          {
+            tool: 'arrow',
+            color: '#f59e0b',
+            width: 5,
+            points: [
+              { x: 0.15, y: 0.25 },
+              { x: 0.85, y: 0.35 }
+            ]
+          },
+          {
+            tool: 'rect',
+            color: '#22c55e',
+            width: 6,
+            points: [
+              { x: 0.2, y: 0.2 },
+              { x: 0.8, y: 0.7 }
+            ]
+          },
+          {
+            tool: 'circle',
+            color: '#e879f9',
+            width: 6,
+            points: [
+              { x: 0.2, y: 0.3 },
+              { x: 0.75, y: 0.85 }
+            ]
+          }
+        ]
+      }
+    });
+
+    expect(lineToSpy).toHaveBeenCalled();
+    expect(rectSpy).toHaveBeenCalledTimes(1);
+    expect(ellipseSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('reporta error en payload invalido de WHITEBOARD_SET_STATE', () => {
+    const { openerPostMessage, instanceToken } = mountSlaveRuntime();
+
+    dispatchSlaveMessage('WHITEBOARD_SET_STATE', {
+      state: null
+    });
+
+    const errorMessages = openerPostMessage.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'SLAVE_ERROR' && message.instanceToken === instanceToken);
+
+    expect(errorMessages.at(-1)?.payload?.message).toContain('WHITEBOARD_SET_STATE ignorado');
   });
 });

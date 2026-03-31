@@ -740,6 +740,62 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
     expect(popup.close).toHaveBeenCalledTimes(1);
     expect(api.monitorStates[mirrorTargetId]?.isWindowOpen).toBe(false);
   });
+
+  it('sincroniza overlay de pizarra con comandos set/undo/clear al monitor objetivo', async () => {
+    const { popups, mirrorTargetId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(mirrorTargetId);
+
+    const popup = popups[0];
+    popup.postMessage.mockClear();
+
+    api.setWhiteboardStateForMonitor(mirrorTargetId, {
+      strokes: [
+        {
+          tool: 'rect',
+          color: '#22c55e',
+          width: 8,
+          points: [
+            { x: 0.1, y: 0.2 },
+            { x: 0.5, y: 0.4 }
+          ]
+        }
+      ]
+    });
+    api.undoWhiteboardForMonitor(mirrorTargetId);
+    api.clearWhiteboardForMonitor(mirrorTargetId);
+
+    const sentMessages = popup.postMessage.mock.calls.map(([message]) => message);
+
+    expect(sentMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'WHITEBOARD_SET_STATE',
+          monitorId: mirrorTargetId,
+          payload: {
+            state: {
+              strokes: [
+                expect.objectContaining({
+                  tool: 'rect'
+                })
+              ]
+            }
+          }
+        }),
+        expect.objectContaining({
+          type: 'WHITEBOARD_UNDO',
+          monitorId: mirrorTargetId
+        }),
+        expect.objectContaining({
+          type: 'WHITEBOARD_CLEAR',
+          monitorId: mirrorTargetId
+        })
+      ])
+    );
+    expect(api.monitorWhiteboards[mirrorTargetId]?.strokes).toEqual([]);
+  });
 });
 
 describe('composables/useMultiMonitorBroadcaster lifecycle cleanup', () => {

@@ -1,5 +1,6 @@
 import type { MonitorTransform } from './broadcaster';
 import type { MultimediaItem } from './playlist';
+import type { WhiteboardState } from './whiteboard';
 
 export const MESSAGE_CHANNEL = 'MMIB_V3_CHANNEL';
 
@@ -12,6 +13,9 @@ export type MasterMessageType =
   | 'VIDEO_SYNC_SEEK'
   | 'VIDEO_SYNC_TIME'
   | 'SET_TRANSFORM'
+  | 'WHITEBOARD_SET_STATE'
+  | 'WHITEBOARD_CLEAR'
+  | 'WHITEBOARD_UNDO'
   | 'REQUEST_FULLSCREEN'
   | 'REQUEST_CLOSE'
   | 'PING';
@@ -78,6 +82,9 @@ export type MasterToSlaveMessage =
   | MessageEnvelope<'VIDEO_SYNC_SEEK', VideoSyncSeekPayload>
   | MessageEnvelope<'VIDEO_SYNC_TIME', VideoSyncTimePayload>
   | MessageEnvelope<'SET_TRANSFORM', { transform: MonitorTransform }>
+  | MessageEnvelope<'WHITEBOARD_SET_STATE', { state: WhiteboardState }>
+  | MessageEnvelope<'WHITEBOARD_CLEAR', { reason: string }>
+  | MessageEnvelope<'WHITEBOARD_UNDO', { reason: string }>
   | MessageEnvelope<'REQUEST_FULLSCREEN', { reason: string }>
   | MessageEnvelope<'REQUEST_CLOSE', { reason: string }>
   | MessageEnvelope<'PING', { timestamp: number }>;

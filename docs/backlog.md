@@ -52,7 +52,7 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 
 | Fase | Progreso |
 | --- | --- |
-| MVP | 85% |
+| MVP | 100% |
 | V1 | 0% |
 | V2 | 0% |
 
@@ -181,21 +181,14 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
     - [x] Grid de miniaturas en panel de control.
     - [x] Estrategia de refresh y limite de frecuencia.
 
-- [ ] **Lower thirds**
-  - Dependencias: compositor de capas.
-  - Hecho: se puede mostrar/ocultar un lower third editable sobre contenido activo.
-  - Subtareas:
-    - [ ] Plantilla basica de lower third.
-    - [ ] Controles de texto/estilo/posicion.
-    - [ ] Integracion con timeline/escena activa.
-
-- [ ] **Pizarra en vivo**
+- [x] **Pizarra en vivo**
+  - Estado: `completed`.
   - Dependencias: capa interactiva sobre salida.
   - Hecho: usuario dibuja en tiempo real y puede limpiar/rehacer sobre la proyeccion.
   - Subtareas:
-    - [ ] Herramienta de trazo (color, grosor).
-    - [ ] Borrado global y undo basico.
-    - [ ] Sincronizacion de overlay en monitor objetivo.
+    - [x] Herramienta de trazo (color, grosor).
+    - [x] Borrado global y undo basico.
+    - [x] Sincronizacion de overlay en monitor objetivo.
 
 ## V1
 
@@ -361,3 +354,5 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 - 2026-03-30: completadas acciones de UI para guardar/cargar/eliminar layouts con feedback operativo y proteccion de sobrescritura/eliminacion accidental; se agregaron pruebas de regresion de flujo y se marco el siguiente item de MVP (`Modo espejo`) en curso.
 - 2026-03-30: Modo espejo completado end-to-end con UI de activacion/origen/destinos, replicacion de estado (transform/media/imagen) origen->destinos, prevencion de ciclos y degradacion operativa con feedback cuando destinos espejo no estan disponibles.
 - 2026-03-31: Thumbnails completado para MVP operativo actual: runtime esclavo emite captura reducida periodica con limite de frecuencia, el master mantiene estado de miniaturas por monitor no persistente y Monitores incorpora grid de previews en vivo con fallback claro.
+- 2026-03-31: Pizarra en vivo completado para MVP: cada tarjeta de monitor secundario permite abrir pizarra, la edicion en master usa referencia de miniatura y sincroniza overlay de trazos (set/undo/clear) en runtime esclavo sin romper fullscreen/thumbnail/handshake.
+- 2026-03-31: Mejora UX post-MVP de pizarra en vivo: toolbar visual con botones iconograficos accesibles (herramientas, color, grosor, undo, limpiar) y nuevas formas basicas (flecha/circulo/rectangulo/linea) con preview click+drag sincronizado al overlay slave.

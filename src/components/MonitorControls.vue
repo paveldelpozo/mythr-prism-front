@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  AdjustmentsHorizontalIcon,
   ArrowDownIcon,
   ArrowLeftIcon,
   ArrowPathIcon,
@@ -13,7 +14,7 @@ import {
   TrashIcon,
   XMarkIcon
 } from '@heroicons/vue/24/outline';
-import { computed, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { MonitorRuntimeState } from '../types/broadcaster';
 import {
   pickImageFromClipboard,
@@ -43,6 +44,13 @@ const emit = defineEmits<{
 const imageImportFeedback = ref<string | null>(null);
 const isImageDropZoneActive = ref(false);
 const imageDropZoneDragDepth = ref(0);
+const isContentEditorModalOpen = ref(false);
+const contentEditorModalTitleId = computed(() => `monitor-content-editor-title-${props.monitorId}`);
+const contentEditorTriggerButton = ref<HTMLButtonElement | null>(null);
+const bodyScrollSnapshot = ref<{
+  overflow: string;
+  paddingRight: string;
+} | null>(null);
 const effectiveFileImportBlocked = computed(() => props.isFileImportBlocked === true);
 const effectiveFileImportBlockedMessage = computed(() =>
   props.fileImportBlockedMessage ?? 'Para importar archivo, sal del fullscreen o usa Drag & Drop / pegar imagen.'
@@ -155,6 +163,68 @@ const fullscreenActionLabel = computed(() => {
 
   return 'Solicitar fullscreen';
 });
+
+const lockBodyScroll = () => {
+  if (typeof document === 'undefined' || bodyScrollSnapshot.value) {
+    return;
+  }
+
+  const body = document.body;
+  bodyScrollSnapshot.value = {
+    overflow: body.style.overflow,
+    paddingRight: body.style.paddingRight
+  };
+
+  const scrollbarWidth = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+  body.style.overflow = 'hidden';
+  body.style.paddingRight = scrollbarWidth > 0 ? `${scrollbarWidth}px` : body.style.paddingRight;
+};
+
+const unlockBodyScroll = () => {
+  if (typeof document === 'undefined' || !bodyScrollSnapshot.value) {
+    return;
+  }
+
+  const body = document.body;
+  body.style.overflow = bodyScrollSnapshot.value.overflow;
+  body.style.paddingRight = bodyScrollSnapshot.value.paddingRight;
+  bodyScrollSnapshot.value = null;
+};
+
+const openContentEditorModal = () => {
+  isContentEditorModalOpen.value = true;
+};
+
+const closeContentEditorModal = () => {
+  isContentEditorModalOpen.value = false;
+  void nextTick(() => {
+    contentEditorTriggerButton.value?.focus();
+  });
+};
+
+const onWindowKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && isContentEditorModalOpen.value) {
+    closeContentEditorModal();
+  }
+};
+
+watch(isContentEditorModalOpen, (isOpen) => {
+  if (isOpen) {
+    lockBodyScroll();
+    return;
+  }
+
+  unlockBodyScroll();
+});
+
+onMounted(() => {
+  window.addEventListener('keydown', onWindowKeydown);
+});
+
+onBeforeUnmount(() => {
+  unlockBodyScroll();
+  window.removeEventListener('keydown', onWindowKeydown);
+});
 </script>
 
 <template>
@@ -209,61 +279,16 @@ const fullscreenActionLabel = computed(() => {
       </p>
     </div>
 
-    <div class="grid gap-3 md:grid-cols-2">
-      <div class="surface-panel">
-        <p class="section-kicker-muted mb-2 text-[11px]">Rotacion</p>
-        <div class="grid grid-cols-2 gap-2">
-          <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'rotate', value: -90 })">
-            <ArrowUturnLeftIcon aria-hidden="true" class="btn-icon" />
-            Rotar -90
-          </button>
-          <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'rotate', value: 90 })">
-            <ArrowUturnRightIcon aria-hidden="true" class="btn-icon" />
-            Rotar +90
-          </button>
-        </div>
-      </div>
-
-      <div class="surface-panel">
-        <p class="section-kicker-muted mb-2 text-[11px]">Escala</p>
-        <div class="grid grid-cols-3 gap-2">
-          <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'scale', value: -0.1 })">
-            <MagnifyingGlassMinusIcon aria-hidden="true" class="btn-icon" />
-            Reducir
-          </button>
-          <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'reset' })">
-            <ArrowPathIcon aria-hidden="true" class="btn-icon" />
-            Reset
-          </button>
-          <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'scale', value: 0.1 })">
-            <MagnifyingGlassPlusIcon aria-hidden="true" class="btn-icon" />
-            Aumentar
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div class="surface-panel">
-      <p class="section-kicker-muted mb-2 text-[11px]">Posicion</p>
-      <div class="mx-auto grid w-full max-w-sm grid-cols-2 gap-2 sm:grid-cols-4">
-        <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'move', value: { y: -40 } })">
-          <ArrowUpIcon aria-hidden="true" class="btn-icon" />
-          Arriba
-        </button>
-        <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'move', value: { y: 40 } })">
-          <ArrowDownIcon aria-hidden="true" class="btn-icon" />
-          Abajo
-        </button>
-        <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'move', value: { x: -40 } })">
-          <ArrowLeftIcon aria-hidden="true" class="btn-icon" />
-          Izquierda
-        </button>
-        <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'move', value: { x: 40 } })">
-          <ArrowRightIcon aria-hidden="true" class="btn-icon" />
-          Derecha
-        </button>
-      </div>
-    </div>
+    <button
+      ref="contentEditorTriggerButton"
+      type="button"
+      data-testid="monitor-open-content-editor"
+      class="btn-with-icon btn-sm btn-slate-soft"
+      @click="openContentEditorModal"
+    >
+      <AdjustmentsHorizontalIcon aria-hidden="true" class="btn-icon" />
+      Editar contenido
+    </button>
 
     <div class="flex flex-wrap gap-2">
       <button
@@ -287,8 +312,121 @@ const fullscreenActionLabel = computed(() => {
 
     </div>
 
-    <p class="text-xs text-slate-300/80">
-      Transform: scale {{ state.transform.scale.toFixed(2) }} | rotate {{ state.transform.rotate }}deg | x {{ state.transform.translateX }} | y {{ state.transform.translateY }}
-    </p>
+    <div
+      v-if="isContentEditorModalOpen"
+      data-testid="monitor-content-editor-overlay"
+      class="app-modal-overlay"
+      @click.self="closeContentEditorModal"
+    >
+      <section
+        data-testid="monitor-content-editor-modal"
+        class="app-modal-panel app-modal-panel--lg"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="contentEditorModalTitleId"
+      >
+        <header class="app-modal-header">
+          <div>
+            <p class="section-kicker">Contenido en pantalla</p>
+            <h3 :id="contentEditorModalTitleId" class="mt-1 text-lg font-semibold text-slate-100">
+              Editar posicion, escala y rotacion
+            </h3>
+          </div>
+          <button
+            type="button"
+            class="app-modal-close-btn"
+            data-testid="monitor-content-editor-close"
+            aria-label="Cerrar editor de contenido"
+            @click="closeContentEditorModal"
+          >
+            <XMarkIcon aria-hidden="true" class="h-4 w-4" />
+          </button>
+        </header>
+
+        <div class="app-modal-body space-y-4">
+          <div class="grid gap-3 md:grid-cols-2">
+            <div class="surface-panel">
+              <p class="section-kicker-muted mb-2 text-[11px]">Rotacion</p>
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  data-testid="monitor-content-rotate-left"
+                  class="control-btn btn-with-icon"
+                  type="button"
+                  @click="emit('transform', monitorId, { type: 'rotate', value: -90 })"
+                >
+                  <ArrowUturnLeftIcon aria-hidden="true" class="btn-icon" />
+                  Rotar -90
+                </button>
+                <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'rotate', value: 90 })">
+                  <ArrowUturnRightIcon aria-hidden="true" class="btn-icon" />
+                  Rotar +90
+                </button>
+              </div>
+            </div>
+
+            <div class="surface-panel">
+              <p class="section-kicker-muted mb-2 text-[11px]">Escala</p>
+              <div class="grid grid-cols-3 gap-2">
+                <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'scale', value: -0.1 })">
+                  <MagnifyingGlassMinusIcon aria-hidden="true" class="btn-icon" />
+                  Reducir
+                </button>
+                <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'reset' })">
+                  <ArrowPathIcon aria-hidden="true" class="btn-icon" />
+                  Reset
+                </button>
+                <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'scale', value: 0.1 })">
+                  <MagnifyingGlassPlusIcon aria-hidden="true" class="btn-icon" />
+                  Aumentar
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="surface-panel">
+            <p class="section-kicker-muted mb-2 text-[11px]">Posicion</p>
+            <div class="mx-auto grid w-full max-w-sm grid-cols-2 gap-2 sm:grid-cols-4">
+              <button
+                data-testid="monitor-content-move-up"
+                class="control-btn btn-with-icon"
+                type="button"
+                @click="emit('transform', monitorId, { type: 'move', value: { y: -40 } })"
+              >
+                <ArrowUpIcon aria-hidden="true" class="btn-icon" />
+                Arriba
+              </button>
+              <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'move', value: { y: 40 } })">
+                <ArrowDownIcon aria-hidden="true" class="btn-icon" />
+                Abajo
+              </button>
+              <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'move', value: { x: -40 } })">
+                <ArrowLeftIcon aria-hidden="true" class="btn-icon" />
+                Izquierda
+              </button>
+              <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'move', value: { x: 40 } })">
+                <ArrowRightIcon aria-hidden="true" class="btn-icon" />
+                Derecha
+              </button>
+            </div>
+          </div>
+
+          <p class="text-xs text-slate-300/80">
+            Transform: scale {{ state.transform.scale.toFixed(2) }} | rotate {{ state.transform.rotate }}deg | x {{ state.transform.translateX }} | y {{ state.transform.translateY }}
+          </p>
+        </div>
+
+        <footer class="app-modal-footer">
+          <button
+            type="button"
+            class="btn-with-icon btn-sm btn-slate-soft"
+            data-testid="monitor-content-editor-reset"
+            @click="emit('transform', monitorId, { type: 'reset' })"
+          >
+            <ArrowPathIcon aria-hidden="true" class="btn-icon" />
+            Restablecer transformacion
+          </button>
+        </footer>
+      </section>
+    </div>
   </div>
 </template>

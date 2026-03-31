@@ -30,6 +30,7 @@ export const createSlaveWindowHtml = ({
         font-family: "Space Grotesk", "Segoe UI", sans-serif;
       }
       #viewport {
+        position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -63,6 +64,13 @@ export const createSlaveWindowHtml = ({
         letter-spacing: 0.08em;
         text-transform: uppercase;
         opacity: 0.7;
+      }
+      #whiteboard {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
       }
       #overlay {
         position: fixed;
@@ -114,13 +122,14 @@ export const createSlaveWindowHtml = ({
     </style>
   </head>
   <body>
-    <div id="viewport">
-      <div id="wrapper">
-        <img id="image" alt="Imagen transmitida" />
-        <video id="video" autoplay playsinline></video>
-        <p id="empty">Esperando imagen...</p>
+      <div id="viewport">
+        <div id="wrapper">
+          <img id="image" alt="Imagen transmitida" />
+          <video id="video" autoplay playsinline></video>
+          <p id="empty">Esperando imagen...</p>
+        </div>
+        <canvas id="whiteboard"></canvas>
       </div>
-    </div>
 
     <div id="overlay">
       <div id="card">
@@ -152,8 +161,11 @@ export const createSlaveWindowHtml = ({
         const image = document.getElementById('image');
         const video = document.getElementById('video');
         const empty = document.getElementById('empty');
+        const whiteboardCanvas = document.getElementById('whiteboard');
         const thumbnailCanvas = document.createElement('canvas');
         let thumbnailContext = null;
+        let whiteboardContext = null;
+        let whiteboardStrokes = [];
         let clipEndAtSeconds = null;
         let syncActionTimeoutId = null;
         let fullscreenIntentActive = false;
@@ -231,6 +243,242 @@ export const createSlaveWindowHtml = ({
             window.clearTimeout(syncActionTimeoutId);
             syncActionTimeoutId = null;
           }
+        };
+
+        const toWhiteboardPoint = (value) => {
+          if (!value || typeof value !== 'object') {
+            return null;
+          }
+
+          const x = Number(value.x);
+          const y = Number(value.y);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            return null;
+          }
+
+          return {
+            x: Math.min(1, Math.max(0, x)),
+            y: Math.min(1, Math.max(0, y))
+          };
+        };
+
+        const isWhiteboardTool = (value) =>
+          value === 'draw'
+          || value === 'line'
+          || value === 'arrow'
+          || value === 'rect'
+          || value === 'circle'
+          || value === 'erase';
+
+        const sanitizeWhiteboardStroke = (value) => {
+          if (!value || typeof value !== 'object') {
+            return null;
+          }
+
+          const points = Array.isArray(value.points)
+            ? value.points
+              .map((point) => toWhiteboardPoint(point))
+              .filter((point) => point !== null)
+            : [];
+
+          if (points.length < 2) {
+            return null;
+          }
+
+          const width = Number(value.width);
+
+          return {
+            tool: isWhiteboardTool(value.tool) ? value.tool : 'draw',
+            color: typeof value.color === 'string' && value.color.trim().length > 0 ? value.color : '#ef4444',
+            width: Number.isFinite(width) ? Math.max(1, Math.min(48, Math.round(width))) : 6,
+            points
+          };
+        };
+
+        const sanitizeWhiteboardState = (value) => {
+          if (!value || typeof value !== 'object' || !Array.isArray(value.strokes)) {
+            return [];
+          }
+
+          return value.strokes
+            .map((stroke) => sanitizeWhiteboardStroke(stroke))
+            .filter((stroke) => stroke !== null);
+        };
+
+        const ensureWhiteboardContext = () => {
+          if (whiteboardContext || !whiteboardCanvas) {
+            return whiteboardContext;
+          }
+
+          try {
+            whiteboardContext = whiteboardCanvas.getContext('2d');
+          } catch {
+            whiteboardContext = null;
+          }
+
+          return whiteboardContext;
+        };
+
+        const resizeWhiteboardCanvas = () => {
+          if (!whiteboardCanvas) {
+            return;
+          }
+
+          const ratio = Math.max(1, window.devicePixelRatio || 1);
+          const width = Math.max(1, Math.round(window.innerWidth * ratio));
+          const height = Math.max(1, Math.round(window.innerHeight * ratio));
+
+          if (whiteboardCanvas.width !== width || whiteboardCanvas.height !== height) {
+            whiteboardCanvas.width = width;
+            whiteboardCanvas.height = height;
+          }
+        };
+
+        const drawWhiteboardFreehandStroke = (context, stroke, width, height) => {
+          context.beginPath();
+
+          stroke.points.forEach((point, index) => {
+            const x = point.x * width;
+            const y = point.y * height;
+            if (index === 0) {
+              context.moveTo(x, y);
+              return;
+            }
+
+            context.lineTo(x, y);
+          });
+
+          context.stroke();
+        };
+
+        const drawWhiteboardShapeStroke = (context, stroke, width, height) => {
+          const start = stroke.points[0];
+          const end = stroke.points[stroke.points.length - 1];
+          if (!start || !end) {
+            return;
+          }
+
+          const fromX = start.x * width;
+          const fromY = start.y * height;
+          const toX = end.x * width;
+          const toY = end.y * height;
+          const dx = toX - fromX;
+          const dy = toY - fromY;
+
+          if (stroke.tool === 'line') {
+            context.beginPath();
+            context.moveTo(fromX, fromY);
+            context.lineTo(toX, toY);
+            context.stroke();
+            return;
+          }
+
+          if (stroke.tool === 'arrow') {
+            const angle = Math.atan2(dy, dx);
+            const headSize = Math.max(10, stroke.width * 2.8);
+
+            context.beginPath();
+            context.moveTo(fromX, fromY);
+            context.lineTo(toX, toY);
+            context.moveTo(toX, toY);
+            context.lineTo(
+              toX - headSize * Math.cos(angle - Math.PI / 7),
+              toY - headSize * Math.sin(angle - Math.PI / 7)
+            );
+            context.moveTo(toX, toY);
+            context.lineTo(
+              toX - headSize * Math.cos(angle + Math.PI / 7),
+              toY - headSize * Math.sin(angle + Math.PI / 7)
+            );
+            context.stroke();
+            return;
+          }
+
+          if (stroke.tool === 'rect') {
+            const x = Math.min(fromX, toX);
+            const y = Math.min(fromY, toY);
+            const rectWidth = Math.abs(dx);
+            const rectHeight = Math.abs(dy);
+
+            if (rectWidth < 1 && rectHeight < 1) {
+              return;
+            }
+
+            context.beginPath();
+            context.rect(x, y, rectWidth, rectHeight);
+            context.stroke();
+            return;
+          }
+
+          if (stroke.tool === 'circle') {
+            const radiusX = Math.abs(dx) / 2;
+            const radiusY = Math.abs(dy) / 2;
+
+            if (radiusX < 1 && radiusY < 1) {
+              return;
+            }
+
+            context.beginPath();
+            context.ellipse((fromX + toX) / 2, (fromY + toY) / 2, radiusX, radiusY, 0, 0, Math.PI * 2);
+            context.stroke();
+          }
+        };
+
+        const drawWhiteboardStroke = (context, stroke, width, height) => {
+          context.save();
+          context.globalCompositeOperation = stroke.tool === 'erase' ? 'destination-out' : 'source-over';
+          context.strokeStyle = stroke.tool === 'erase' ? '#000000' : stroke.color;
+          context.lineWidth = Math.max(1, stroke.width);
+          context.lineCap = 'round';
+          context.lineJoin = 'round';
+
+          if (stroke.tool === 'draw' || stroke.tool === 'erase') {
+            drawWhiteboardFreehandStroke(context, stroke, width, height);
+          } else {
+            drawWhiteboardShapeStroke(context, stroke, width, height);
+          }
+
+          context.restore();
+        };
+
+        const renderWhiteboard = () => {
+          const context = ensureWhiteboardContext();
+          if (!context || !whiteboardCanvas) {
+            return;
+          }
+
+          resizeWhiteboardCanvas();
+
+          const ratio = Math.max(1, window.devicePixelRatio || 1);
+          const width = whiteboardCanvas.width / ratio;
+          const height = whiteboardCanvas.height / ratio;
+
+          context.save();
+          context.setTransform(ratio, 0, 0, ratio, 0, 0);
+          context.clearRect(0, 0, width, height);
+          whiteboardStrokes.forEach((stroke) => {
+            drawWhiteboardStroke(context, stroke, width, height);
+          });
+          context.restore();
+        };
+
+        const applyWhiteboardState = (state) => {
+          whiteboardStrokes = sanitizeWhiteboardState(state);
+          renderWhiteboard();
+        };
+
+        const clearWhiteboard = () => {
+          whiteboardStrokes = [];
+          renderWhiteboard();
+        };
+
+        const undoWhiteboard = () => {
+          if (whiteboardStrokes.length === 0) {
+            return;
+          }
+
+          whiteboardStrokes = whiteboardStrokes.slice(0, -1);
+          renderWhiteboard();
         };
 
         const clearScheduledThumbnailCapture = () => {
@@ -746,6 +994,35 @@ export const createSlaveWindowHtml = ({
             return;
           }
 
+          if (message.type === 'WHITEBOARD_SET_STATE') {
+            if (!message.payload || typeof message.payload !== 'object') {
+              postToMaster('SLAVE_ERROR', {
+                message: 'WHITEBOARD_SET_STATE ignorado: payload invalido.'
+              });
+              return;
+            }
+
+            if (!message.payload.state || typeof message.payload.state !== 'object') {
+              postToMaster('SLAVE_ERROR', {
+                message: 'WHITEBOARD_SET_STATE ignorado: state invalido.'
+              });
+              return;
+            }
+
+            applyWhiteboardState(message.payload.state);
+            return;
+          }
+
+          if (message.type === 'WHITEBOARD_CLEAR') {
+            clearWhiteboard();
+            return;
+          }
+
+          if (message.type === 'WHITEBOARD_UNDO') {
+            undoWhiteboard();
+            return;
+          }
+
           if (message.type === 'VIDEO_SYNC_SEEK') {
             const payload = message.payload;
             runAt(payload.scheduledAtMs, () => {
@@ -846,9 +1123,13 @@ export const createSlaveWindowHtml = ({
           trace('beforeunload', { isClosingWindow });
           postToMaster('SLAVE_CLOSING', { timestamp: Date.now() });
         });
+        window.addEventListener('resize', () => {
+          renderWhiteboard();
+        });
         video.addEventListener('loadedmetadata', onVideoLoadedMetadata);
         video.addEventListener('timeupdate', onVideoTimeUpdate);
 
+        renderWhiteboard();
         scheduleThumbnailCapture(THUMBNAIL_CAPTURE_INTERVAL_MS);
         postToMaster('SLAVE_READY', { timestamp: Date.now() });
         reportFullscreenStatus('Ventana inicializada', 'init', true);

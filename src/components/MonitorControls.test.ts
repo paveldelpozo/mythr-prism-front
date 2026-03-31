@@ -19,6 +19,35 @@ const createDataTransfer = (file: File): DataTransfer =>
   }) as unknown as DataTransfer;
 
 describe('MonitorControls', () => {
+  it('abre y cierra modal de edicion de contenido con controles de mover/rotar', async () => {
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state: createDefaultMonitorState(),
+        isFileImportBlocked: false,
+        fileImportBlockedMessage: 'bloqueado'
+      }
+    });
+
+    expect(wrapper.find('[data-testid="monitor-content-editor-modal"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="monitor-open-content-editor"]').trigger('click');
+
+    expect(wrapper.get('[data-testid="monitor-content-editor-modal"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="monitor-content-rotate-left"]').text()).toContain('Rotar -90');
+    expect(wrapper.get('[data-testid="monitor-content-move-up"]').text()).toContain('Arriba');
+
+    await wrapper.get('[data-testid="monitor-content-editor-close"]').trigger('click');
+    expect(wrapper.find('[data-testid="monitor-content-editor-modal"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="monitor-open-content-editor"]').trigger('click');
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-testid="monitor-content-editor-modal"]').exists()).toBe(false);
+  });
+
   it('muestra accion visible para cerrar ventana', async () => {
     const wrapper = mount(MonitorControls, {
       props: {
@@ -39,7 +68,7 @@ describe('MonitorControls', () => {
   });
 
   it('no emite uploadImage al hacer click en el input sin change', async () => {
-const wrapper = mount(MonitorControls, {
+    const wrapper = mount(MonitorControls, {
       props: {
         monitorId: 'monitor-1',
         state: createDefaultMonitorState(),
@@ -55,7 +84,7 @@ const wrapper = mount(MonitorControls, {
   });
 
   it('emite uploadImage solo cuando change incluye un archivo', async () => {
-const wrapper = mount(MonitorControls, {
+    const wrapper = mount(MonitorControls, {
       props: {
         monitorId: 'monitor-1',
         state: createDefaultMonitorState(),

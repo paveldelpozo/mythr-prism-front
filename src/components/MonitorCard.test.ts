@@ -106,11 +106,81 @@ describe('MonitorCard', () => {
     expect(previewImage.attributes('src')).toContain('THUMB');
   });
 
-  it('muestra boton de editar junto al nombre y no renderiza input inline', () => {
+  it('renderiza botones icon-only con tooltip para renombrar y estado', () => {
     const wrapper = mountCard();
 
-    expect(wrapper.get('[data-testid="monitor-rename-open"]').text()).toContain('Editar');
+    const renameButton = wrapper.get('[data-testid="monitor-rename-open"]');
+    const infoButton = wrapper.get('[data-testid="monitor-info-toggle"]');
+
+    expect(renameButton.text().trim()).toBe('');
+    expect(renameButton.attributes('title')).toBe('Renombrar pantalla');
+    expect(renameButton.attributes('aria-label')).toContain('Renombrar');
+    expect(infoButton.text().trim()).toBe('');
+    expect(infoButton.attributes('title')).toBe('Estado del monitor');
+    expect(infoButton.attributes('aria-label')).toBe('Estado del monitor');
+
     expect(wrapper.find('[data-testid="monitor-rename-input"]').exists()).toBe(false);
+  });
+
+  it('alinea chip de tipo y botones de cabecera en la misma fila', () => {
+    const wrapper = mountCard();
+
+    const row = wrapper.get('[data-testid="monitor-card-header-actions-top"]');
+    expect(row.classes()).toContain('monitor-card-header-actions-top');
+    expect(row.find('[data-testid="monitor-type-chip"]').exists()).toBe(true);
+    expect(row.find('[data-testid="monitor-rename-open"]').exists()).toBe(true);
+    expect(row.find('[data-testid="monitor-info-toggle"]').exists()).toBe(true);
+  });
+
+  it('habilita abrir pizarra cuando la ventana esta abierta', async () => {
+    const wrapper = mountCard();
+
+    const whiteboardButton = wrapper.get('[data-testid="monitor-open-whiteboard"]');
+    expect(whiteboardButton.attributes('disabled')).toBeUndefined();
+    expect(whiteboardButton.text()).toContain('Abrir pizarra');
+
+    await whiteboardButton.trigger('click');
+
+    expect(wrapper.emitted('openWhiteboard')?.[0]).toEqual(['monitor-1']);
+  });
+
+  it('deshabilita abrir pizarra cuando la ventana esta cerrada', async () => {
+    const wrapper = mountCard({
+      state: {
+        ...state,
+        isWindowOpen: false
+      }
+    });
+
+    const whiteboardButton = wrapper.get('[data-testid="monitor-open-whiteboard"]');
+    expect(whiteboardButton.attributes('disabled')).toBeDefined();
+
+    await whiteboardButton.trigger('click');
+
+    expect(wrapper.emitted('openWhiteboard')).toBeUndefined();
+  });
+
+  it('oculta accion de pizarra para monitor principal de la app', () => {
+    const wrapper = mount(MonitorCard, {
+      props: {
+        monitor: {
+          ...monitor,
+          isMasterAppScreen: true
+        },
+        state,
+        thumbnail
+      },
+      global: {
+        stubs: {
+          MonitorControls: defineComponent({
+            name: 'MonitorControls',
+            template: '<div data-testid="monitor-controls-stub" />'
+          })
+        }
+      }
+    });
+
+    expect(wrapper.find('[data-testid="monitor-open-whiteboard"]').exists()).toBe(false);
   });
 
   it('abre y cierra modal de renombrado por boton de cierre y Escape', async () => {

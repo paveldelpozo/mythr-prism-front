@@ -29,6 +29,7 @@ const emit = defineEmits<{
   closeWindow: [monitorId: string];
   uploadImage: [monitorId: string, file: File];
   clearImage: [monitorId: string];
+  openWhiteboard: [monitorId: string];
   renameMonitor: [monitorId: string, nextName: string];
   transform: [
     monitorId: string,
@@ -165,6 +166,7 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
         @close-window="emit('closeWindow', $event)"
         @upload-image="(id, file) => emit('uploadImage', id, file)"
         @clear-image="emit('clearImage', $event)"
+        @open-whiteboard="emit('openWhiteboard', $event)"
         @rename-monitor="(id, name) => emit('renameMonitor', id, name)"
         @transform="(id, action) => emit('transform', id, action)"
       />

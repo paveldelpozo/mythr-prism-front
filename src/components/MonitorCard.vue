@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import {
   ArrowTopRightOnSquareIcon,
+  InformationCircleIcon,
+  PaintBrushIcon,
   PencilSquareIcon,
   XMarkIcon
 } from '@heroicons/vue/24/outline';
@@ -26,6 +28,7 @@ const emit = defineEmits<{
   closeWindow: [monitorId: string];
   uploadImage: [monitorId: string, file: File];
   clearImage: [monitorId: string];
+  openWhiteboard: [monitorId: string];
   renameMonitor: [monitorId: string, nextName: string];
   transform: [
     monitorId: string,
@@ -179,78 +182,81 @@ onBeforeUnmount(() => {
     class="monitor-card"
     :class="state.isWindowOpen ? 'monitor-card--open' : 'monitor-card--closed'"
   >
-    <header class="mb-4 flex items-center justify-between gap-3">
+    <header class="monitor-card-header" data-testid="monitor-card-header">
       <div>
-        <div class="monitor-card-title-row">
-          <h3 class="text-lg font-bold text-slate-100">{{ monitor.label }}</h3>
-          <button
-            ref="renameTriggerButton"
-            type="button"
-            class="btn-with-icon btn-sm btn-slate-soft"
-            data-testid="monitor-rename-open"
-            :aria-controls="renameModalId"
-            :aria-haspopup="'dialog'"
-            :aria-expanded="isRenameModalOpen"
-            :aria-label="`Renombrar ${monitor.label}`"
-            @click="openRenameModal"
-          >
-            <PencilSquareIcon aria-hidden="true" class="btn-icon" />
-            Editar
-          </button>
-        </div>
+        <h3 class="text-lg font-bold text-slate-100">{{ monitor.label }}</h3>
         <p class="mt-1 text-xs text-slate-300/80">
           {{ monitor.width }}x{{ monitor.height }} | pos ({{ monitor.left }}, {{ monitor.top }})
         </p>
       </div>
 
-      <div class="flex flex-col items-end gap-2">
-        <span
-          class="rounded-full px-3 py-1 text-[11px] font-semibold"
-          :class="monitor.isPrimary ? 'bg-emerald-500/20 text-emerald-200' : 'bg-slate-700/40 text-slate-200'"
-        >
-          {{ monitor.isPrimary ? 'Principal' : 'Externo' }}
-        </span>
+      <div class="monitor-card-header-actions" data-testid="monitor-card-header-actions">
+        <div class="monitor-card-header-actions-top" data-testid="monitor-card-header-actions-top">
+          <span
+            data-testid="monitor-type-chip"
+            class="rounded-full px-3 py-1 text-[11px] font-semibold"
+            :class="monitor.isPrimary ? 'bg-emerald-500/20 text-emerald-200' : 'bg-slate-700/40 text-slate-200'"
+          >
+            {{ monitor.isPrimary ? 'Principal' : 'Externo' }}
+          </span>
+          <button
+            ref="renameTriggerButton"
+            type="button"
+            class="btn-icon-only btn-slate-soft"
+            data-testid="monitor-rename-open"
+            :aria-controls="renameModalId"
+            :aria-haspopup="'dialog'"
+            :aria-expanded="isRenameModalOpen"
+            :aria-label="`Renombrar ${monitor.label}`"
+            title="Renombrar pantalla"
+            @click="openRenameModal"
+          >
+            <PencilSquareIcon aria-hidden="true" class="btn-icon" />
+          </button>
+          <div class="monitor-status-popover-wrap">
+            <button
+              ref="infoPopoverToggleButton"
+              type="button"
+              class="btn-icon-only btn-slate-soft"
+              data-testid="monitor-info-toggle"
+              :aria-controls="infoPanelId"
+              :aria-expanded="isInfoPanelOpen"
+              :aria-haspopup="'dialog'"
+              aria-label="Estado del monitor"
+              title="Estado del monitor"
+              @click="toggleInfoPopover"
+            >
+              <InformationCircleIcon aria-hidden="true" class="btn-icon" />
+            </button>
+
+            <section
+              v-if="isInfoPanelOpen"
+              :id="infoPanelId"
+              ref="infoPopoverPanel"
+              class="monitor-status-popover"
+              role="dialog"
+              aria-label="Estado detallado del monitor"
+              data-testid="monitor-info-popover"
+            >
+              <p class="text-xs text-slate-300/90">Estado ventana: {{ state.isWindowOpen ? 'Abierta' : 'Cerrada' }}</p>
+              <p class="text-xs text-slate-300/90">Handshake: {{ state.isSlaveReady ? 'Conectado' : 'Pendiente' }}</p>
+              <p class="text-xs text-slate-300/90">Fullscreen: {{ state.isFullscreen ? 'Activo' : 'No activo' }}</p>
+              <p v-if="state.lostFullscreenUnexpectedly" class="mt-1 text-xs text-amber-200/90">
+                Fullscreen se cerro por una accion externa. Usa "Reactivar fullscreen" para recuperarlo en un clic.
+              </p>
+              <p v-if="state.requiresFullscreenInteraction" class="mt-1 text-xs text-indigo-200/90">
+                Requiere clic en la ventana esclava para fullscreen.
+              </p>
+              <p v-if="state.lastError" class="mt-1 text-xs text-amber-200/90">{{ state.lastError }}</p>
+            </section>
+          </div>
+        </div>
         <span
           v-if="monitor.isMasterAppScreen"
           class="rounded-full bg-indigo-500/25 px-3 py-1 text-[11px] font-semibold text-indigo-100"
         >
           Ventana principal (esta app)
         </span>
-        <div class="monitor-status-popover-wrap">
-          <button
-            ref="infoPopoverToggleButton"
-            type="button"
-            class="btn-with-icon btn-sm btn-slate-soft"
-            data-testid="monitor-info-toggle"
-            :aria-controls="infoPanelId"
-            :aria-expanded="isInfoPanelOpen"
-            :aria-haspopup="'dialog'"
-            @click="toggleInfoPopover"
-          >
-            Estado
-          </button>
-
-          <section
-            v-if="isInfoPanelOpen"
-            :id="infoPanelId"
-            ref="infoPopoverPanel"
-            class="monitor-status-popover"
-            role="dialog"
-            aria-label="Estado detallado del monitor"
-            data-testid="monitor-info-popover"
-          >
-            <p class="text-xs text-slate-300/90">Estado ventana: {{ state.isWindowOpen ? 'Abierta' : 'Cerrada' }}</p>
-            <p class="text-xs text-slate-300/90">Handshake: {{ state.isSlaveReady ? 'Conectado' : 'Pendiente' }}</p>
-            <p class="text-xs text-slate-300/90">Fullscreen: {{ state.isFullscreen ? 'Activo' : 'No activo' }}</p>
-            <p v-if="state.lostFullscreenUnexpectedly" class="mt-1 text-xs text-amber-200/90">
-              Fullscreen se cerro por una accion externa. Usa "Reactivar fullscreen" para recuperarlo en un clic.
-            </p>
-            <p v-if="state.requiresFullscreenInteraction" class="mt-1 text-xs text-indigo-200/90">
-              Requiere clic en la ventana esclava para fullscreen.
-            </p>
-            <p v-if="state.lastError" class="mt-1 text-xs text-amber-200/90">{{ state.lastError }}</p>
-          </section>
-        </div>
       </div>
     </header>
 
@@ -272,6 +278,20 @@ onBeforeUnmount(() => {
     </div>
 
     <p class="mb-4 mt-2 text-[11px] text-slate-300/75">{{ thumbnailCapturedAtLabel }}</p>
+
+    <button
+      v-if="!monitor.isMasterAppScreen"
+      type="button"
+      class="btn-with-icon btn-sm btn-emerald-soft mb-3 w-full"
+      data-testid="monitor-open-whiteboard"
+      :disabled="!state.isWindowOpen"
+      :title="state.isWindowOpen ? 'Abrir pizarra' : 'Abre la ventana del monitor para usar la pizarra'"
+      :aria-label="state.isWindowOpen ? 'Abrir pizarra' : 'Abrir pizarra (deshabilitado: ventana cerrada)'"
+      @click="emit('openWhiteboard', monitor.id)"
+    >
+      <PaintBrushIcon aria-hidden="true" class="btn-icon" />
+      Abrir pizarra
+    </button>
 
     <button
       v-if="!state.isWindowOpen"
