@@ -63,6 +63,9 @@ const createMonitorStates = (): MonitorStateMap => ({
     isWindowOpen: true,
     isSlaveReady: true,
     isFullscreen: false,
+    fullscreenIntentActive: false,
+    lostFullscreenUnexpectedly: false,
+    lastFullscreenExitAtMs: null,
     requiresFullscreenInteraction: false,
     lastError: null
   },
@@ -73,6 +76,9 @@ const createMonitorStates = (): MonitorStateMap => ({
     isWindowOpen: false,
     isSlaveReady: false,
     isFullscreen: false,
+    fullscreenIntentActive: false,
+    lostFullscreenUnexpectedly: false,
+    lastFullscreenExitAtMs: null,
     requiresFullscreenInteraction: true,
     lastError: null
   }
@@ -115,6 +121,18 @@ const createMockDataTransfer = (): DataTransfer => {
     addElement: () => {}
   } as DataTransfer;
 };
+
+const createImageDataTransfer = (file: File): DataTransfer =>
+  ({
+    items: {
+      length: 1,
+      [0]: {
+        kind: 'file',
+        getAsFile: () => file
+      }
+    },
+    files: createFileList(file)
+  }) as unknown as DataTransfer;
 
 const createVideoSyncPlan = (overrides?: Partial<VideoSyncPlan>): VideoSyncPlan => ({
   strategy: {
@@ -826,6 +844,150 @@ describe('components/PlaylistManager', () => {
 
     const payload = wrapper.emitted('update:items')?.at(-1)?.[0] as MultimediaItem[];
     expect(payload[0]?.source.startsWith('data:image/png;base64,')).toBe(true);
+  });
+
+  it('bloquea selector de archivo cuando existe fullscreen activo', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false,
+        isFileImportBlocked: true,
+        fileImportBlockedMessage: 'Para importar archivo, sal del fullscreen o usa Drag & Drop / pegar imagen.'
+      }
+    });
+
+    await openAddModal(wrapper);
+
+    const fileInput = wrapper.get('[data-testid="add-item-modal"] input[type="file"]');
+    expect(fileInput.attributes('disabled')).toBeDefined();
+    expect(wrapper.get('[data-testid="playlist-add-file-import-blocked-feedback"]').text()).toContain('sal del fullscreen');
+  });
+
+  it('soporta importar imagen por drag and drop en alta', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await openAddModal(wrapper);
+
+    const droppedFile = new File(['drop-image'], 'drop.png', { type: 'image/png' });
+    const dataTransfer = createImageDataTransfer(droppedFile);
+
+    await wrapper.get('[data-testid="playlist-add-image-drop-zone"]').trigger('drop', { dataTransfer });
+    await flushPromises();
+
+    await wrapper.get('input[placeholder="Promo apertura"]').setValue('Drop image');
+    await wrapper.get('[data-testid="save-add-item-modal"]').trigger('click');
+
+    const payload = wrapper.emitted('update:items')?.at(-1)?.[0] as MultimediaItem[];
+    expect(payload[0]?.source.startsWith('data:image/png;base64,')).toBe(true);
+  });
+
+  it('soporta pegar imagen desde portapapeles en alta', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await openAddModal(wrapper);
+
+    const pastedFile = new File(['paste-image'], 'paste.png', { type: 'image/png' });
+    const clipboardData = createImageDataTransfer(pastedFile);
+
+    await wrapper.get('[data-testid="playlist-add-image-drop-zone"]').trigger('paste', { clipboardData });
+    await flushPromises();
+
+    await wrapper.get('input[placeholder="Promo apertura"]').setValue('Pasted image');
+    await wrapper.get('[data-testid="save-add-item-modal"]').trigger('click');
+
+    const payload = wrapper.emitted('update:items')?.at(-1)?.[0] as MultimediaItem[];
+    expect(payload[0]?.source.startsWith('data:image/png;base64,')).toBe(true);
+  });
+
+  it('marca zona de drop como deshabilitada cuando el item no es imagen', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await openAddModal(wrapper);
+    await wrapper.get('[data-testid="add-item-modal"] select').setValue('video');
+
+    const dropZone = wrapper.get('[data-testid="playlist-add-image-drop-zone"]');
+    expect(dropZone.classes()).toContain('image-drop-zone--disabled');
+  });
+
+  it('muestra error claro al soltar archivo no imagen en alta', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await openAddModal(wrapper);
+
+    const invalidFile = new File(['txt'], 'archivo.txt', { type: 'text/plain' });
+    await wrapper.get('[data-testid="playlist-add-image-drop-zone"]').trigger('drop', {
+      dataTransfer: createImageDataTransfer(invalidFile)
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('El archivo seleccionado no es una imagen valida.');
+  });
+
+  it('soporta importar imagen por drag and drop en edicion', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [createImage('edit-dnd', 'Editar DnD')],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await wrapper.get('[data-testid="open-edit-item-modal-edit-dnd"]').trigger('click');
+
+    const droppedFile = new File(['drop-image'], 'edit-drop.png', { type: 'image/png' });
+    await wrapper.get('[data-testid="playlist-edit-image-drop-zone"]').trigger('drop', {
+      dataTransfer: createImageDataTransfer(droppedFile)
+    });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="save-edit-item-modal"]').trigger('click');
+
+    const payload = wrapper.emitted('update:items')?.at(-1)?.[0] as MultimediaItem[];
+    const editedItem = payload.find((item) => item.id === 'edit-dnd');
+    expect(editedItem?.source.startsWith('data:image/png;base64,')).toBe(true);
   });
 
   it('permite seleccion multi-destino y evita emisiones redundantes', async () => {

@@ -101,6 +101,29 @@ export const createSlaveWindowHtml = ({
         letter-spacing: 0.03em;
         cursor: pointer;
       }
+      #fullscreenButton[disabled] {
+        opacity: 0.7;
+        cursor: wait;
+      }
+      #closeButton,
+      #quickCloseButton {
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.9);
+        color: #f8fafc;
+        padding: 10px 16px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      #closeButton {
+        margin-top: 10px;
+      }
+      #quickCloseButton {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 20;
+      }
       #hint {
         display: block;
         margin-top: 12px;
@@ -125,23 +148,68 @@ export const createSlaveWindowHtml = ({
           Para activar modo de proyeccion completa, haz clic en el boton desde esta misma ventana.
         </p>
         <button id="fullscreenButton" type="button">Activar Fullscreen</button>
+        <button id="closeButton" type="button">Cerrar ventana</button>
         <small id="hint">El navegador exige interaccion del usuario en esta pantalla.</small>
       </div>
     </div>
+    <button id="quickCloseButton" type="button" aria-label="Cerrar ventana">Cerrar ventana</button>
 
     <script>
       (function () {
+        const FULLSCREEN_REQUEST_TIMEOUT_MS = 3000;
+        const FULLSCREEN_REPORT_THROTTLE_MS = 200;
+        const IMAGE_APPLY_DEFER_MS = 0;
+        const TRACE_BUFFER_LIMIT = 120;
         const MESSAGE_CHANNEL = ${channelLiteral};
         const monitorId = ${monitorIdLiteral};
         const instanceToken = ${tokenLiteral};
         const overlay = document.getElementById('overlay');
         const button = document.getElementById('fullscreenButton');
+        const closeButton = document.getElementById('closeButton');
+        const quickCloseButton = document.getElementById('quickCloseButton');
         const wrapper = document.getElementById('wrapper');
         const image = document.getElementById('image');
         const video = document.getElementById('video');
         const empty = document.getElementById('empty');
         let clipEndAtSeconds = null;
         let syncActionTimeoutId = null;
+        let fullscreenIntentActive = false;
+        let hasEnteredFullscreen = false;
+        let isFullscreenRequestInFlight = false;
+        let fullscreenRequestId = 0;
+        let isClosingWindow = false;
+        let lastReportedFullscreenActive = Boolean(document.fullscreenElement);
+        let lastReportedUnexpectedExit = false;
+        let lastFullscreenReportAtMs = 0;
+        let pendingFullscreenReportTimeoutId = null;
+        let pendingFullscreenReport = null;
+        let imageRenderRequestId = 0;
+        const traceBuffer = [];
+        let isTraceConsoleEnabled = false;
+
+        try {
+          isTraceConsoleEnabled = window.localStorage?.getItem('mythr-prism.slave-trace') === '1';
+        } catch {
+          isTraceConsoleEnabled = false;
+        }
+
+        const trace = (event, details) => {
+          const entry = {
+            at: Date.now(),
+            event,
+            details: details ?? null
+          };
+
+          traceBuffer.push(entry);
+          if (traceBuffer.length > TRACE_BUFFER_LIMIT) {
+            traceBuffer.shift();
+          }
+
+          window.__MMIB_SLAVE_TRACE__ = traceBuffer.slice();
+          if (isTraceConsoleEnabled) {
+            console.debug('[MMIB slave]', event, details ?? {});
+          }
+        };
 
         const onVideoLoadedMetadata = () => {
           if (!video.dataset.startAtSeconds) {
@@ -172,24 +240,50 @@ export const createSlaveWindowHtml = ({
           video.pause();
         };
 
-        const clearViewportMedia = () => {
+        const clearScheduledSyncAction = () => {
           if (syncActionTimeoutId !== null) {
             window.clearTimeout(syncActionTimeoutId);
             syncActionTimeoutId = null;
           }
+        };
+
+        const stopVideoPlayback = (resetSource) => {
+          clearScheduledSyncAction();
+
+          video.pause();
+          if (resetSource) {
+            video.removeAttribute('src');
+          }
+          video.style.display = 'none';
+          video.dataset.startAtSeconds = '';
+          clipEndAtSeconds = null;
+        };
+
+        const clearViewportMedia = () => {
+          clearScheduledSyncAction();
 
           image.src = '';
           image.style.display = 'none';
 
-          video.pause();
-          video.removeAttribute('src');
-          video.load();
-          video.style.display = 'none';
-          video.dataset.startAtSeconds = '';
-          clipEndAtSeconds = null;
+          stopVideoPlayback(true);
 
           empty.style.display = 'block';
           empty.textContent = 'Esperando contenido...';
+        };
+
+        const hasVisibleMedia = () =>
+          image.style.display !== 'none' || video.style.display !== 'none';
+
+        const ensureViewportFallbackVisible = () => {
+          if (!hasVisibleMedia()) {
+            empty.style.display = 'block';
+            if (!empty.textContent || empty.textContent.trim().length === 0) {
+              empty.textContent = 'Esperando contenido...';
+            }
+            return;
+          }
+
+          empty.style.display = 'none';
         };
 
         const toFiniteNumber = (value, fallback) => {
@@ -234,10 +328,40 @@ export const createSlaveWindowHtml = ({
         };
 
         const showImage = (source) => {
-          clearViewportMedia();
-          image.src = source;
-          image.style.display = 'block';
-          empty.style.display = 'none';
+          imageRenderRequestId += 1;
+          const requestId = imageRenderRequestId;
+
+          stopVideoPlayback(true);
+          image.style.display = 'none';
+          empty.style.display = 'block';
+          empty.textContent = 'Cargando imagen...';
+
+          trace('SET_IMAGE:queued', {
+            requestId,
+            sourceLength: typeof source === 'string' ? source.length : null
+          });
+
+          window.setTimeout(() => {
+            if (requestId !== imageRenderRequestId) {
+              trace('SET_IMAGE:discarded', { requestId, reason: 'superseded' });
+              return;
+            }
+
+            image.src = source;
+
+            Promise.resolve(typeof image.decode === 'function' ? image.decode() : undefined)
+              .catch(() => undefined)
+              .finally(() => {
+                if (requestId !== imageRenderRequestId) {
+                  trace('SET_IMAGE:discarded', { requestId, reason: 'superseded-after-decode' });
+                  return;
+                }
+
+                image.style.display = 'block';
+                empty.style.display = 'none';
+                trace('SET_IMAGE:applied', { requestId });
+              });
+          }, IMAGE_APPLY_DEFER_MS);
         };
 
         const showVideo = (item) => {
@@ -285,27 +409,184 @@ export const createSlaveWindowHtml = ({
           overlay.style.display = isFullscreen ? 'none' : 'flex';
         };
 
-        const reportFullscreenStatus = (message) => {
-          const active = Boolean(document.fullscreenElement);
-          postToMaster('FULLSCREEN_STATUS', {
-            active,
-            requiresInteraction: !active,
-            message
-          });
-          setFullscreenUi(active);
+        const updateFullscreenButtonLabel = (isFullscreen) => {
+          button.disabled = isFullscreenRequestInFlight;
+
+          if (isFullscreenRequestInFlight) {
+            button.textContent = 'Activando fullscreen...';
+            return;
+          }
+
+          if (isFullscreen) {
+            button.textContent = 'Fullscreen activo';
+            return;
+          }
+
+          if (fullscreenIntentActive && hasEnteredFullscreen) {
+            button.textContent = 'Reactivar Fullscreen';
+            return;
+          }
+
+          button.textContent = 'Activar Fullscreen';
         };
 
-        const enterFullscreenFromClick = async () => {
-          try {
-            await document.documentElement.requestFullscreen();
-            reportFullscreenStatus('Fullscreen activado');
-          } catch (error) {
-            const message = error instanceof Error ? error.message : 'No se pudo activar fullscreen';
-            reportFullscreenStatus(message);
+        const closeSlaveWindow = () => {
+          if (isClosingWindow) {
+            trace('REQUEST_CLOSE:ignored', { reason: 'already-closing' });
+            return;
           }
+
+          isClosingWindow = true;
+          trace('REQUEST_CLOSE:received', {
+            inFullscreen: Boolean(document.fullscreenElement)
+          });
+          postToMaster('SLAVE_CLOSING', { timestamp: Date.now() });
+
+          const tryCloseWindow = () => {
+            try {
+              window.close();
+            } catch {}
+
+            window.setTimeout(() => {
+              if (window.closed) {
+                return;
+              }
+
+              isClosingWindow = false;
+              trace('REQUEST_CLOSE:failed', { reason: 'window-close-blocked' });
+              postToMaster('SLAVE_ERROR', {
+                message: 'No se pudo cerrar automaticamente. Usa el control de cierre del navegador para forzar el cierre.'
+              });
+            }, 800);
+          };
+
+          if (document.fullscreenElement && typeof document.exitFullscreen === 'function') {
+            Promise.resolve(document.exitFullscreen())
+              .catch(() => undefined)
+              .finally(() => {
+                tryCloseWindow();
+              });
+            return;
+          }
+
+          tryCloseWindow();
+        };
+
+        const reportFullscreenStatus = (message, reason, forceReport) => {
+          const active = Boolean(document.fullscreenElement);
+          if (active) {
+            fullscreenIntentActive = true;
+            hasEnteredFullscreen = true;
+          }
+
+          const unexpectedExit =
+            !active
+            && reason !== 'init'
+            && fullscreenIntentActive
+            && hasEnteredFullscreen;
+
+          const shouldReport =
+            Boolean(forceReport)
+            || active !== lastReportedFullscreenActive
+            || unexpectedExit !== lastReportedUnexpectedExit;
+
+          const nextPayload = {
+            active,
+            requiresInteraction: !active,
+            intentActive: fullscreenIntentActive,
+            unexpectedExit,
+            message
+          };
+
+          setFullscreenUi(active);
+          ensureViewportFallbackVisible();
+          updateFullscreenButtonLabel(active);
+
+          if (!shouldReport) {
+            return;
+          }
+
+          lastReportedFullscreenActive = active;
+          lastReportedUnexpectedExit = unexpectedExit;
+
+          const flushReport = (payload) => {
+            lastFullscreenReportAtMs = Date.now();
+            postToMaster('FULLSCREEN_STATUS', payload);
+          };
+
+          if (pendingFullscreenReportTimeoutId !== null) {
+            window.clearTimeout(pendingFullscreenReportTimeoutId);
+            pendingFullscreenReportTimeoutId = null;
+          }
+
+          const elapsedMs = Date.now() - lastFullscreenReportAtMs;
+          if (Boolean(forceReport) || elapsedMs >= FULLSCREEN_REPORT_THROTTLE_MS) {
+            flushReport(nextPayload);
+            pendingFullscreenReport = null;
+            return;
+          }
+
+          pendingFullscreenReport = nextPayload;
+          pendingFullscreenReportTimeoutId = window.setTimeout(() => {
+            pendingFullscreenReportTimeoutId = null;
+            if (!pendingFullscreenReport) {
+              return;
+            }
+
+            const payload = pendingFullscreenReport;
+            pendingFullscreenReport = null;
+            flushReport(payload);
+          }, FULLSCREEN_REPORT_THROTTLE_MS - elapsedMs);
+        };
+
+        const enterFullscreenFromClick = () => {
+          if (isFullscreenRequestInFlight) {
+            reportFullscreenStatus('La solicitud de fullscreen sigue en curso.', 'button-click-pending');
+            return;
+          }
+
+          fullscreenIntentActive = true;
+          isFullscreenRequestInFlight = true;
+          fullscreenRequestId += 1;
+          const currentRequestId = fullscreenRequestId;
+
+          updateFullscreenButtonLabel(Boolean(document.fullscreenElement));
+
+          window.setTimeout(() => {
+            if (!isFullscreenRequestInFlight || currentRequestId !== fullscreenRequestId) {
+              return;
+            }
+
+            isFullscreenRequestInFlight = false;
+            reportFullscreenStatus(
+              'La activacion de fullscreen tardo demasiado. Puedes reintentar con un clic.',
+              'button-click-timeout'
+            );
+          }, FULLSCREEN_REQUEST_TIMEOUT_MS);
+
+          Promise.resolve(document.documentElement.requestFullscreen())
+            .then(() => {
+              if (currentRequestId !== fullscreenRequestId) {
+                return;
+              }
+
+              isFullscreenRequestInFlight = false;
+              reportFullscreenStatus('Fullscreen activado', 'button-click');
+            })
+            .catch((error) => {
+              if (currentRequestId !== fullscreenRequestId) {
+                return;
+              }
+
+              isFullscreenRequestInFlight = false;
+              const message = error instanceof Error ? error.message : 'No se pudo activar fullscreen';
+              reportFullscreenStatus(message, 'button-click-error');
+            });
         };
 
         button.addEventListener('click', enterFullscreenFromClick);
+        closeButton.addEventListener('click', closeSlaveWindow);
+        quickCloseButton.addEventListener('click', closeSlaveWindow);
 
         window.addEventListener('message', (event) => {
           const message = event.data;
@@ -322,19 +603,47 @@ export const createSlaveWindowHtml = ({
           }
 
           if (message.type === 'SET_IMAGE') {
+            trace('SET_IMAGE:received', {
+              hasPayload: Boolean(message.payload),
+              sourceLength: typeof message.payload?.imageDataUrl === 'string'
+                ? message.payload.imageDataUrl.length
+                : null
+            });
             const imageDataUrl = message.payload.imageDataUrl;
+
+            if (imageDataUrl === null) {
+              clearViewportMedia();
+              return;
+            }
+
             if (typeof imageDataUrl === 'string' && imageDataUrl.length > 0) {
               showImage(imageDataUrl);
-            } else {
-              clearViewportMedia();
+              return;
             }
+
+            postToMaster('SLAVE_ERROR', {
+              message: 'SET_IMAGE ignorado: payload invalido.'
+            });
+            trace('SET_IMAGE:invalid', { payloadType: typeof imageDataUrl });
+            return;
           }
 
           if (message.type === 'SET_MEDIA') {
+            trace('SET_MEDIA:received', {
+              kind: message.payload?.item?.kind ?? null
+            });
             const item = message.payload.item;
 
-            if (!item || typeof item !== 'object') {
+            if (item === null) {
               clearViewportMedia();
+              return;
+            }
+
+            if (!item || typeof item !== 'object') {
+              postToMaster('SLAVE_ERROR', {
+                message: 'SET_MEDIA ignorado: payload invalido.'
+              });
+              trace('SET_MEDIA:invalid', { reason: 'payload' });
               return;
             }
 
@@ -348,7 +657,11 @@ export const createSlaveWindowHtml = ({
               return;
             }
 
-            clearViewportMedia();
+            postToMaster('SLAVE_ERROR', {
+              message: 'SET_MEDIA ignorado: item no soportado o incompleto.'
+            });
+            trace('SET_MEDIA:invalid', { reason: 'item' });
+            return;
           }
 
           if (message.type === 'VIDEO_SYNC_SEEK') {
@@ -408,7 +721,18 @@ export const createSlaveWindowHtml = ({
           }
 
           if (message.type === 'REQUEST_FULLSCREEN') {
-            reportFullscreenStatus('Haz clic en esta ventana para activar fullscreen');
+            fullscreenIntentActive = true;
+            setFullscreenUi(Boolean(document.fullscreenElement));
+            ensureViewportFallbackVisible();
+            updateFullscreenButtonLabel(Boolean(document.fullscreenElement));
+          }
+
+          if (message.type === 'REQUEST_CLOSE') {
+            trace('REQUEST_CLOSE:message', {
+              reason: message.payload?.reason ?? null
+            });
+            closeSlaveWindow();
+            return;
           }
 
           if (message.type === 'PING') {
@@ -416,13 +740,34 @@ export const createSlaveWindowHtml = ({
           }
         });
 
-        document.addEventListener('fullscreenchange', () => reportFullscreenStatus('Cambio de fullscreen'));
-        window.addEventListener('beforeunload', () => postToMaster('SLAVE_CLOSING', { timestamp: Date.now() }));
+        document.addEventListener('fullscreenchange', () => {
+          isFullscreenRequestInFlight = false;
+          const isActive = Boolean(document.fullscreenElement);
+          trace('fullscreenchange', {
+            active: isActive,
+            intentActive: fullscreenIntentActive
+          });
+          const statusMessage =
+            !isActive && fullscreenIntentActive && hasEnteredFullscreen
+              ? 'Fullscreen se cerro por una accion externa del navegador o el sistema.'
+              : 'Cambio de fullscreen';
+
+          reportFullscreenStatus(statusMessage, 'fullscreenchange');
+        });
+        window.addEventListener('beforeunload', () => {
+          if (pendingFullscreenReportTimeoutId !== null) {
+            window.clearTimeout(pendingFullscreenReportTimeoutId);
+            pendingFullscreenReportTimeoutId = null;
+          }
+          pendingFullscreenReport = null;
+          trace('beforeunload', { isClosingWindow });
+          postToMaster('SLAVE_CLOSING', { timestamp: Date.now() });
+        });
         video.addEventListener('loadedmetadata', onVideoLoadedMetadata);
         video.addEventListener('timeupdate', onVideoTimeUpdate);
 
         postToMaster('SLAVE_READY', { timestamp: Date.now() });
-        reportFullscreenStatus('Ventana inicializada');
+        reportFullscreenStatus('Ventana inicializada', 'init', true);
       })();
     </script>
   </body>

@@ -123,6 +123,45 @@ const setupWindowManagementMocks = () => {
   };
 };
 
+const dispatchFullscreenStatusFromPopup = ({
+  popup,
+  monitorId,
+  instanceToken,
+  active,
+  requiresInteraction,
+  intentActive,
+  unexpectedExit,
+  message
+}: {
+  popup: PopupWindowMock;
+  monitorId: string;
+  instanceToken: string;
+  active: boolean;
+  requiresInteraction: boolean;
+  intentActive: boolean;
+  unexpectedExit: boolean;
+  message: string;
+}) => {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      source: popup,
+      data: {
+        channel: 'MMIB_V3_CHANNEL',
+        type: 'FULLSCREEN_STATUS',
+        instanceToken,
+        monitorId,
+        payload: {
+          active,
+          requiresInteraction,
+          intentActive,
+          unexpectedExit,
+          message
+        }
+      }
+    })
+  );
+};
+
 beforeEach(() => {
   vi.restoreAllMocks();
 });
@@ -270,6 +309,136 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
     expect(api.monitorStates[sourceMonitorId]?.imageDataUrl).toBe(sourceImage);
   });
 
+  it('envia blob URL al slave y conserva dataURL persistible tras salida de fullscreen', async () => {
+    const { popups, mirrorTargetId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(mirrorTargetId);
+
+    const popup = popups[0];
+    const firstSentMessage = popup?.postMessage.mock.calls[0]?.[0] as
+      | { instanceToken?: string }
+      | undefined;
+    const instanceToken = firstSentMessage?.instanceToken as string;
+
+    dispatchFullscreenStatusFromPopup({
+      popup,
+      monitorId: mirrorTargetId,
+      instanceToken,
+      active: true,
+      requiresInteraction: false,
+      intentActive: true,
+      unexpectedExit: false,
+      message: 'Fullscreen activado'
+    });
+    dispatchFullscreenStatusFromPopup({
+      popup,
+      monitorId: mirrorTargetId,
+      instanceToken,
+      active: false,
+      requiresInteraction: true,
+      intentActive: true,
+      unexpectedExit: true,
+      message: 'Salida externa'
+    });
+
+    popup.postMessage.mockClear();
+
+    const hugeDataUrl = `data:image/png;base64,${'A'.repeat(120000)}`;
+    api.setImageForMonitor(mirrorTargetId, hugeDataUrl, {
+      renderSource: 'blob:runtime-upload'
+    });
+
+    const sentMessages = popup.postMessage.mock.calls.map(([message]) => message);
+
+    expect(sentMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'SET_IMAGE',
+          monitorId: mirrorTargetId,
+          payload: {
+            imageDataUrl: 'blob:runtime-upload'
+          }
+        })
+      ])
+    );
+    expect(api.monitorStates[mirrorTargetId]?.imageDataUrl).toBe(hugeDataUrl);
+
+    popup.postMessage.mockClear();
+    api.requestFullscreen(mirrorTargetId);
+    api.closeWindow(mirrorTargetId);
+
+    const controlMessages = popup.postMessage.mock.calls.map(([message]) => message);
+    expect(controlMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'REQUEST_FULLSCREEN',
+          monitorId: mirrorTargetId
+        }),
+        expect.objectContaining({
+          type: 'REQUEST_CLOSE',
+          monitorId: mirrorTargetId
+        })
+      ])
+    );
+    expect(popup.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('abre ventana esclava en ruta same-origin y completa handshake basico', async () => {
+    const { popups, mirrorTargetId } = setupWindowManagementMocks();
+    const openSpy = vi.spyOn(window, 'open');
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(mirrorTargetId);
+
+    const openedUrl = openSpy.mock.calls[0]?.[0];
+    expect(typeof openedUrl).toBe('string');
+    expect(String(openedUrl)).toContain('/slave.html?');
+    expect(String(openedUrl)).toContain(`monitorId=${encodeURIComponent(mirrorTargetId)}`);
+    expect(String(openedUrl)).toContain('instanceToken=');
+    expect(String(openedUrl)).not.toContain('blob:');
+
+    const popup = popups[0];
+    const firstSentMessage = popup?.postMessage.mock.calls[0]?.[0] as
+      | { instanceToken?: string }
+      | undefined;
+    const instanceToken = firstSentMessage?.instanceToken as string;
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        source: popup,
+        data: {
+          channel: 'MMIB_V3_CHANNEL',
+          type: 'SLAVE_READY',
+          instanceToken,
+          monitorId: mirrorTargetId,
+          payload: { timestamp: Date.now() }
+        }
+      })
+    );
+
+    expect(api.monitorStates[mirrorTargetId]?.isWindowOpen).toBe(true);
+    expect(api.monitorStates[mirrorTargetId]?.isSlaveReady).toBe(true);
+  });
+
+  it('libera blob URL runtime cuando se reemplaza o limpia imagen', () => {
+    const api = createHarness();
+
+    api.setImageForMonitor('source', 'data:image/png;base64,OLD', {
+      renderSource: 'blob:first-image'
+    });
+    api.setImageForMonitor('source', 'data:image/png;base64,NEW', {
+      renderSource: 'blob:second-image'
+    });
+    api.setImageForMonitor('source', null);
+
+    const revokeObjectURL = URL.revokeObjectURL as ReturnType<typeof vi.fn>;
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:first-image');
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:second-image');
+  });
+
   it('al desactivar espejo limpia destinos activos y resetea configuracion', async () => {
     const { popups, sourceMonitorId, mirrorTargetId } = setupWindowManagementMocks();
     const api = createHarness();
@@ -344,6 +513,167 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
     expect(api.mirrorStatus.value.unavailableTargetIds).toEqual([mirrorTargetId, unavailableTargetId]);
     expect(api.mirrorStatus.value.lastError).toContain('degradacion');
   });
+
+  it('conserva intencion fullscreen y reporta perdida externa para reactivacion rapida', async () => {
+    const { popups, mirrorTargetId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(mirrorTargetId);
+
+    const popup = popups[0];
+    const firstSentMessage = popup?.postMessage.mock.calls[0]?.[0] as
+      | { instanceToken?: string }
+      | undefined;
+    const instanceToken = firstSentMessage?.instanceToken;
+
+    expect(instanceToken).toBeTruthy();
+
+    dispatchFullscreenStatusFromPopup({
+      popup,
+      monitorId: mirrorTargetId,
+      instanceToken: instanceToken as string,
+      active: true,
+      requiresInteraction: false,
+      intentActive: true,
+      unexpectedExit: false,
+      message: 'Fullscreen activado'
+    });
+
+    dispatchFullscreenStatusFromPopup({
+      popup,
+      monitorId: mirrorTargetId,
+      instanceToken: instanceToken as string,
+      active: false,
+      requiresInteraction: true,
+      intentActive: true,
+      unexpectedExit: true,
+      message: 'Fullscreen se cerro por una accion externa del navegador o el sistema.'
+    });
+
+    expect(api.monitorStates[mirrorTargetId]?.fullscreenIntentActive).toBe(true);
+    expect(api.monitorStates[mirrorTargetId]?.lostFullscreenUnexpectedly).toBe(true);
+    expect(api.monitorStates[mirrorTargetId]?.lastFullscreenExitAtMs).not.toBeNull();
+  });
+
+  it('repite flujo de perdida de fullscreen y sigue permitiendo cierre desde master', async () => {
+    const { popups, mirrorTargetId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(mirrorTargetId);
+
+    const popup = popups[0];
+    const firstSentMessage = popup?.postMessage.mock.calls[0]?.[0] as
+      | { instanceToken?: string }
+      | undefined;
+    const instanceToken = firstSentMessage?.instanceToken as string;
+
+    const dispatchExitCycle = () => {
+      dispatchFullscreenStatusFromPopup({
+        popup,
+        monitorId: mirrorTargetId,
+        instanceToken,
+        active: true,
+        requiresInteraction: false,
+        intentActive: true,
+        unexpectedExit: false,
+        message: 'Fullscreen activado'
+      });
+
+      dispatchFullscreenStatusFromPopup({
+        popup,
+        monitorId: mirrorTargetId,
+        instanceToken,
+        active: false,
+        requiresInteraction: true,
+        intentActive: true,
+        unexpectedExit: true,
+        message: 'Fullscreen se cerro por una accion externa del navegador o el sistema.'
+      });
+    };
+
+    dispatchExitCycle();
+    dispatchExitCycle();
+
+    popup.postMessage.mockClear();
+    api.closeWindow(mirrorTargetId);
+
+    const sentMessages = popup.postMessage.mock.calls.map(([message]) => message);
+
+    expect(sentMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'REQUEST_CLOSE',
+          monitorId: mirrorTargetId
+        })
+      ])
+    );
+    expect(popup.close).toHaveBeenCalledTimes(1);
+    expect(api.monitorStates[mirrorTargetId]?.isWindowOpen).toBe(false);
+  });
+
+  it('ignora pagehide transitorio del selector de archivo y mantiene comandos de control', async () => {
+    const { popups, mirrorTargetId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(mirrorTargetId);
+
+    const popup = popups[0];
+    const firstSentMessage = popup?.postMessage.mock.calls[0]?.[0] as
+      | { instanceToken?: string }
+      | undefined;
+    const instanceToken = firstSentMessage?.instanceToken as string;
+
+    dispatchFullscreenStatusFromPopup({
+      popup,
+      monitorId: mirrorTargetId,
+      instanceToken,
+      active: true,
+      requiresInteraction: false,
+      intentActive: true,
+      unexpectedExit: false,
+      message: 'Fullscreen activado'
+    });
+
+    popup.postMessage.mockClear();
+    popup.close.mockClear();
+
+    expect(() => window.dispatchEvent(new Event('pagehide'))).not.toThrow();
+
+    const postPagehideMessages = popup.postMessage.mock.calls.map(([message]) => message);
+
+    expect(postPagehideMessages).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'REQUEST_CLOSE',
+          monitorId: mirrorTargetId
+        })
+      ])
+    );
+    expect(popup.close).not.toHaveBeenCalled();
+    expect(api.monitorStates[mirrorTargetId]?.isWindowOpen).toBe(true);
+
+    api.requestFullscreen(mirrorTargetId);
+    api.closeWindow(mirrorTargetId);
+
+    const controlMessages = popup.postMessage.mock.calls.map(([message]) => message);
+    expect(controlMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'REQUEST_FULLSCREEN',
+          monitorId: mirrorTargetId
+        }),
+        expect.objectContaining({
+          type: 'REQUEST_CLOSE',
+          monitorId: mirrorTargetId
+        })
+      ])
+    );
+    expect(popup.close).toHaveBeenCalledTimes(1);
+    expect(api.monitorStates[mirrorTargetId]?.isWindowOpen).toBe(false);
+  });
 });
 
 describe('composables/useMultiMonitorBroadcaster lifecycle cleanup', () => {
@@ -367,7 +697,7 @@ describe('composables/useMultiMonitorBroadcaster lifecycle cleanup', () => {
     unmount();
   });
 
-  it('intenta cerrar todas las ventanas en pagehide aunque falle un close', async () => {
+  it('intenta cerrar todas las ventanas en beforeunload aunque falle un close', async () => {
     const { popups, sourceMonitorId, mirrorTargetId } = setupWindowManagementMocks();
     const { api, unmount } = createHarnessWithUnmount();
 
@@ -381,7 +711,7 @@ describe('composables/useMultiMonitorBroadcaster lifecycle cleanup', () => {
       throw new Error('close blocked');
     });
 
-    expect(() => window.dispatchEvent(new Event('pagehide'))).not.toThrow();
+    expect(() => window.dispatchEvent(new Event('beforeunload'))).not.toThrow();
 
     expect(popups[0]?.close).toHaveBeenCalledTimes(1);
     expect(popups[1]?.close).toHaveBeenCalledTimes(1);

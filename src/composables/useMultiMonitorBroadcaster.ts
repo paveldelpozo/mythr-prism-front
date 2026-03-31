@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
-import { createSlaveWindowHtml } from '../services/slaveWindowHtml';
+import { buildSlaveWindowUrl } from '../services/slaveWindowUrl';
 import {
   createDefaultMonitorState,
   DEFAULT_TRANSFORM,
@@ -37,13 +37,16 @@ type TransformAction =
 
 interface WindowRegistryEntry {
   ref: Window;
-  blobUrl: string;
   instanceToken: string;
 }
 
 interface UseMultiMonitorBroadcasterOptions {
   initialMonitorStateById?: PersistedMonitorStateMap;
   initialMirrorMode?: MirrorModeConfig;
+}
+
+interface SetImageForMonitorOptions {
+  renderSource?: string | null;
 }
 
 type VideoSyncCommandType = 'VIDEO_SYNC_PLAY' | 'VIDEO_SYNC_PAUSE' | 'VIDEO_SYNC_SEEK' | 'VIDEO_SYNC_TIME';
@@ -57,6 +60,7 @@ type VideoSyncPayloadByType = {
 
 const MIN_SCALE = 0.05;
 const LIFE_CHECK_INTERVAL_MS = 1000;
+const BLOB_URL_PREFIX = 'blob:';
 
 const toMonitorId = (screen: ScreenDetailed, index: number): string =>
   `${index}-${screen.left}-${screen.top}-${screen.width}x${screen.height}`;
@@ -123,6 +127,8 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
   const monitors = ref<MonitorDescriptor[]>([]);
   const monitorStates = reactive<MonitorStateMap>({});
   const windowsRegistry = new Map<string, WindowRegistryEntry>();
+  const monitorImageRenderSourceById = new Map<string, string | null>();
+  const blobUrlUsageCountBySource = new Map<string, number>();
   const initialMonitorStateById = options.initialMonitorStateById ?? {};
   const mirrorConfig = ref<MirrorModeConfig>(
     sanitizeMirrorModeConfig(options.initialMirrorMode ?? DEFAULT_MIRROR_MODE_CONFIG)
@@ -204,6 +210,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       const targetState = getMonitorState(targetMonitorId);
       targetState.imageDataUrl = null;
       targetState.activeMediaItem = null;
+      setMonitorImageRenderSource(targetMonitorId, null);
 
       const clearMessage = buildMasterMessage(targetMonitorId, 'SET_IMAGE', {
         imageDataUrl: null
@@ -279,13 +286,15 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       return;
     }
 
-    URL.revokeObjectURL(entry.blobUrl);
     windowsRegistry.delete(monitorId);
 
     const state = getMonitorState(monitorId);
     state.isWindowOpen = false;
     state.isSlaveReady = false;
     state.isFullscreen = false;
+    state.fullscreenIntentActive = false;
+    state.lostFullscreenUnexpectedly = false;
+    state.lastFullscreenExitAtMs = null;
     state.requiresFullscreenInteraction = true;
   };
 
@@ -293,6 +302,13 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     const entry = windowsRegistry.get(monitorId);
     if (!entry) {
       return;
+    }
+
+    const closeMessage = buildMasterMessage(monitorId, 'REQUEST_CLOSE', {
+      reason: 'Operator close command'
+    });
+    if (closeMessage) {
+      sendToSlave(monitorId, closeMessage);
     }
 
     try {
@@ -344,6 +360,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       }
 
       closeWindow(monitorId);
+      setMonitorImageRenderSource(monitorId, null);
       delete monitorStates[monitorId];
     });
 
@@ -400,8 +417,10 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       });
     }
 
+    const renderSource = resolveImageRenderSource(monitorId, state);
+
     return buildMasterMessage(monitorId, 'SET_IMAGE', {
-      imageDataUrl: state.imageDataUrl
+      imageDataUrl: renderSource
     });
   };
 
@@ -440,6 +459,10 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       targetState.transform = { ...sourceState.transform };
       targetState.imageDataUrl = sourceState.imageDataUrl;
       targetState.activeMediaItem = sourceState.activeMediaItem;
+      setMonitorImageRenderSource(
+        targetMonitorId,
+        resolveImageRenderSource(sourceMonitorId, sourceState)
+      );
 
       const transformMessage = buildMasterMessage(targetMonitorId, 'SET_TRANSFORM', {
         transform: targetState.transform
@@ -517,9 +540,23 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     }
 
     if (message.type === 'FULLSCREEN_STATUS') {
+      const wasFullscreenActive = state.isFullscreen;
+      const intentActive = message.payload.intentActive ?? state.fullscreenIntentActive;
+      const lostFullscreenUnexpectedly =
+        Boolean(message.payload.unexpectedExit)
+        || (wasFullscreenActive && !message.payload.active && intentActive);
+
       state.isFullscreen = message.payload.active;
       state.requiresFullscreenInteraction = message.payload.requiresInteraction;
+      state.fullscreenIntentActive = intentActive || message.payload.active;
+      state.lostFullscreenUnexpectedly = lostFullscreenUnexpectedly;
+      state.lastFullscreenExitAtMs = lostFullscreenUnexpectedly ? Date.now() : null;
       state.lastError = message.payload.message ?? null;
+
+      if (message.payload.active) {
+        state.lostFullscreenUnexpectedly = false;
+        state.lastFullscreenExitAtMs = null;
+      }
       return;
     }
 
@@ -539,10 +576,6 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
   };
 
   const onBeforeUnload = () => {
-    shutdownAllWindows();
-  };
-
-  const onPageHide = () => {
     shutdownAllWindows();
   };
 
@@ -625,13 +658,10 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     closeWindow(monitorId);
 
     const instanceToken = createInstanceToken(monitorId);
-    const html = createSlaveWindowHtml({
+    const slaveWindowUrl = buildSlaveWindowUrl({
       monitorId,
       instanceToken
     });
-
-    const blob = new Blob([html], { type: 'text/html' });
-    const blobUrl = URL.createObjectURL(blob);
     const features = [
       'popup=yes',
       `left=${monitor.availLeft}`,
@@ -640,17 +670,15 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       `height=${monitor.availHeight}`
     ].join(',');
 
-    const win = window.open(blobUrl, '_blank', features);
+    const win = window.open(slaveWindowUrl, '_blank', features);
 
     if (!win) {
-      URL.revokeObjectURL(blobUrl);
       setMonitorError(monitorId, 'El navegador bloqueo la ventana emergente. Habilita popups para continuar.');
       return;
     }
 
     windowsRegistry.set(monitorId, {
       ref: win,
-      blobUrl,
       instanceToken
     });
 
@@ -658,6 +686,9 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     state.isWindowOpen = true;
     state.isSlaveReady = false;
     state.isFullscreen = false;
+    state.fullscreenIntentActive = true;
+    state.lostFullscreenUnexpectedly = false;
+    state.lastFullscreenExitAtMs = null;
     state.requiresFullscreenInteraction = true;
     state.lastError =
       'Abre la ventana esclava y pulsa "Activar Fullscreen" en esa pantalla para completar el modo proyeccion.';
@@ -715,19 +746,92 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     replicateSourceToMirrorTargets(monitorId);
   };
 
-  const setImageForMonitor = (monitorId: string, imageDataUrl: string | null) => {
+  const isBlobUrl = (value: string): boolean =>
+    value.startsWith(BLOB_URL_PREFIX);
+
+  const incrementBlobUrlUsage = (source: string) => {
+    if (!isBlobUrl(source)) {
+      return;
+    }
+
+    const currentUsage = blobUrlUsageCountBySource.get(source) ?? 0;
+    blobUrlUsageCountBySource.set(source, currentUsage + 1);
+  };
+
+  const decrementBlobUrlUsage = (source: string) => {
+    if (!isBlobUrl(source)) {
+      return;
+    }
+
+    const currentUsage = blobUrlUsageCountBySource.get(source) ?? 0;
+    if (currentUsage <= 1) {
+      blobUrlUsageCountBySource.delete(source);
+      if (typeof URL.revokeObjectURL === 'function') {
+        URL.revokeObjectURL(source);
+      }
+      return;
+    }
+
+    blobUrlUsageCountBySource.set(source, currentUsage - 1);
+  };
+
+  const setMonitorImageRenderSource = (monitorId: string, nextSource: string | null) => {
+    const previousSource = monitorImageRenderSourceById.get(monitorId) ?? null;
+    if (previousSource === nextSource) {
+      return;
+    }
+
+    if (typeof previousSource === 'string' && previousSource.length > 0) {
+      decrementBlobUrlUsage(previousSource);
+    }
+
+    if (typeof nextSource === 'string' && nextSource.length > 0) {
+      monitorImageRenderSourceById.set(monitorId, nextSource);
+      incrementBlobUrlUsage(nextSource);
+      return;
+    }
+
+    monitorImageRenderSourceById.delete(monitorId);
+  };
+
+  const resolveImageRenderSource = (monitorId: string, state: MonitorRuntimeState): string | null => {
+    const renderSource = monitorImageRenderSourceById.get(monitorId);
+    if (typeof renderSource === 'string' && renderSource.length > 0) {
+      return renderSource;
+    }
+
+    return state.imageDataUrl;
+  };
+
+  const setImageForMonitorWithOptions = (
+    monitorId: string,
+    imageDataUrl: string | null,
+    options: SetImageForMonitorOptions = {}
+  ) => {
     const state = getMonitorState(monitorId);
     state.imageDataUrl = imageDataUrl;
     state.activeMediaItem = null;
+    const renderSource = options.renderSource === undefined
+      ? imageDataUrl
+      : options.renderSource;
+    setMonitorImageRenderSource(monitorId, renderSource);
 
     const message = buildMasterMessage(monitorId, 'SET_IMAGE', {
-      imageDataUrl
+      imageDataUrl: resolveImageRenderSource(monitorId, state)
     });
     if (message) {
       sendToSlave(monitorId, message);
     }
 
     replicateSourceToMirrorTargets(monitorId);
+  };
+
+  const setImageForMonitor = (
+    monitorId: string,
+    imageDataUrl: string | null,
+    options: SetImageForMonitorOptions = {}
+  ) => {
+    setImageForMonitorWithOptions(monitorId, imageDataUrl, options);
   };
 
   const setPlaylistItemForMonitor = (monitorId: string, item: MultimediaItem | null): boolean => {
@@ -756,6 +860,8 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     }
 
     const state = getMonitorState(monitorId);
+    state.fullscreenIntentActive = true;
+    state.lostFullscreenUnexpectedly = false;
     state.lastError = 'Se envio la solicitud. Debes hacer clic en la ventana esclava para activar fullscreen.';
   };
 
@@ -788,12 +894,10 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
 
   window.addEventListener('message', onMessageFromSlave);
   window.addEventListener('beforeunload', onBeforeUnload);
-  window.addEventListener('pagehide', onPageHide);
 
   onBeforeUnmount(() => {
     window.removeEventListener('message', onMessageFromSlave);
     window.removeEventListener('beforeunload', onBeforeUnload);
-    window.removeEventListener('pagehide', onPageHide);
 
     screenDetailsRef?.removeEventListener('screenschange', refreshMonitorList);
     screenDetailsRef?.removeEventListener('currentscreenchange', refreshMonitorList);

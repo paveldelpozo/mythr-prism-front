@@ -55,6 +55,8 @@ const props = defineProps<{
   mirrorActiveTargetCount: number;
   mirrorUnavailableTargetIds: string[];
   mirrorLastError: string | null;
+  isFileImportBlocked?: boolean;
+  fileImportBlockedMessage?: string;
 }>();
 
 const monitorLabelById = (monitorId: string | null): string => {
@@ -77,6 +79,12 @@ const unavailableMirrorTargetLabels = computed(() =>
 
 const mirrorActionLabel = computed(() =>
   props.mirrorEnabled ? 'Finalizar espejo' : 'Iniciar espejo'
+);
+
+const fullscreenLossLabels = computed(() =>
+  props.monitors
+    .filter((monitor) => props.states[monitor.id]?.lostFullscreenUnexpectedly)
+    .map((monitor) => monitor.label)
 );
 
 const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
@@ -126,6 +134,15 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
         </button>
       </div>
     </div>
+
+    <p
+      v-if="fullscreenLossLabels.length > 0"
+      data-testid="fullscreen-loss-feedback"
+      class="app-alert app-alert--amber"
+    >
+      Fullscreen se desactivo fuera de la app en: {{ fullscreenLossLabels.join(', ') }}.
+      Pide reactivacion rapida con "Reactivar fullscreen".
+    </p>
 
     <div class="surface-panel space-y-3 px-4 py-3" data-testid="layout-manager-panel">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -306,6 +323,8 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
         :key="monitor.id"
         :monitor="monitor"
         :state="props.states[monitor.id]"
+        :is-file-import-blocked="props.isFileImportBlocked"
+        :file-import-blocked-message="props.fileImportBlockedMessage"
         @open-window="emit('openWindow', $event)"
         @close-window="emit('closeWindow', $event)"
         @request-fullscreen="emit('requestFullscreen', $event)"

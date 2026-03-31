@@ -30,6 +30,9 @@ export interface MonitorRuntimeState {
   isWindowOpen: boolean;
   isSlaveReady: boolean;
   isFullscreen: boolean;
+  fullscreenIntentActive: boolean;
+  lostFullscreenUnexpectedly: boolean;
+  lastFullscreenExitAtMs: number | null;
   requiresFullscreenInteraction: boolean;
   lastError: string | null;
 }
@@ -50,6 +53,9 @@ export const createDefaultMonitorState = (): MonitorRuntimeState => ({
   isWindowOpen: false,
   isSlaveReady: false,
   isFullscreen: false,
+  fullscreenIntentActive: false,
+  lostFullscreenUnexpectedly: false,
+  lastFullscreenExitAtMs: null,
   requiresFullscreenInteraction: true,
   lastError: null
 });

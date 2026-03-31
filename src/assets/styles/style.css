@@ -246,6 +246,18 @@
     @apply rounded-xl border border-dashed border-slate-600/80 bg-slate-950/35 p-6 text-sm text-slate-300/90;
   }
 
+  .image-drop-zone {
+    @apply rounded-xl border border-dashed border-slate-500/40 bg-slate-900/35 px-3 py-2 text-xs text-slate-300/90 transition-colors;
+  }
+
+  .image-drop-zone--active {
+    @apply border-emerald-300/80 bg-emerald-500/10 text-emerald-100;
+  }
+
+  .image-drop-zone--disabled {
+    @apply opacity-60;
+  }
+
   .app-modal-overlay {
     @apply fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4;
   }

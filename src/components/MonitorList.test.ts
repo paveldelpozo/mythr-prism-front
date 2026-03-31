@@ -29,6 +29,9 @@ const states: MonitorStateMap = {
     isWindowOpen: true,
     isSlaveReady: true,
     isFullscreen: false,
+    fullscreenIntentActive: false,
+    lostFullscreenUnexpectedly: false,
+    lastFullscreenExitAtMs: null,
     requiresFullscreenInteraction: false,
     lastError: null
   }
@@ -103,5 +106,22 @@ describe('MonitorList', () => {
     });
 
     expect(wrapper.get('[data-testid="mirror-mode-toggle-btn"]').text()).toContain('Finalizar espejo');
+  });
+
+  it('muestra feedback global cuando un monitor pierde fullscreen de forma externa', async () => {
+    const wrapper = mountMonitorList(true);
+
+    await wrapper.setProps({
+      states: {
+        'monitor-1': {
+          ...states['monitor-1'],
+          lostFullscreenUnexpectedly: true,
+          fullscreenIntentActive: true,
+          lastFullscreenExitAtMs: Date.now()
+        }
+      }
+    });
+
+    expect(wrapper.get('[data-testid="fullscreen-loss-feedback"]').text()).toContain('Monitor 1');
   });
 });

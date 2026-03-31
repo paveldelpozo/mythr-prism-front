@@ -45,6 +45,9 @@ const mockMonitorStates = reactive({
     isWindowOpen: true,
     isSlaveReady: true,
     isFullscreen: false,
+    fullscreenIntentActive: false,
+    lostFullscreenUnexpectedly: false,
+    lastFullscreenExitAtMs: null,
     requiresFullscreenInteraction: false,
     lastError: null
   },
@@ -55,6 +58,9 @@ const mockMonitorStates = reactive({
     isWindowOpen: true,
     isSlaveReady: true,
     isFullscreen: false,
+    fullscreenIntentActive: false,
+    lostFullscreenUnexpectedly: false,
+    lastFullscreenExitAtMs: null,
     requiresFullscreenInteraction: false,
     lastError: null
   }

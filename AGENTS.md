@@ -122,6 +122,9 @@ Todo entregable de agente debe incluir, de forma breve y verificable:
 - Botones de accion deben combinar icono + texto (no icono solo); marcar iconos decorativos con `aria-hidden="true"` y mantener espaciado consistente.
 - Checkboxes inline de formulario deben usar un componente visual unificado y accesible (por defecto `src/components/ui/AppCheckbox.vue`).
 - Interacciones de reordenado por drag and drop deben incluir siempre fallback accesible por botones (`Subir/Bajar`) y feedback visual de origen/destino durante el arrastre.
+- Convencion operativa fullscreen+import: si existe alguna ventana esclava en fullscreen, bloquear acciones que abren selector nativo de archivo y mostrar feedback claro con alternativa (`Drag & Drop` / pegar imagen).
+- Convencion de import para imagenes: en puntos de carga clave (controles de monitor y formularios de playlist) ofrecer siempre alternativas sin dialogo nativo (`Drag & Drop` y pegado desde portapapeles) con validacion/feedback consistente.
+- Convencion global de file pickers de imagen: todo punto con `Seleccionar archivo` debe aceptar `Drag & Drop` sobre su misma zona operativa, con handlers completos (`dragenter/dragover/dragleave/drop`), estado visual activo de destino y mensaje de error explicito para archivos no imagen.
 
 ### No sobre-ingenieria
 
@@ -175,6 +178,7 @@ Todo entregable de agente debe incluir, de forma breve y verificable:
 - Pop-up blockers pueden impedir `window.open`; reportar error accionable.
 - APIs de Window Management pueden requerir permisos o no estar disponibles segun navegador/version.
 - Nunca asumir permisos garantizados; siempre contemplar fallback y comunicacion clara.
+- Runtime esclavo: abrir en entrada same-origin versionada del proyecto (ej. `/slave.html` con query params de sesion) y evitar dependencias a popups `blob:` para preservar estabilidad de fullscreen y handshakes.
 
 ## 7) Backlog y delivery
 

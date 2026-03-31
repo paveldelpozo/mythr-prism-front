@@ -1,0 +1,406 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSlaveWindowHtml } from './slaveWindowHtml';
+import { MESSAGE_CHANNEL } from '../types/messages';
+
+let runtimeInstanceCounter = 0;
+let activeRuntimeIdentity = {
+  monitorId: 'mirror-dest',
+  instanceToken: 'token-123'
+};
+
+const mountSlaveRuntime = ({
+  requestFullscreenImpl
+}: {
+  requestFullscreenImpl?: () => Promise<void>;
+} = {}) => {
+  runtimeInstanceCounter += 1;
+  const monitorId = `mirror-dest-${runtimeInstanceCounter}`;
+  const instanceToken = `token-${runtimeInstanceCounter}`;
+  activeRuntimeIdentity = {
+    monitorId,
+    instanceToken
+  };
+
+  const html = createSlaveWindowHtml({
+    monitorId,
+    instanceToken
+  });
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  const scriptContent = parsed.querySelector('script')?.textContent ?? '';
+
+  document.body.innerHTML = parsed.body.innerHTML;
+
+  const openerPostMessage = vi.fn();
+  Object.defineProperty(window, 'opener', {
+    configurable: true,
+    writable: true,
+    value: {
+      postMessage: openerPostMessage
+    }
+  });
+
+  let fullscreenElementValue: Element | null = null;
+  Object.defineProperty(document, 'fullscreenElement', {
+    configurable: true,
+    get: () => fullscreenElementValue
+  });
+
+  const requestFullscreenMock = vi.fn(
+    requestFullscreenImpl
+      ?? (async () => {
+        fullscreenElementValue = document.documentElement;
+      })
+  );
+  Object.defineProperty(document.documentElement, 'requestFullscreen', {
+    configurable: true,
+    writable: true,
+    value: requestFullscreenMock
+  });
+
+  const exitFullscreenMock = vi.fn(() => Promise.resolve());
+  Object.defineProperty(document, 'exitFullscreen', {
+    configurable: true,
+    writable: true,
+    value: exitFullscreenMock
+  });
+
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+  const loadSpy = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => undefined);
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(() => Promise.resolve());
+
+  new Function(scriptContent)();
+
+  return {
+    monitorId,
+    instanceToken,
+    loadSpy,
+    exitFullscreenMock,
+    requestFullscreenMock,
+    openerPostMessage,
+    setFullscreenElement: (nextValue: Element | null) => {
+      fullscreenElementValue = nextValue;
+    }
+  };
+};
+
+const dispatchSlaveMessage = (
+  type: 'SET_IMAGE' | 'SET_MEDIA' | 'SET_TRANSFORM' | 'REQUEST_CLOSE' | 'REQUEST_FULLSCREEN' | 'PING',
+  payload: Record<string, unknown>
+) => {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: {
+        channel: MESSAGE_CHANNEL,
+        type,
+        instanceToken: activeRuntimeIdentity.instanceToken,
+        monitorId: activeRuntimeIdentity.monitorId,
+        payload
+      }
+    })
+  );
+};
+
+const flushImageRender = async () => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await Promise.resolve();
+};
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+  document.body.innerHTML = '';
+});
+
+describe('services/slaveWindowHtml mirror rendering', () => {
+  it('abandona estado "Esperando contenido" al recibir SET_IMAGE valido', async () => {
+    mountSlaveRuntime();
+
+    dispatchSlaveMessage('SET_IMAGE', {
+      imageDataUrl: 'data:image/png;base64,AAA'
+    });
+    await flushImageRender();
+
+    const image = document.getElementById('image') as HTMLImageElement;
+    const empty = document.getElementById('empty') as HTMLElement;
+
+    expect(image.style.display).toBe('block');
+    expect(empty.style.display).toBe('none');
+  });
+
+  it('no intenta salir de fullscreen al aplicar SET_IMAGE', () => {
+    const { loadSpy, exitFullscreenMock } = mountSlaveRuntime();
+
+    dispatchSlaveMessage('SET_IMAGE', {
+      imageDataUrl: 'data:image/png;base64,AAA'
+    });
+
+    expect(exitFullscreenMock).not.toHaveBeenCalled();
+    expect(loadSpy).not.toHaveBeenCalled();
+  });
+
+  it('no intenta salir de fullscreen al aplicar SET_MEDIA (imagen o video)', () => {
+    const { loadSpy, exitFullscreenMock } = mountSlaveRuntime();
+
+    dispatchSlaveMessage('SET_MEDIA', {
+      item: {
+        kind: 'image',
+        source: 'data:image/png;base64,BBB'
+      }
+    });
+
+    dispatchSlaveMessage('SET_MEDIA', {
+      item: {
+        kind: 'video',
+        source: 'https://cdn/video.mp4',
+        startAtMs: 0,
+        endAtMs: null,
+        muted: true
+      }
+    });
+
+    expect(exitFullscreenMock).not.toHaveBeenCalled();
+    expect(loadSpy).not.toHaveBeenCalled();
+  });
+
+  it('reporta salida externa de fullscreen y permite reactivacion en un clic', async () => {
+    const { instanceToken, openerPostMessage, setFullscreenElement } = mountSlaveRuntime();
+    const button = document.getElementById('fullscreenButton') as HTMLButtonElement;
+
+    await button.click();
+
+    setFullscreenElement(document.documentElement);
+    document.dispatchEvent(new Event('fullscreenchange'));
+
+    setFullscreenElement(null);
+    document.dispatchEvent(new Event('fullscreenchange'));
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    const fullscreenStatusMessages = openerPostMessage.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'FULLSCREEN_STATUS' && message.instanceToken === instanceToken);
+    const latestPayload = fullscreenStatusMessages.at(-1)?.payload;
+
+    expect(latestPayload?.unexpectedExit).toBe(true);
+    expect(latestPayload?.intentActive).toBe(true);
+    expect(button.textContent).toContain('Reactivar Fullscreen');
+  });
+
+  it('repite el flujo fullscreen -> volver al master -> set image sin congelar controles', async () => {
+    const { requestFullscreenMock, setFullscreenElement } = mountSlaveRuntime();
+    const button = document.getElementById('fullscreenButton') as HTMLButtonElement;
+
+    await button.click();
+    setFullscreenElement(document.documentElement);
+    document.dispatchEvent(new Event('fullscreenchange'));
+    setFullscreenElement(null);
+    document.dispatchEvent(new Event('fullscreenchange'));
+    dispatchSlaveMessage('SET_IMAGE', {
+      imageDataUrl: 'data:image/png;base64,FIRST'
+    });
+
+    await button.click();
+    setFullscreenElement(document.documentElement);
+    document.dispatchEvent(new Event('fullscreenchange'));
+    setFullscreenElement(null);
+    document.dispatchEvent(new Event('fullscreenchange'));
+    dispatchSlaveMessage('SET_IMAGE', {
+      imageDataUrl: 'data:image/png;base64,SECOND'
+    });
+
+    expect(requestFullscreenMock).toHaveBeenCalledTimes(2);
+    expect(button.disabled).toBe(false);
+    expect(button.textContent).toContain('Reactivar Fullscreen');
+  });
+
+  it('no crea watchdogs periodicos de UI en runtime esclavo', () => {
+    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+    mountSlaveRuntime();
+
+    expect(setIntervalSpy).not.toHaveBeenCalled();
+  });
+
+  it('ignora focus/visibilitychange sin cerrar ni bloquear la ventana', async () => {
+    const { instanceToken, openerPostMessage } = mountSlaveRuntime();
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('focus'));
+
+    const messageTypes = openerPostMessage.mock.calls.map(([message]) => message.type);
+    const fullscreenStatuses = openerPostMessage.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'FULLSCREEN_STATUS' && message.instanceToken === instanceToken);
+
+    expect(messageTypes).not.toContain('SLAVE_CLOSING');
+    expect(fullscreenStatuses).toHaveLength(1);
+  });
+
+  it('deduplica y limita rafagas de fullscreenchange para evitar floods', async () => {
+    vi.useFakeTimers();
+
+    const { instanceToken, openerPostMessage, setFullscreenElement } = mountSlaveRuntime();
+    const fullscreenStatusPayloads = () =>
+      openerPostMessage.mock.calls
+        .map(([message]) => message)
+        .filter((message) => message.type === 'FULLSCREEN_STATUS' && message.instanceToken === instanceToken)
+        .map((message) => message.payload);
+
+    setFullscreenElement(document.documentElement);
+    document.dispatchEvent(new Event('fullscreenchange'));
+    setFullscreenElement(null);
+    document.dispatchEvent(new Event('fullscreenchange'));
+    setFullscreenElement(document.documentElement);
+    document.dispatchEvent(new Event('fullscreenchange'));
+
+    vi.advanceTimersByTime(250);
+
+    const payloads = fullscreenStatusPayloads();
+    expect(payloads.length).toBeLessThanOrEqual(3);
+    expect(payloads.at(-1)?.active).toBe(true);
+  });
+
+  it('mantiene REQUEST_CLOSE operativo tras secuencia focus/visibility/fullscreenchange', () => {
+    const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => undefined);
+    const { openerPostMessage, setFullscreenElement } = mountSlaveRuntime();
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('focus'));
+    setFullscreenElement(document.documentElement);
+    document.dispatchEvent(new Event('fullscreenchange'));
+    setFullscreenElement(null);
+    document.dispatchEvent(new Event('fullscreenchange'));
+
+    dispatchSlaveMessage('REQUEST_CLOSE', {
+      reason: 'Operator close command'
+    });
+
+    expect(closeSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
+
+    const closingMessages = openerPostMessage.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'SLAVE_CLOSING');
+    expect(closingMessages.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('ignora payload SET_MEDIA invalido sin limpiar contenido activo', async () => {
+    const { openerPostMessage } = mountSlaveRuntime();
+
+    dispatchSlaveMessage('SET_MEDIA', {
+      item: {
+        kind: 'image',
+        source: 'data:image/png;base64,LOCKED'
+      }
+    });
+
+    await flushImageRender();
+
+    dispatchSlaveMessage('SET_MEDIA', {
+      item: {
+        kind: 'image',
+        source: ''
+      }
+    });
+
+    const image = document.getElementById('image') as HTMLImageElement;
+    const empty = document.getElementById('empty') as HTMLElement;
+
+    expect(image.style.display).toBe('block');
+    expect(empty.style.display).toBe('none');
+
+    const errorMessages = openerPostMessage.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'SLAVE_ERROR');
+    const latestError = errorMessages.at(-1)?.payload?.message;
+
+    expect(latestError).toContain('SET_MEDIA ignorado');
+  });
+
+  it('mantiene ventana operable tras volver del selector y cargar imagen grande', async () => {
+    const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => undefined);
+    const { openerPostMessage, setFullscreenElement } = mountSlaveRuntime();
+    const button = document.getElementById('fullscreenButton') as HTMLButtonElement;
+    const wrapper = document.getElementById('wrapper') as HTMLElement;
+    const closeButton = document.getElementById('closeButton') as HTMLButtonElement;
+
+    await button.click();
+    setFullscreenElement(document.documentElement);
+    document.dispatchEvent(new Event('fullscreenchange'));
+
+    setFullscreenElement(null);
+    document.dispatchEvent(new Event('fullscreenchange'));
+
+    const hugeDataUrl = `data:image/png;base64,${'X'.repeat(200000)}`;
+    dispatchSlaveMessage('SET_IMAGE', {
+      imageDataUrl: hugeDataUrl
+    });
+    await flushImageRender();
+
+    dispatchSlaveMessage('SET_TRANSFORM', {
+      transform: {
+        rotate: 12,
+        scale: 1.1,
+        translateX: 25,
+        translateY: -8
+      }
+    });
+    dispatchSlaveMessage('PING', {
+      timestamp: Date.now()
+    });
+
+    closeButton.click();
+
+    expect(wrapper.style.transform).toContain('translate(25px, -8px)');
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+
+    const types = openerPostMessage.mock.calls.map(([message]) => message.type);
+    expect(types).toContain('PONG');
+    expect(types).toContain('SLAVE_CLOSING');
+
+    const trace = (window as Window & { __MMIB_SLAVE_TRACE__?: Array<{ event: string }> }).__MMIB_SLAVE_TRACE__;
+    expect(trace?.some((entry) => entry.event === 'SET_IMAGE:received')).toBe(true);
+    expect(trace?.some((entry) => entry.event === 'fullscreenchange')).toBe(true);
+    expect(trace?.some((entry) => entry.event.startsWith('REQUEST_CLOSE'))).toBe(true);
+  });
+
+  it('request close sale de fullscreen antes de cerrar ventana', async () => {
+    vi.spyOn(window, 'close').mockImplementation(() => undefined);
+    const { exitFullscreenMock, openerPostMessage, setFullscreenElement } = mountSlaveRuntime();
+
+    setFullscreenElement(document.documentElement);
+
+    dispatchSlaveMessage('REQUEST_CLOSE', {
+      reason: 'Operator close command'
+    });
+
+    await Promise.resolve();
+
+    expect(exitFullscreenMock.mock.calls.length).toBeGreaterThanOrEqual(1);
+
+    const closingMessages = openerPostMessage.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'SLAVE_CLOSING');
+
+    expect(closingMessages.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('mantiene cierre operativo desde UI local y desde REQUEST_CLOSE', () => {
+    const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => undefined);
+    const { openerPostMessage } = mountSlaveRuntime();
+
+    const closeButton = document.getElementById('closeButton') as HTMLButtonElement;
+    const quickCloseButton = document.getElementById('quickCloseButton') as HTMLButtonElement;
+
+    closeButton.click();
+    quickCloseButton.click();
+    dispatchSlaveMessage('REQUEST_CLOSE', {
+      reason: 'Operator close command'
+    });
+
+    expect(closeSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
+
+    const closingMessages = openerPostMessage.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'SLAVE_CLOSING');
+
+    expect(closingMessages.length).toBeGreaterThanOrEqual(1);
+  });
+});

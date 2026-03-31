@@ -13,6 +13,7 @@ export type MasterMessageType =
   | 'VIDEO_SYNC_TIME'
   | 'SET_TRANSFORM'
   | 'REQUEST_FULLSCREEN'
+  | 'REQUEST_CLOSE'
   | 'PING';
 
 export type SlaveMessageType =
@@ -33,6 +34,8 @@ export interface MessageEnvelope<TType extends string, TPayload> {
 export interface FullscreenStatusPayload {
   active: boolean;
   requiresInteraction: boolean;
+  intentActive?: boolean;
+  unexpectedExit?: boolean;
   message?: string;
 }
 
@@ -70,6 +73,7 @@ export type MasterToSlaveMessage =
   | MessageEnvelope<'VIDEO_SYNC_TIME', VideoSyncTimePayload>
   | MessageEnvelope<'SET_TRANSFORM', { transform: MonitorTransform }>
   | MessageEnvelope<'REQUEST_FULLSCREEN', { reason: string }>
+  | MessageEnvelope<'REQUEST_CLOSE', { reason: string }>
   | MessageEnvelope<'PING', { timestamp: number }>;
 
 export type SlaveToMasterMessage =

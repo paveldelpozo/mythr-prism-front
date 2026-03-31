@@ -6,6 +6,8 @@ import type { MonitorDescriptor, MonitorRuntimeState } from '../types/broadcaste
 defineProps<{
   monitor: MonitorDescriptor;
   state: MonitorRuntimeState;
+  isFileImportBlocked?: boolean;
+  fileImportBlockedMessage?: string;
 }>();
 
 const emit = defineEmits<{
@@ -54,6 +56,9 @@ const emit = defineEmits<{
       <p class="text-xs text-slate-300/90">Estado ventana: {{ state.isWindowOpen ? 'Abierta' : 'Cerrada' }}</p>
       <p class="text-xs text-slate-300/90">Handshake: {{ state.isSlaveReady ? 'Conectado' : 'Pendiente' }}</p>
       <p class="text-xs text-slate-300/90">Fullscreen: {{ state.isFullscreen ? 'Activo' : 'No activo' }}</p>
+      <p v-if="state.lostFullscreenUnexpectedly" class="mt-1 text-xs text-amber-200/90">
+        Fullscreen se cerro por una accion externa. Usa "Reactivar fullscreen" para recuperarlo en un clic.
+      </p>
       <p v-if="state.requiresFullscreenInteraction" class="mt-1 text-xs text-indigo-200/90">
         Requiere clic en la ventana esclava para fullscreen.
       </p>
@@ -74,6 +79,8 @@ const emit = defineEmits<{
       v-else
       :monitor-id="monitor.id"
       :state="state"
+      :is-file-import-blocked="isFileImportBlocked"
+      :file-import-blocked-message="fileImportBlockedMessage"
       @close-window="emit('closeWindow', $event)"
       @request-fullscreen="emit('requestFullscreen', $event)"
       @upload-image="(id, file) => emit('uploadImage', id, file)"

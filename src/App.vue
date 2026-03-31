@@ -22,6 +22,8 @@ import { sanitizeMirrorModeConfig, type MirrorModeConfig } from './types/mirrorM
 import type { MultimediaItem, PlaylistPlaybackState } from './types/playlist';
 import { buildVideoSyncPlan } from './types/videoSync';
 
+const FILE_IMPORT_BLOCK_MESSAGE = 'Para importar archivo, sal del fullscreen o usa Drag & Drop / pegar imagen.';
+
 const persistedSession = loadPersistedSession();
 
 const clampPlaylistIndex = (index: number, total: number): number => {
@@ -292,6 +294,10 @@ const openSlaveWindowsCount = computed(() =>
 
 const canCloseAllWindows = computed(() => openSlaveWindowsCount.value > 0);
 
+const hasActiveFullscreenSlave = computed(() =>
+  Object.values(monitorStates).some((state) => state.isWindowOpen && state.isFullscreen)
+);
+
 const openSelectedSlaveMonitorIds = computed(() =>
   selectedTargetMonitorIds.value.filter((monitorId) => Boolean(monitorStates[monitorId]?.isWindowOpen))
 );
@@ -315,14 +321,40 @@ const videoSyncPlan = computed(() =>
 );
 
 const uploadImage = (monitorId: string, file: File) => {
+  if (hasActiveFullscreenSlave.value) {
+    globalError.value = FILE_IMPORT_BLOCK_MESSAGE;
+    return;
+  }
+
+  globalError.value = null;
+  const runtimeBlobUrl = typeof URL.createObjectURL === 'function'
+    ? URL.createObjectURL(file)
+    : null;
   const reader = new FileReader();
   reader.onload = (event) => {
     const data = event.target?.result;
     if (typeof data === 'string') {
-      setImageForMonitor(monitorId, data);
+      setImageForMonitor(monitorId, data, {
+        renderSource: runtimeBlobUrl ?? data
+      });
+      return;
     }
+
+    if (runtimeBlobUrl && typeof URL.revokeObjectURL === 'function') {
+      URL.revokeObjectURL(runtimeBlobUrl);
+    }
+    setImageForMonitor(monitorId, null);
   };
   reader.onerror = () => {
+    if (runtimeBlobUrl && typeof URL.revokeObjectURL === 'function') {
+      URL.revokeObjectURL(runtimeBlobUrl);
+    }
+    setImageForMonitor(monitorId, null);
+  };
+  reader.onabort = () => {
+    if (runtimeBlobUrl && typeof URL.revokeObjectURL === 'function') {
+      URL.revokeObjectURL(runtimeBlobUrl);
+    }
     setImageForMonitor(monitorId, null);
   };
   reader.readAsDataURL(file);
@@ -701,6 +733,8 @@ onBeforeUnmount(() => {
           :mirror-active-target-count="mirrorStatus.activeTargetCount"
           :mirror-unavailable-target-ids="mirrorStatus.unavailableTargetIds"
           :mirror-last-error="mirrorStatus.lastError"
+          :is-file-import-blocked="hasActiveFullscreenSlave"
+          :file-import-blocked-message="FILE_IMPORT_BLOCK_MESSAGE"
           @update:show-only-projectable="showOnlyProjectable = $event"
           @update:layout-draft-name="layoutDraftName = $event"
           @update:selected-layout-id="onLayoutSelectionChange"
@@ -735,6 +769,8 @@ onBeforeUnmount(() => {
           :video-sync-plan="videoSyncPlan"
           :playback-feedback="playlistPlaybackFeedback"
           :is-playing="isPlaylistPlaying"
+          :is-file-import-blocked="hasActiveFullscreenSlave"
+          :file-import-blocked-message="FILE_IMPORT_BLOCK_MESSAGE"
           @playback:start="startPlaylist"
           @playback:pause="pausePlaylist"
           @playback:next="playNext"
