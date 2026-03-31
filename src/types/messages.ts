@@ -6,6 +6,7 @@ export const MESSAGE_CHANNEL = 'MMIB_V3_CHANNEL';
 
 export type MasterMessageType =
   | 'MASTER_INIT'
+  | 'FLASH_MONITOR_ID'
   | 'SET_IMAGE'
   | 'SET_MEDIA'
   | 'VIDEO_SYNC_PLAY'
@@ -48,6 +49,11 @@ export interface MasterInitPayload {
   monitorLabel: string;
 }
 
+export interface FlashMonitorIdPayload {
+  monitorLabel: string;
+  durationMs: number;
+}
+
 export interface ThumbnailSnapshotPayload {
   imageDataUrl: string | null;
   capturedAtMs: number;
@@ -75,6 +81,7 @@ export interface VideoSyncTimePayload {
 
 export type MasterToSlaveMessage =
   | MessageEnvelope<'MASTER_INIT', MasterInitPayload>
+  | MessageEnvelope<'FLASH_MONITOR_ID', FlashMonitorIdPayload>
   | MessageEnvelope<'SET_IMAGE', { imageDataUrl: string | null }>
   | MessageEnvelope<'SET_MEDIA', { item: MultimediaItem | null }>
   | MessageEnvelope<'VIDEO_SYNC_PLAY', VideoSyncPlayPayload>

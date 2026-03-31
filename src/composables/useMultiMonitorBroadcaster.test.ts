@@ -257,6 +257,34 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
     expect(api.persistableMonitorStates.value[sourceMonitorId]?.customName).toBe('Escenario frontal');
   });
 
+  it('envia FLASH_MONITOR_ID al monitor con ventana abierta', async () => {
+    const { popups, sourceMonitorId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(sourceMonitorId);
+
+    const popup = popups[0];
+    popup.postMessage.mockClear();
+
+    const sent = api.flashMonitorId(sourceMonitorId);
+    const sentMessages = popup.postMessage.mock.calls.map(([message]) => message);
+
+    expect(sent).toBe(true);
+    expect(sentMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'FLASH_MONITOR_ID',
+          monitorId: sourceMonitorId,
+          payload: expect.objectContaining({
+            monitorLabel: expect.any(String),
+            durationMs: 2200
+          })
+        })
+      ])
+    );
+  });
+
   it('replica imagen al destino espejo enviando SET_IMAGE sin limpiar con SET_MEDIA null', async () => {
     const { popups, sourceMonitorId, mirrorTargetId } = setupWindowManagementMocks();
     const api = createHarness();

@@ -137,7 +137,8 @@ describe('MonitorCard', () => {
 
     const whiteboardButton = wrapper.get('[data-testid="monitor-open-whiteboard"]');
     expect(whiteboardButton.attributes('disabled')).toBeUndefined();
-    expect(whiteboardButton.text()).toContain('Abrir pizarra');
+    expect(whiteboardButton.attributes('title')).toBe('Abrir pizarra');
+    expect(whiteboardButton.text().trim()).toBe('');
 
     await whiteboardButton.trigger('click');
 
@@ -158,6 +159,45 @@ describe('MonitorCard', () => {
     await whiteboardButton.trigger('click');
 
     expect(wrapper.emitted('openWhiteboard')).toBeUndefined();
+  });
+
+  it('emite accion para identificar monitor cuando la ventana esta abierta', async () => {
+    const wrapper = mountCard();
+
+    const flashButton = wrapper.get('[data-testid="monitor-flash-id"]');
+    expect(flashButton.attributes('disabled')).toBeUndefined();
+    expect(flashButton.attributes('title')).toBe('Destacar pantalla para identificar monitor');
+    expect(flashButton.text().trim()).toBe('');
+
+    await flashButton.trigger('click');
+
+    expect(wrapper.emitted('flashMonitorId')?.[0]).toEqual(['monitor-1']);
+  });
+
+  it('agrupa acciones rapidas en barra compacta de una sola linea', () => {
+    const wrapper = mountCard();
+
+    const toolbar = wrapper.get('[data-testid="monitor-card-actions"]');
+
+    expect(toolbar.classes()).toContain('monitor-card-actions');
+    expect(toolbar.find('[data-testid="monitor-open-whiteboard"]').exists()).toBe(true);
+    expect(toolbar.find('[data-testid="monitor-flash-id"]').exists()).toBe(true);
+  });
+
+  it('deshabilita identificar monitor cuando la ventana esta cerrada', async () => {
+    const wrapper = mountCard({
+      state: {
+        ...state,
+        isWindowOpen: false
+      }
+    });
+
+    const flashButton = wrapper.get('[data-testid="monitor-flash-id"]');
+    expect(flashButton.attributes('disabled')).toBeDefined();
+
+    await flashButton.trigger('click');
+
+    expect(wrapper.emitted('flashMonitorId')).toBeUndefined();
   });
 
   it('oculta accion de pizarra para monitor principal de la app', () => {

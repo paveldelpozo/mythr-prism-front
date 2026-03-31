@@ -47,11 +47,12 @@ const thumbnails: MonitorThumbnailStateMap = {
 
 const MonitorCardStub = defineComponent({
   name: 'MonitorCard',
-  emits: ['renameMonitor', 'openWhiteboard'],
+  emits: ['renameMonitor', 'openWhiteboard', 'flashMonitorId'],
   template: `
     <div>
       <button data-testid="monitor-card-rename" @click="$emit('renameMonitor', 'monitor-1', 'Escenario')">rename</button>
       <button data-testid="monitor-card-whiteboard" @click="$emit('openWhiteboard', 'monitor-1')">whiteboard</button>
+      <button data-testid="monitor-card-flash-id" @click="$emit('flashMonitorId', 'monitor-1')">flash</button>
     </div>
   `
 });
@@ -159,6 +160,14 @@ describe('MonitorList', () => {
     await wrapper.get('[data-testid="monitor-card-whiteboard"]').trigger('click');
 
     expect(wrapper.emitted('openWhiteboard')?.[0]).toEqual(['monitor-1']);
+  });
+
+  it('propaga evento para identificar monitor desde la tarjeta', async () => {
+    const wrapper = mountMonitorList(true);
+
+    await wrapper.get('[data-testid="monitor-card-flash-id"]').trigger('click');
+
+    expect(wrapper.emitted('flashMonitorId')?.[0]).toEqual(['monitor-1']);
   });
 
   it('mantiene el orden de secciones requerido en el tab Monitores', () => {

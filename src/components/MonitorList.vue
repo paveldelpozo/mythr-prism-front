@@ -26,6 +26,7 @@ const emit = defineEmits<{
   deleteLayout: [];
   openWindow: [monitorId: string];
   requestFullscreen: [monitorId: string];
+  flashMonitorId: [monitorId: string];
   closeWindow: [monitorId: string];
   uploadImage: [monitorId: string, file: File];
   clearImage: [monitorId: string];
@@ -163,6 +164,7 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
         :file-import-blocked-message="props.fileImportBlockedMessage"
         @open-window="emit('openWindow', $event)"
         @request-fullscreen="emit('requestFullscreen', $event)"
+        @flash-monitor-id="emit('flashMonitorId', $event)"
         @close-window="emit('closeWindow', $event)"
         @upload-image="(id, file) => emit('uploadImage', id, file)"
         @clear-image="emit('clearImage', $event)"

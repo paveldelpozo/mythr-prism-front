@@ -186,8 +186,20 @@
     @apply flex items-center justify-end gap-2;
   }
 
+  .monitor-card-actions {
+    @apply mb-3 flex items-center gap-1.5 overflow-x-auto pb-0.5;
+  }
+
+  .monitor-action-toolbar {
+    @apply flex w-full items-center gap-1.5 overflow-x-auto pb-0.5;
+  }
+
+  .monitor-action-btn {
+    @apply btn-icon-only h-8 w-8 shrink-0;
+  }
+
   .btn-icon-only {
-    @apply inline-flex h-8 w-8 items-center justify-center rounded-md border;
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/70;
   }
 
   .monitor-card--open {

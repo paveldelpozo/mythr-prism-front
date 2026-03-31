@@ -279,37 +279,40 @@ onBeforeUnmount(() => {
       </p>
     </div>
 
-    <button
-      ref="contentEditorTriggerButton"
-      type="button"
-      data-testid="monitor-open-content-editor"
-      class="btn-with-icon btn-sm btn-slate-soft"
-      @click="openContentEditorModal"
-    >
-      <AdjustmentsHorizontalIcon aria-hidden="true" class="btn-icon" />
-      Editar contenido
-    </button>
+    <div class="monitor-action-toolbar" data-testid="monitor-action-toolbar">
+      <button
+        ref="contentEditorTriggerButton"
+        type="button"
+        data-testid="monitor-open-content-editor"
+        class="monitor-action-btn btn-slate-soft"
+        title="Editar contenido"
+        aria-label="Editar contenido"
+        @click="openContentEditorModal"
+      >
+        <AdjustmentsHorizontalIcon aria-hidden="true" class="btn-icon" />
+      </button>
 
-    <div class="flex flex-wrap gap-2">
       <button
         type="button"
-        class="btn-with-icon btn-sm btn-indigo-soft"
+        data-testid="monitor-request-fullscreen"
+        class="monitor-action-btn btn-indigo-soft"
+        :title="fullscreenActionLabel"
+        :aria-label="fullscreenActionLabel"
         @click="emit('requestFullscreen', monitorId)"
       >
         <ArrowsPointingOutIcon aria-hidden="true" class="btn-icon" />
-        {{ fullscreenActionLabel }}
       </button>
 
       <button
         type="button"
         data-testid="monitor-close-window"
-        class="btn-with-icon btn-sm btn-rose-soft"
+        class="monitor-action-btn btn-rose-soft"
+        title="Cerrar ventana"
+        aria-label="Cerrar ventana"
         @click="emit('closeWindow', monitorId)"
       >
         <XMarkIcon aria-hidden="true" class="btn-icon" />
-        Cerrar ventana
       </button>
-
     </div>
 
     <div

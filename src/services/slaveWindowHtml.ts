@@ -72,6 +72,42 @@ export const createSlaveWindowHtml = ({
         height: 100%;
         pointer-events: none;
       }
+      #monitorIdentifyFlash {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 140ms ease-out;
+        z-index: 22;
+      }
+      #monitorIdentifyFlash.is-active {
+        opacity: 1;
+      }
+      #monitorIdentifyFlash::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border: 14px solid rgba(56, 189, 248, 0.92);
+        box-shadow: inset 0 0 0 6px rgba(2, 6, 23, 0.3);
+        animation: monitor-identify-pulse 520ms ease-in-out infinite;
+      }
+      #monitorIdentifyFlashLabel {
+        position: relative;
+        z-index: 1;
+        border-radius: 999px;
+        border: 1px solid rgba(125, 211, 252, 0.85);
+        background: rgba(15, 23, 42, 0.9);
+        color: #e0f2fe;
+        padding: 10px 18px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
       #overlay {
         position: fixed;
         inset: 0;
@@ -119,6 +155,17 @@ export const createSlaveWindowHtml = ({
         font-size: 12px;
         color: #93c5fd;
       }
+      @keyframes monitor-identify-pulse {
+        0%,
+        100% {
+          opacity: 0.95;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.55;
+          transform: scale(0.985);
+        }
+      }
     </style>
   </head>
   <body>
@@ -129,6 +176,9 @@ export const createSlaveWindowHtml = ({
           <p id="empty">Esperando imagen...</p>
         </div>
         <canvas id="whiteboard"></canvas>
+        <div id="monitorIdentifyFlash" aria-live="polite">
+          <strong id="monitorIdentifyFlashLabel">Identificando monitor</strong>
+        </div>
       </div>
 
     <div id="overlay">
@@ -146,6 +196,9 @@ export const createSlaveWindowHtml = ({
       (function () {
         const FULLSCREEN_REQUEST_TIMEOUT_MS = 3000;
         const FULLSCREEN_REPORT_THROTTLE_MS = 200;
+        const MONITOR_ID_FLASH_DEFAULT_MS = 2200;
+        const MONITOR_ID_FLASH_MIN_MS = 800;
+        const MONITOR_ID_FLASH_MAX_MS = 5000;
         const IMAGE_APPLY_DEFER_MS = 0;
         const THUMBNAIL_CAPTURE_INTERVAL_MS = 1000;
         const THUMBNAIL_MAX_WIDTH = 320;
@@ -162,6 +215,8 @@ export const createSlaveWindowHtml = ({
         const video = document.getElementById('video');
         const empty = document.getElementById('empty');
         const whiteboardCanvas = document.getElementById('whiteboard');
+        const monitorIdentifyFlash = document.getElementById('monitorIdentifyFlash');
+        const monitorIdentifyFlashLabel = document.getElementById('monitorIdentifyFlashLabel');
         const thumbnailCanvas = document.createElement('canvas');
         let thumbnailContext = null;
         let whiteboardContext = null;
@@ -182,6 +237,7 @@ export const createSlaveWindowHtml = ({
         let thumbnailCaptureBlockedUntilMs = 0;
         let lastThumbnailDataUrl = null;
         let imageRenderRequestId = 0;
+        let monitorIdentifyFlashTimeoutId = null;
         const traceBuffer = [];
         let isTraceConsoleEnabled = false;
 
@@ -207,6 +263,65 @@ export const createSlaveWindowHtml = ({
           if (isTraceConsoleEnabled) {
             console.debug('[MMIB slave]', event, details ?? {});
           }
+        };
+
+        const sanitizeFlashDurationMs = (value) => {
+          const durationMs = Number(value);
+          if (!Number.isFinite(durationMs)) {
+            return MONITOR_ID_FLASH_DEFAULT_MS;
+          }
+
+          return Math.max(
+            MONITOR_ID_FLASH_MIN_MS,
+            Math.min(MONITOR_ID_FLASH_MAX_MS, Math.round(durationMs))
+          );
+        };
+
+        const sanitizeFlashLabel = (value) => {
+          if (typeof value !== 'string') {
+            return 'Identificando monitor';
+          }
+
+          const normalized = value.trim();
+          if (normalized.length === 0) {
+            return 'Identificando monitor';
+          }
+
+          return normalized.slice(0, 80);
+        };
+
+        const clearMonitorIdFlash = () => {
+          if (monitorIdentifyFlashTimeoutId !== null) {
+            window.clearTimeout(monitorIdentifyFlashTimeoutId);
+            monitorIdentifyFlashTimeoutId = null;
+          }
+
+          if (!monitorIdentifyFlash) {
+            return;
+          }
+
+          monitorIdentifyFlash.classList.remove('is-active');
+        };
+
+        const showMonitorIdFlash = (payload) => {
+          if (!monitorIdentifyFlash || !monitorIdentifyFlashLabel) {
+            return;
+          }
+
+          const durationMs = sanitizeFlashDurationMs(payload?.durationMs);
+          const monitorLabel = sanitizeFlashLabel(payload?.monitorLabel);
+
+          monitorIdentifyFlashLabel.textContent = 'Identificando: ' + monitorLabel;
+          monitorIdentifyFlash.classList.add('is-active');
+
+          if (monitorIdentifyFlashTimeoutId !== null) {
+            window.clearTimeout(monitorIdentifyFlashTimeoutId);
+          }
+
+          monitorIdentifyFlashTimeoutId = window.setTimeout(() => {
+            monitorIdentifyFlashTimeoutId = null;
+            monitorIdentifyFlash.classList.remove('is-active');
+          }, durationMs);
         };
 
         const onVideoLoadedMetadata = () => {
@@ -994,6 +1109,11 @@ export const createSlaveWindowHtml = ({
             return;
           }
 
+          if (message.type === 'FLASH_MONITOR_ID') {
+            showMonitorIdFlash(message.payload);
+            return;
+          }
+
           if (message.type === 'WHITEBOARD_SET_STATE') {
             if (!message.payload || typeof message.payload !== 'object') {
               postToMaster('SLAVE_ERROR', {
@@ -1114,6 +1234,7 @@ export const createSlaveWindowHtml = ({
           reportFullscreenStatus(statusMessage, 'fullscreenchange');
         });
         window.addEventListener('beforeunload', () => {
+          clearMonitorIdFlash();
           clearScheduledThumbnailCapture();
           if (pendingFullscreenReportTimeoutId !== null) {
             window.clearTimeout(pendingFullscreenReportTimeoutId);
