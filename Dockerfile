@@ -7,19 +7,18 @@ RUN corepack enable
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY mythr-prism-front/package.json ./mythr-prism-front/package.json
+COPY package.json ./
 
-RUN pnpm install --frozen-lockfile --filter mythr-prism-front...
+RUN pnpm install --no-frozen-lockfile
 
-COPY mythr-prism-front ./mythr-prism-front
+COPY . .
 
-RUN pnpm --filter mythr-prism-front run build
+RUN pnpm run build
 
 FROM nginx:1.27-alpine AS runtime
 
-COPY mythr-prism-front/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/mythr-prism-front/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80
 
