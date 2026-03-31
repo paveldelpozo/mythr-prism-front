@@ -1,4 +1,4 @@
-# Mythr Prism
+# mythr-prism-front
 
 Mythr Prism es un módulo integrado en el ecosistema Mythr, orientado al control y la proyección de contenido en entornos multi-monitor para experiencias visuales coordinadas.
 
@@ -15,7 +15,13 @@ Mythr Prism es un módulo integrado en el ecosistema Mythr, orientado al control
 - pnpm `>=8.15.9`.
 - Navegador moderno con soporte para APIs necesarias de gestión de ventanas/pantallas.
 
+## Ubicacion en monorepo
+
+Este paquete vive dentro del monorepo `mythr-prism` en la ruta `mythr-prism-front/`.
+
 ## Instalación
+
+Desde la raiz del monorepo:
 
 ```bash
 pnpm install
@@ -23,7 +29,7 @@ pnpm install
 
 ## Scripts disponibles
 
-- `pnpm run dev`: inicia el entorno de desarrollo local.
+- `pnpm run dev`: inicia el entorno de desarrollo local (ejecutar dentro de `mythr-prism-front/` o via root con `pnpm run dev:front`).
 - `pnpm run build`: genera la build de producción.
 - `pnpm run preview`: sirve la build para validación local.
 - `pnpm run typecheck`: ejecuta la verificación de tipos.
@@ -31,8 +37,8 @@ pnpm install
 
 ## Uso básico
 
-1. Instala dependencias con `pnpm install`.
-2. Arranca el entorno local con `pnpm run dev`.
+1. Instala dependencias con `pnpm install` en la raiz del monorepo.
+2. Arranca el entorno local con `pnpm run dev:front` en la raiz, o `pnpm run dev` dentro de `mythr-prism-front/`.
 3. Abre la URL indicada en consola en un navegador compatible.
 4. Prueba el flujo básico de proyección y control entre ventanas/pantallas.
 5. Valida build, tipos y tests con `pnpm run build`, `pnpm run typecheck` y `pnpm run test`.

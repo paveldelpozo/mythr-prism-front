@@ -1,10 +1,12 @@
 # Backlog y seguimiento del proyecto Mythr Prism
 
-Ultima actualizacion: 2026-03-30
+Ultima actualizacion: 2026-03-31
 
 ## Resumen
 
 Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para proyeccion/control de contenido multi-monitor.
+
+Nota Mantenimiento (2026-03-31): se completo la reestructuracion a monorepo PNPM; el frontend se movio a `mythr-prism-front/`, se agrego scaffold `mythr-prism-back/` y la orquestacion global queda en la raiz (`README.md`, `package.json`, `pnpm-workspace.yaml`). Este backlog continua en `mythr-prism-front/docs/backlog.md`.
 
 Nota UX (2026-03-30): en Playlist se reforzo comportamiento operativo de modales con overlay fijo + bloqueo de scroll de fondo, y se aplico truncado visual de `source` largos (incluye data URI) manteniendo valor completo por `title`.
 Nota Bugfix/UX (2026-03-30): se robustecio el manejo de fullscreen en ventanas esclavas frente a salidas forzadas por navegador/SO (ej. al abrir file picker en la ventana principal): ahora se detecta perdida externa via `fullscreenchange`, se conserva la intencion de fullscreen por monitor, se habilita CTA de reactivacion rapida en la esclava (`Reactivar Fullscreen`) y el master muestra feedback explicito con los monitores afectados.
