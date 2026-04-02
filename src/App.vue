@@ -197,7 +197,12 @@ const buildPersistablePlaylist = (): MultimediaItem[] =>
       }
 
       if (item.kind === 'image') {
-        if (typeof item.durationMs !== 'number' || !Number.isFinite(item.durationMs)) {
+        if (
+          typeof item.durationMs !== 'number' ||
+          !Number.isFinite(item.durationMs) ||
+          typeof item.startAtMs !== 'number' ||
+          !Number.isFinite(item.startAtMs)
+        ) {
           return null;
         }
 
@@ -206,7 +211,10 @@ const buildPersistablePlaylist = (): MultimediaItem[] =>
           kind: 'image',
           name: item.name,
           source: item.source,
-          durationMs: item.durationMs
+          durationMs: item.durationMs,
+          startAtMs: 0,
+          endAtMs: null,
+          transition: sanitizeContentTransition(item.transition)
         };
       }
 
@@ -215,11 +223,17 @@ const buildPersistablePlaylist = (): MultimediaItem[] =>
           id: item.id,
           kind: 'external-url',
           name: item.name,
-          source: item.source
+          source: item.source,
+          durationMs: item.durationMs,
+          startAtMs: 0,
+          endAtMs: null,
+          transition: sanitizeContentTransition(item.transition)
         };
       }
 
       if (
+        typeof item.durationMs !== 'number' ||
+        !Number.isFinite(item.durationMs) ||
         typeof item.startAtMs !== 'number' ||
         !Number.isFinite(item.startAtMs) ||
         typeof item.muted !== 'boolean' ||
@@ -234,8 +248,10 @@ const buildPersistablePlaylist = (): MultimediaItem[] =>
         kind: 'video',
         name: item.name,
         source: item.source,
+        durationMs: item.durationMs,
         startAtMs: item.startAtMs,
         endAtMs: item.endAtMs,
+        transition: sanitizeContentTransition(item.transition),
         muted: item.muted
       };
     })

@@ -8,7 +8,13 @@ describe('types/playlist guards', () => {
       kind: 'image',
       name: 'Imagen',
       source: 'data:image/png;base64,AAA',
-      durationMs: 1200
+      durationMs: 1200,
+      startAtMs: 0,
+      endAtMs: null,
+      transition: {
+        type: 'cut',
+        durationMs: 450
+      }
     };
 
     const video = {
@@ -16,8 +22,13 @@ describe('types/playlist guards', () => {
       kind: 'video',
       name: 'Video',
       source: 'https://example.com/video.mp4',
+      durationMs: 5000,
       startAtMs: 0,
       endAtMs: 6000,
+      transition: {
+        type: 'fade',
+        durationMs: 600
+      },
       muted: false
     };
 
@@ -25,7 +36,14 @@ describe('types/playlist guards', () => {
       id: 'url-1',
       kind: 'external-url',
       name: 'Web oficial',
-      source: 'https://example.com/page'
+      source: 'https://example.com/page',
+      durationMs: 5000,
+      startAtMs: 0,
+      endAtMs: null,
+      transition: {
+        type: 'wipe',
+        durationMs: 700
+      }
     };
 
     expect(isMultimediaItem(image)).toBe(true);
@@ -40,7 +58,13 @@ describe('types/playlist guards', () => {
         kind: 'image',
         name: 'Sin id',
         source: 'x',
-        durationMs: 100
+        durationMs: 100,
+        startAtMs: 0,
+        endAtMs: null,
+        transition: {
+          type: 'cut',
+          durationMs: 450
+        }
       })
     ).toBe(false);
 
@@ -50,8 +74,13 @@ describe('types/playlist guards', () => {
         kind: 'video',
         name: 'Rango invalido',
         source: 'x',
+        durationMs: 2000,
         startAtMs: 5000,
         endAtMs: 3000,
+        transition: {
+          type: 'cut',
+          durationMs: 450
+        },
         muted: true
       })
     ).toBe(false);

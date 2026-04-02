@@ -23,8 +23,18 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } fro
 import AppCheckbox from './ui/AppCheckbox.vue';
 import { usePlaylistThumbnails } from '../composables/usePlaylistThumbnails';
 import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
-import type { MediaItemKind, MultimediaItem, PlaylistPlaybackState } from '../types/playlist';
+import {
+  DEFAULT_PLAYLIST_ITEM_TRANSITION,
+  type MediaItemKind,
+  type MultimediaItem,
+  type PlaylistPlaybackState
+} from '../types/playlist';
 import { buildVideoSyncPlan, type VideoSyncPlan } from '../types/videoSync';
+import {
+  CONTENT_TRANSITION_TYPES,
+  type ContentTransition,
+  type ContentTransitionType
+} from '../types/transitions';
 import {
   pickImageFromClipboard,
   pickImageFromDataTransfer,
@@ -33,6 +43,7 @@ import {
 } from '../utils/imageFileImport';
 
 const DEFAULT_IMAGE_DURATION_MS = 5000;
+const DEFAULT_ITEM_START_AT_MS = 0;
 const IMAGE_DATA_URL_PREFIX = 'data:image/';
 const MAX_SOURCE_PREVIEW_LENGTH = 96;
 const SOURCE_PREVIEW_ELLIPSIS = '...';
@@ -67,9 +78,10 @@ const emit = defineEmits<{
 const newItemKind = ref<MediaItemKind>('image');
 const newItemName = ref('');
 const newItemSource = ref('');
-const newImageDurationMs = ref(DEFAULT_IMAGE_DURATION_MS);
-const newVideoStartAtMs = ref(0);
-const newVideoEndAtMs = ref<string>('');
+const newItemDurationMs = ref(DEFAULT_IMAGE_DURATION_MS);
+const newItemStartAtMs = ref(DEFAULT_ITEM_START_AT_MS);
+const newItemEndAtMs = ref<string>('');
+const newItemTransitionType = ref<ContentTransitionType>(DEFAULT_PLAYLIST_ITEM_TRANSITION.type);
 const newVideoMuted = ref(true);
 const formError = ref<string | null>(null);
 const newImageFileFeedback = ref<string | null>(null);
@@ -149,7 +161,13 @@ const cloneMediaItem = (item: MultimediaItem): MultimediaItem =>
         kind: 'image',
         name: item.name,
         source: item.source,
-        durationMs: item.durationMs
+        durationMs: item.durationMs,
+        startAtMs: item.startAtMs,
+        endAtMs: item.endAtMs,
+        transition: {
+          type: resolveTransitionType(item),
+          durationMs: item.transition?.durationMs ?? DEFAULT_PLAYLIST_ITEM_TRANSITION.durationMs
+        }
       }
     : item.kind === 'video'
       ? {
@@ -157,16 +175,42 @@ const cloneMediaItem = (item: MultimediaItem): MultimediaItem =>
           kind: 'video',
           name: item.name,
           source: item.source,
+          durationMs: item.durationMs,
           startAtMs: item.startAtMs,
           endAtMs: item.endAtMs,
+          transition: {
+            type: resolveTransitionType(item),
+            durationMs: item.transition?.durationMs ?? DEFAULT_PLAYLIST_ITEM_TRANSITION.durationMs
+          },
           muted: item.muted
         }
       : {
         id: item.id,
         kind: 'external-url',
         name: item.name,
-        source: item.source
+        source: item.source,
+        durationMs: item.durationMs,
+        startAtMs: item.startAtMs,
+        endAtMs: item.endAtMs,
+        transition: {
+          type: resolveTransitionType(item),
+          durationMs: item.transition?.durationMs ?? DEFAULT_PLAYLIST_ITEM_TRANSITION.durationMs
+        }
       };
+
+const toItemTransition = (type: ContentTransitionType): ContentTransition => ({
+  type,
+  durationMs: DEFAULT_PLAYLIST_ITEM_TRANSITION.durationMs
+});
+
+const resolveTransitionType = (item: MultimediaItem): ContentTransitionType => {
+  const rawType = item.transition?.type;
+  if (CONTENT_TRANSITION_TYPES.includes(rawType as ContentTransitionType)) {
+    return rawType as ContentTransitionType;
+  }
+
+  return DEFAULT_PLAYLIST_ITEM_TRANSITION.type;
+};
 
 const toPositiveNumber = (value: number, fallback: number): number => {
   if (!Number.isFinite(value) || value <= 0) {
@@ -196,6 +240,24 @@ const toVideoEnd = (raw: string, startAtMs: number): number | null => {
   }
 
   return Math.max(startAtMs, Math.round(parsed));
+};
+
+const normalizeTemporalClipByKind = (
+  kind: MediaItemKind,
+  startAtMs: number,
+  endAtMs: number | null
+): { startAtMs: number; endAtMs: number | null } => {
+  if (kind !== 'video') {
+    return {
+      startAtMs: DEFAULT_ITEM_START_AT_MS,
+      endAtMs: null
+    };
+  }
+
+  return {
+    startAtMs,
+    endAtMs
+  };
 };
 
 const emitItems = (items: MultimediaItem[]) => {
@@ -391,9 +453,10 @@ const resetNewItemForm = () => {
   newItemKind.value = 'image';
   newItemName.value = '';
   newItemSource.value = '';
-  newImageDurationMs.value = DEFAULT_IMAGE_DURATION_MS;
-  newVideoStartAtMs.value = 0;
-  newVideoEndAtMs.value = '';
+  newItemDurationMs.value = DEFAULT_IMAGE_DURATION_MS;
+  newItemStartAtMs.value = DEFAULT_ITEM_START_AT_MS;
+  newItemEndAtMs.value = '';
+  newItemTransitionType.value = DEFAULT_PLAYLIST_ITEM_TRANSITION.type;
   newVideoMuted.value = true;
   formError.value = null;
   newImageFileFeedback.value = null;
@@ -527,30 +590,35 @@ const addItem = () => {
 
   const id = createItemId();
   const kind = newItemKind.value;
+  const normalizedStartAtMs = toNonNegativeNumber(newItemStartAtMs.value, DEFAULT_ITEM_START_AT_MS);
+  const normalizedEndAtMs = toVideoEnd(newItemEndAtMs.value, normalizedStartAtMs);
+  const temporalClip = normalizeTemporalClipByKind(kind, normalizedStartAtMs, normalizedEndAtMs);
+  const durationMs =
+    kind === 'video'
+      ? DEFAULT_IMAGE_DURATION_MS
+      : toPositiveNumber(newItemDurationMs.value, DEFAULT_IMAGE_DURATION_MS);
 
   const base = {
     id,
     kind,
     name,
-    source
+    source,
+    durationMs,
+    startAtMs: temporalClip.startAtMs,
+    endAtMs: temporalClip.endAtMs,
+    transition: toItemTransition(newItemTransitionType.value)
   };
 
   const item: MultimediaItem =
     kind === 'image'
       ? {
           ...base,
-          kind: 'image',
-          durationMs: toPositiveNumber(newImageDurationMs.value, DEFAULT_IMAGE_DURATION_MS)
+          kind: 'image'
         }
       : kind === 'video'
         ? {
             ...base,
             kind: 'video',
-            startAtMs: toNonNegativeNumber(newVideoStartAtMs.value, 0),
-            endAtMs: toVideoEnd(
-              newVideoEndAtMs.value,
-              toNonNegativeNumber(newVideoStartAtMs.value, 0)
-            ),
             muted: newVideoMuted.value
           }
         : {
@@ -703,7 +771,13 @@ const updateItemKind = (itemId: string, kind: MediaItemKind) => {
         kind: 'image',
         name: item.name,
         source: item.source,
-        durationMs: DEFAULT_IMAGE_DURATION_MS
+        durationMs: item.durationMs,
+        startAtMs: DEFAULT_ITEM_START_AT_MS,
+        endAtMs: null,
+        transition: {
+          type: resolveTransitionType(item),
+          durationMs: item.transition?.durationMs ?? DEFAULT_PLAYLIST_ITEM_TRANSITION.durationMs
+        }
       };
     }
 
@@ -713,8 +787,13 @@ const updateItemKind = (itemId: string, kind: MediaItemKind) => {
         kind: 'video',
         name: item.name,
         source: item.source,
-        startAtMs: 0,
-        endAtMs: null,
+        durationMs: item.durationMs,
+        startAtMs: item.startAtMs,
+        endAtMs: item.endAtMs,
+        transition: {
+          type: resolveTransitionType(item),
+          durationMs: item.transition?.durationMs ?? DEFAULT_PLAYLIST_ITEM_TRANSITION.durationMs
+        },
         muted: true
       };
     }
@@ -723,7 +802,14 @@ const updateItemKind = (itemId: string, kind: MediaItemKind) => {
       id: item.id,
       kind: 'external-url',
       name: item.name,
-      source: item.source
+      source: item.source,
+      durationMs: item.durationMs,
+      startAtMs: DEFAULT_ITEM_START_AT_MS,
+      endAtMs: null,
+      transition: {
+        type: resolveTransitionType(item),
+        durationMs: item.transition?.durationMs ?? DEFAULT_PLAYLIST_ITEM_TRANSITION.durationMs
+      }
     };
   });
 };
@@ -880,10 +966,6 @@ const onEditingImagePaste = (itemId: string, event: ClipboardEvent) => {
 
 const updateImageDuration = (itemId: string, value: number) => {
   updateItem(itemId, (item) => {
-    if (item.kind !== 'image') {
-      return item;
-    }
-
     return {
       ...item,
       durationMs: toPositiveNumber(value, item.durationMs)
@@ -893,10 +975,6 @@ const updateImageDuration = (itemId: string, value: number) => {
 
 const updateVideoStartAt = (itemId: string, value: number) => {
   updateItem(itemId, (item) => {
-    if (item.kind !== 'video') {
-      return item;
-    }
-
     const nextStartAtMs = toNonNegativeNumber(value, item.startAtMs);
     const nextEndAtMs = item.endAtMs === null ? null : Math.max(nextStartAtMs, item.endAtMs);
 
@@ -910,15 +988,22 @@ const updateVideoStartAt = (itemId: string, value: number) => {
 
 const updateVideoEndAt = (itemId: string, value: string) => {
   updateItem(itemId, (item) => {
-    if (item.kind !== 'video') {
-      return item;
-    }
-
     return {
       ...item,
       endAtMs: toVideoEnd(value, item.startAtMs)
     };
   });
+};
+
+const updateItemTransitionType = (itemId: string, value: string) => {
+  if (!CONTENT_TRANSITION_TYPES.includes(value as ContentTransitionType)) {
+    return;
+  }
+
+  updateItem(itemId, (item) => ({
+    ...item,
+    transition: toItemTransition(value as ContentTransitionType)
+  }));
 };
 
 const updateVideoMuted = (itemId: string, value: boolean) => {
@@ -965,6 +1050,10 @@ const onVideoStartInput = (itemId: string, event: Event) => {
 
 const onVideoEndInput = (itemId: string, event: Event) => {
   updateVideoEndAt(itemId, (event.target as HTMLInputElement).value);
+};
+
+const onItemTransitionTypeChange = (itemId: string, event: Event) => {
+  updateItemTransitionType(itemId, (event.target as HTMLSelectElement).value);
 };
 
 const onVideoMutedChange = (itemId: string, value: boolean) => {
@@ -1370,11 +1459,16 @@ onBeforeUnmount(() => {
             >
               {{ toSourcePreview(item.source) }}
             </p>
-            <p v-if="item.kind === 'image'" class="mt-2 text-xs text-slate-300/85">Duracion: {{ item.durationMs }} ms</p>
-            <p v-else-if="item.kind === 'video'" class="mt-2 text-xs text-slate-300/85">
-              Inicio: {{ item.startAtMs }} ms | Fin: {{ item.endAtMs ?? 'hasta final' }} | Mute: {{ item.muted ? 'si' : 'no' }}
+            <p class="mt-2 text-xs text-slate-300/85">
+              Duracion: {{ item.durationMs }} ms
+              <span v-if="item.kind === 'video'">
+                | Inicio: {{ item.startAtMs }} ms | Fin: {{ item.endAtMs ?? 'hasta final' }}
+              </span>
             </p>
-            <p v-else class="mt-2 text-xs text-slate-300/85">Navegacion web externa en vivo.</p>
+            <p class="mt-1 text-xs text-slate-300/85">
+              Transicion: {{ resolveTransitionType(item) }}
+              <span v-if="item.kind === 'video'"> | Mute: {{ item.muted ? 'si' : 'no' }}</span>
+            </p>
           </div>
         </div>
       </li>
@@ -1510,8 +1604,8 @@ onBeforeUnmount(() => {
           </div>
 
           <div data-layout-group="source" class="form-row mt-2">
-          <label class="form-field">
-            Source (URL o data URI)
+          <label class="form-field md:col-span-2">
+            URL / Source
             <input
               v-model="newItemSource"
               type="text"
@@ -1521,20 +1615,17 @@ onBeforeUnmount(() => {
             />
           </label>
 
-          <label class="form-field">
+          <label v-if="newItemKind === 'image'" class="form-field">
             Archivo local (imagen)
             <input
               type="file"
               accept="image/*"
-              :disabled="newItemKind !== 'image' || effectiveFileImportBlocked"
+              :disabled="effectiveFileImportBlocked"
               class="form-file-control"
               @change="onNewImageFileChange"
             />
-            <span v-if="newItemKind !== 'image'" class="mt-1 block text-[11px] text-slate-400">
-              Disponible solo para items de imagen.
-            </span>
             <span
-              v-else-if="effectiveFileImportBlocked"
+              v-if="effectiveFileImportBlocked"
               data-testid="playlist-add-file-import-blocked-feedback"
               class="mt-1 block text-[11px] text-amber-200"
             >
@@ -1545,7 +1636,7 @@ onBeforeUnmount(() => {
                 class="image-drop-zone mt-2"
                 :class="[
                   isAddImageDropZoneActive ? 'image-drop-zone--active' : '',
-                  newItemKind !== 'image' || effectiveFileImportBlocked ? 'image-drop-zone--disabled' : ''
+                  effectiveFileImportBlocked ? 'image-drop-zone--disabled' : ''
                 ]"
                 role="button"
                 tabindex="0"
@@ -1562,39 +1653,41 @@ onBeforeUnmount(() => {
           </div>
 
           <div data-layout-group="timing" class="form-row--triple mt-2">
-          <label class="form-field">
+          <label v-if="newItemKind !== 'video'" class="form-field">
             Duracion (ms)
             <input
-              v-model.number="newImageDurationMs"
+              v-model.number="newItemDurationMs"
               type="number"
               min="1"
-              :disabled="newItemKind !== 'image'"
               class="form-control"
             />
           </label>
 
-          <label class="form-field">
-            Inicio (ms)
+          <label v-if="newItemKind === 'video'" class="form-field">
+            Inicio de video (ms)
             <input
-              v-model.number="newVideoStartAtMs"
+              v-model.number="newItemStartAtMs"
               type="number"
               min="0"
-              :disabled="newItemKind !== 'video'"
               class="form-control"
             />
           </label>
 
-          <label class="form-field">
-            Fin (ms, opcional)
+          <label v-if="newItemKind === 'video'" class="form-field">
+            Fin de video (ms, opcional)
             <input
-              v-model="newVideoEndAtMs"
+              v-model="newItemEndAtMs"
               type="text"
               placeholder="vacio = hasta el final"
-              :disabled="newItemKind !== 'video'"
               class="form-control"
             />
           </label>
+
           </div>
+
+          <p v-if="newItemKind === 'video'" class="mt-2 text-xs text-slate-400">
+            El recorte temporal (Inicio/Fin) aplica solo a videos.
+          </p>
 
           <p v-if="newImageFileFeedback && newItemKind === 'image'" class="mt-2 text-xs text-amber-200">
             {{ newImageFileFeedback }}
@@ -1611,6 +1704,17 @@ onBeforeUnmount(() => {
                 Evita picos de audio al cargar el video en pantalla.
               </p>
             </div>
+          </div>
+
+          <div data-layout-group="transition" class="form-row mt-2">
+            <label class="form-field">
+              Transicion
+              <select v-model="newItemTransitionType" class="form-control">
+                <option value="cut">Corte</option>
+                <option value="fade">Fade</option>
+                <option value="wipe">Wipe</option>
+              </select>
+            </label>
           </div>
 
           <p v-if="formError" class="mt-3 text-xs text-amber-200">{{ formError }}</p>
@@ -1705,8 +1809,8 @@ onBeforeUnmount(() => {
           </div>
 
           <div data-layout-group="source" class="form-row mt-2">
-          <label class="form-field">
-            Source (URL o data URI)
+          <label class="form-field md:col-span-2">
+            URL / Source
             <input
               :value="editingItem.source"
               type="text"
@@ -1715,20 +1819,17 @@ onBeforeUnmount(() => {
             />
           </label>
 
-          <label class="form-field">
+          <label v-if="editingItem.kind === 'image'" class="form-field">
             Archivo local (imagen)
             <input
               type="file"
               accept="image/*"
-              :disabled="editingItem.kind !== 'image' || effectiveFileImportBlocked"
-               class="form-file-control"
+              :disabled="effectiveFileImportBlocked"
+                class="form-file-control"
               @change="onItemImageFileChange(editingItem.id, $event)"
             />
-            <span v-if="editingItem.kind !== 'image'" class="mt-1 block text-[11px] text-slate-400">
-              Disponible solo para items de imagen.
-            </span>
             <span
-              v-else-if="effectiveFileImportBlocked"
+              v-if="effectiveFileImportBlocked"
               data-testid="playlist-edit-file-import-blocked-feedback"
               class="mt-1 block text-[11px] text-amber-200"
             >
@@ -1739,7 +1840,7 @@ onBeforeUnmount(() => {
                 class="image-drop-zone mt-2"
                 :class="[
                   isEditImageDropZoneActive ? 'image-drop-zone--active' : '',
-                  editingItem.kind !== 'image' || effectiveFileImportBlocked ? 'image-drop-zone--disabled' : ''
+                  effectiveFileImportBlocked ? 'image-drop-zone--disabled' : ''
                 ]"
                 role="button"
                 tabindex="0"
@@ -1760,61 +1861,43 @@ onBeforeUnmount(() => {
           </p>
 
           <div data-layout-group="timing" class="form-row--triple mt-2">
-          <label class="form-field">
+          <label v-if="editingItem.kind !== 'video'" class="form-field">
             Duracion (ms)
             <input
-              v-if="editingItem.kind === 'image'"
               :value="editingItem.durationMs"
               type="number"
               min="1"
-               class="form-control"
+                class="form-control"
               @input="onImageDurationInput(editingItem.id, $event)"
-            />
-            <input
-              v-else
-              type="number"
-              min="1"
-              disabled
-               class="form-control"
             />
           </label>
 
-          <label class="form-field">
-            Inicio (ms)
+          <label v-if="editingItem.kind === 'video'" class="form-field">
+            Inicio de video (ms)
             <input
-              v-if="editingItem.kind === 'video'"
               :value="editingItem.startAtMs"
               type="number"
               min="0"
-               class="form-control"
+                class="form-control"
               @input="onVideoStartInput(editingItem.id, $event)"
-            />
-            <input
-              v-else
-              type="number"
-              min="0"
-              disabled
-               class="form-control"
             />
           </label>
 
-          <label class="form-field">
-            Fin (ms, opcional)
+          <label v-if="editingItem.kind === 'video'" class="form-field">
+            Fin de video (ms, opcional)
             <input
-              v-if="editingItem.kind === 'video'"
               :value="editingItem.endAtMs ?? ''"
               type="text"
-               class="form-control"
+                class="form-control"
               @input="onVideoEndInput(editingItem.id, $event)"
             />
-            <input
-              v-else
-              type="text"
-              disabled
-               class="form-control"
-            />
           </label>
+
           </div>
+
+          <p v-if="editingItem.kind === 'video'" class="mt-2 text-xs text-slate-400">
+            El recorte temporal (Inicio/Fin) aplica solo a videos.
+          </p>
 
           <div
             v-if="editingItem.kind === 'video'"
@@ -1832,6 +1915,21 @@ onBeforeUnmount(() => {
                 Silencia el audio durante el inicio para evitar sobresaltos.
               </p>
             </div>
+          </div>
+
+          <div data-layout-group="transition" class="form-row mt-2">
+            <label class="form-field">
+              Transicion
+              <select
+                :value="resolveTransitionType(editingItem)"
+                class="form-control"
+                @change="onItemTransitionTypeChange(editingItem.id, $event)"
+              >
+                <option value="cut">Corte</option>
+                <option value="fade">Fade</option>
+                <option value="wipe">Wipe</option>
+              </select>
+            </label>
           </div>
         </div>
 

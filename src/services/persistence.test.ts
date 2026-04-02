@@ -58,6 +58,15 @@ describe('services/persistence', () => {
           durationMs: 3000
         },
         {
+          id: 'ext-legacy',
+          kind: 'external-url',
+          name: 'URL legacy',
+          source: 'https://example.com/page',
+          durationMs: 2500,
+          startAtMs: 900,
+          endAtMs: 1500
+        },
+        {
           id: '',
           kind: 'video',
           name: 'Video invalido',
@@ -126,9 +135,12 @@ describe('services/persistence', () => {
     expect(loaded.monitors.m1.imageDataUrl).toBeNull();
     expect(loaded.monitors.m1.externalUrl).toBeNull();
     expect(loaded.monitors.m1.customName).toBeNull();
-    expect(loaded.playlist).toHaveLength(1);
+    expect(loaded.playlist).toHaveLength(2);
+    const sanitizedExternal = loaded.playlist.find((item) => item.id === 'ext-legacy');
+    expect(sanitizedExternal?.startAtMs).toBe(0);
+    expect(sanitizedExternal?.endAtMs).toBeNull();
     expect(loaded.playback.targetMonitorIds).toEqual(['m1']);
-    expect(loaded.playback.currentIndex).toBe(0);
+    expect(loaded.playback.currentIndex).toBe(1);
     expect(loaded.playback.intervalSeconds).toBe(1);
     expect(loaded.mirror.enabled).toBe(true);
     expect(loaded.mirror.sourceMonitorId).toBe('m1');
