@@ -1,6 +1,7 @@
 import { config, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import PlaylistManager from './PlaylistManager.vue';
+import AppFileDropzone from './ui/AppFileDropzone.vue';
 import * as videoThumbnailService from '../services/videoThumbnail';
 import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
 import type { MultimediaItem, PlaylistPlaybackState } from '../types/playlist';
@@ -845,7 +846,7 @@ describe('components/PlaylistManager', () => {
     await openAddModal(wrapper);
     await wrapper.get('input[placeholder="Promo apertura"]').setValue('Con archivo');
 
-    const fileInput = wrapper.get('[data-testid="add-item-modal"] input[type="file"]');
+    const fileInput = wrapper.get('[data-testid="add-item-modal"] [data-testid="app-file-dropzone-hidden-input"]');
     const file = new File(['binary'], 'slide.png', { type: 'image/png' });
 
     Object.defineProperty(fileInput.element, 'files', {
@@ -878,8 +879,8 @@ describe('components/PlaylistManager', () => {
 
     await openAddModal(wrapper);
 
-    const fileInput = wrapper.get('[data-testid="add-item-modal"] input[type="file"]');
-    expect(fileInput.attributes('disabled')).toBeDefined();
+    const selectButton = wrapper.get('[data-testid="playlist-add-image-select-button"]');
+    expect(selectButton.attributes('disabled')).toBeDefined();
     expect(wrapper.get('[data-testid="playlist-add-file-import-blocked-feedback"]').text()).toContain('sal del fullscreen');
   });
 
@@ -937,6 +938,32 @@ describe('components/PlaylistManager', () => {
     expect(payload[0]?.source.startsWith('data:image/png;base64,')).toBe(true);
   });
 
+  it('limpia source en alta al quitar archivo seleccionado en dropzone', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await openAddModal(wrapper);
+
+    const sourceInput = wrapper.get('[data-testid="add-item-modal"] input[placeholder="https://... o data:image/..."]');
+    await sourceInput.setValue('data:image/png;base64,preview');
+
+    wrapper.getComponent(AppFileDropzone).vm.$emit('cleared');
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    const refreshedSourceInput = wrapper.get('[data-testid="add-item-modal"] input[placeholder="https://... o data:image/..."]');
+
+    expect((refreshedSourceInput.element as HTMLInputElement).value).toBe('');
+  });
+
   it('oculta zona de drop cuando el item no es imagen', async () => {
     const wrapper = mount(PlaylistManager, {
       props: {
@@ -975,7 +1002,7 @@ describe('components/PlaylistManager', () => {
     });
     await flushPromises();
 
-    expect(wrapper.text()).toContain('El archivo seleccionado no es una imagen valida.');
+    expect(wrapper.text()).toContain('Formato no permitido');
   });
 
   it('soporta importar imagen por drag and drop en edicion', async () => {
@@ -1003,6 +1030,28 @@ describe('components/PlaylistManager', () => {
     const payload = wrapper.emitted('update:items')?.at(-1)?.[0] as MultimediaItem[];
     const editedItem = payload.find((item) => item.id === 'edit-dnd');
     expect(editedItem?.source.startsWith('data:image/png;base64,')).toBe(true);
+  });
+
+  it('limpia source en edicion al quitar archivo seleccionado en dropzone', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [createImage('edit-clear', 'Editar limpiar')],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await wrapper.get('[data-testid="open-edit-item-modal-edit-clear"]').trigger('click');
+
+    wrapper.getComponent(AppFileDropzone).vm.$emit('cleared');
+    await wrapper.vm.$nextTick();
+
+    const payload = wrapper.emitted('update:items')?.at(-1)?.[0] as MultimediaItem[];
+    const editedItem = payload.find((item) => item.id === 'edit-clear');
+    expect(editedItem?.source).toBe('');
   });
 
   it('permite seleccion multi-destino y evita emisiones redundantes', async () => {

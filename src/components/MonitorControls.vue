@@ -15,6 +15,7 @@ import {
   XMarkIcon
 } from '@heroicons/vue/24/outline';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import AppFileDropzone from './ui/AppFileDropzone.vue';
 import type { MonitorRuntimeState } from '../types/broadcaster';
 import {
   CONTENT_TRANSITION_TYPES,
@@ -23,12 +24,8 @@ import {
   type ContentTransition,
   type ContentTransitionType
 } from '../types/transitions';
-import {
-  pickImageFromClipboard,
-  pickImageFromDataTransfer,
-  pickImageFromFileList,
-  type ImageImportFailureReason
-} from '../utils/imageFileImport';
+
+type ImageImportFailureReason = 'empty' | 'not-image';
 
 const props = defineProps<{
   monitorId: string;
@@ -58,8 +55,6 @@ const emit = defineEmits<{
 const imageImportFeedback = ref<string | null>(null);
 const externalUrlFeedback = ref<string | null>(null);
 const externalUrlDraft = ref('');
-const isImageDropZoneActive = ref(false);
-const imageDropZoneDragDepth = ref(0);
 const isContentEditorModalOpen = ref(false);
 const contentEditorModalTitleId = computed(() => `monitor-content-editor-title-${props.monitorId}`);
 const contentEditorTriggerButton = ref<HTMLButtonElement | null>(null);
@@ -143,78 +138,28 @@ const emitImageFile = (file: File, source: ImageImportSource) => {
   imageImportFeedback.value = `Imagen "${file.name}" lista para proyectar.`;
 };
 
-const onFileChange = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  if (effectiveFileImportBlocked.value) {
-    imageImportFeedback.value = effectiveFileImportBlockedMessage.value;
-    target.value = '';
+const onImageFilesSelected = (files: File[], source: ImageImportSource) => {
+  const file = files[0] ?? null;
+  if (!file) {
+    imageImportFeedback.value = feedbackForFailureReason('empty');
     return;
   }
 
-  const selection = pickImageFromFileList(target.files);
-  if (!selection.file) {
-    imageImportFeedback.value = feedbackForFailureReason(selection.reason ?? 'empty');
-    target.value = '';
+  if (!file.type.startsWith('image/')) {
+    imageImportFeedback.value = feedbackForFailureReason('not-image');
     return;
   }
 
-  emitImageFile(selection.file, 'file-picker');
-  target.value = '';
+  emitImageFile(file, source);
 };
 
-const resetImageDropZoneState = () => {
-  imageDropZoneDragDepth.value = 0;
-  isImageDropZoneActive.value = false;
+const onImageDropzoneError = (message: string) => {
+  imageImportFeedback.value = message;
 };
 
-const onImageDragEnter = (event: DragEvent) => {
-  event.preventDefault();
-  imageDropZoneDragDepth.value += 1;
-  isImageDropZoneActive.value = true;
-};
-
-const onImageDragOver = (event: DragEvent) => {
-  event.preventDefault();
-
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = 'copy';
-  }
-
-  isImageDropZoneActive.value = true;
-};
-
-const onImageDragLeave = (event: DragEvent) => {
-  event.preventDefault();
-  imageDropZoneDragDepth.value = Math.max(0, imageDropZoneDragDepth.value - 1);
-  if (imageDropZoneDragDepth.value === 0) {
-    isImageDropZoneActive.value = false;
-  }
-};
-
-const onImageDrop = (event: DragEvent) => {
-  event.preventDefault();
-  resetImageDropZoneState();
-
-  const selection = pickImageFromDataTransfer(event.dataTransfer);
-  if (!selection.file) {
-    imageImportFeedback.value = feedbackForFailureReason(selection.reason ?? 'empty');
-    return;
-  }
-
-  emitImageFile(selection.file, 'drag-drop');
-};
-
-const onImagePaste = (event: ClipboardEvent) => {
-  resetImageDropZoneState();
-
-  const selection = pickImageFromClipboard(event.clipboardData);
-  if (!selection.file) {
-    imageImportFeedback.value = feedbackForFailureReason(selection.reason ?? 'empty');
-    return;
-  }
-
-  event.preventDefault();
-  emitImageFile(selection.file, 'paste');
+const onImageDropzoneCleared = () => {
+  imageImportFeedback.value = null;
+  emit('clearImage', props.monitorId);
 };
 
 const fullscreenActionLabel = computed(() => {
@@ -299,38 +244,29 @@ onBeforeUnmount(() => {
       >
         {{ effectiveFileImportBlockedMessage }}
       </p>
-      <div class="flex items-center gap-2">
-        <input
-          type="file"
-          accept="image/*"
-          :disabled="effectiveFileImportBlocked"
-          class="form-file-control mt-0 text-xs text-slate-200 file:mr-3 file:bg-indigo-500 file:px-3 file:py-1.5 file:text-white"
-          @change="onFileChange"
-        />
-        <button
-          type="button"
-          class="btn-with-icon btn-sm btn-rose-soft shrink-0"
-          @click="emit('clearImage', monitorId)"
-        >
-          <TrashIcon aria-hidden="true" class="btn-icon" />
-          Limpiar
-        </button>
-      </div>
-      <div
-        data-testid="monitor-image-drop-zone"
-        class="image-drop-zone mt-3"
-        :class="isImageDropZoneActive ? 'image-drop-zone--active' : ''"
-        role="button"
-        tabindex="0"
-        @dragenter="onImageDragEnter"
-        @dragover="onImageDragOver"
-        @dragleave="onImageDragLeave"
-        @drop="onImageDrop"
-        @paste="onImagePaste"
-        @focus="clearImageImportFeedback"
-        @blur="resetImageDropZoneState"
-      >
-        Arrastra una imagen aqui o pega desde portapapeles (Ctrl/Cmd+V).
+      <div class="mt-2 space-y-2">
+        <div class="w-full" @focusin="clearImageImportFeedback">
+          <AppFileDropzone
+            data-testid="monitor-image-drop-zone"
+            accept="image/*"
+            :multiple="false"
+            :disable-picker="effectiveFileImportBlocked"
+            pick-button-test-id="monitor-image-select-button"
+            @files-selected="onImageFilesSelected"
+            @cleared="onImageDropzoneCleared"
+            @error="onImageDropzoneError"
+          />
+        </div>
+        <div class="flex justify-end">
+          <button
+            type="button"
+            class="btn-with-icon btn-sm btn-rose-soft"
+            @click="emit('clearImage', monitorId)"
+          >
+            <TrashIcon aria-hidden="true" class="btn-icon" />
+            Limpiar
+          </button>
+        </div>
       </div>
       <p v-if="imageImportFeedback" data-testid="monitor-image-import-feedback" class="mt-2 text-xs text-amber-200">
         {{ imageImportFeedback }}

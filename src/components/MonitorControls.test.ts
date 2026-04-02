@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import MonitorControls from './MonitorControls.vue';
+import AppFileDropzone from './ui/AppFileDropzone.vue';
 import { createDefaultMonitorState } from '../types/broadcaster';
 
 const createDataTransfer = (file: File): DataTransfer =>
@@ -91,8 +92,7 @@ describe('MonitorControls', () => {
       }
     });
 
-    const fileInput = wrapper.get('input[type="file"]');
-    await fileInput.trigger('click');
+    await wrapper.get('[data-testid="monitor-image-select-button"]').trigger('click');
 
     expect(wrapper.emitted('uploadImage')).toBeUndefined();
   });
@@ -107,7 +107,7 @@ describe('MonitorControls', () => {
       }
     });
 
-    const input = wrapper.get('input[type="file"]').element as HTMLInputElement;
+    const input = wrapper.get('[data-testid="app-file-dropzone-hidden-input"]').element as HTMLInputElement;
     const imageFile = new File(['image-binary'], 'cover.png', { type: 'image/png' });
 
     Object.defineProperty(input, 'files', {
@@ -115,7 +115,7 @@ describe('MonitorControls', () => {
       value: [imageFile]
     });
 
-    await wrapper.get('input[type="file"]').trigger('change');
+    await wrapper.get('[data-testid="app-file-dropzone-hidden-input"]').trigger('change');
 
     expect(wrapper.emitted('uploadImage')).toEqual([['monitor-1', imageFile, 'file-picker']]);
   });
@@ -130,8 +130,8 @@ describe('MonitorControls', () => {
       }
     });
 
-    const input = wrapper.get('input[type="file"]');
-    expect(input.attributes('disabled')).toBeDefined();
+    const button = wrapper.get('[data-testid="monitor-image-select-button"]');
+    expect(button.attributes('disabled')).toBeDefined();
     expect(wrapper.get('[data-testid="monitor-file-import-blocked-feedback"]').text()).toContain('sal del fullscreen');
   });
 
@@ -189,6 +189,22 @@ describe('MonitorControls', () => {
     expect(wrapper.emitted('uploadImage')).toEqual([['monitor-1', imageFile, 'drag-drop']]);
   });
 
+  it('emite clearImage al quitar archivo seleccionado en dropzone', async () => {
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state: createDefaultMonitorState(),
+        isFileImportBlocked: false,
+        fileImportBlockedMessage: 'bloqueado'
+      }
+    });
+
+    wrapper.getComponent(AppFileDropzone).vm.$emit('cleared');
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.emitted('clearImage')).toEqual([['monitor-1']]);
+  });
+
   it('soporta pegar imagen desde portapapeles', async () => {
     const wrapper = mount(MonitorControls, {
       props: {
@@ -219,10 +235,10 @@ describe('MonitorControls', () => {
 
     const dropZone = wrapper.get('[data-testid="monitor-image-drop-zone"]');
     await dropZone.trigger('dragenter', { dataTransfer: createDataTransfer(new File(['img'], 'drag.png', { type: 'image/png' })) });
-    expect(dropZone.classes()).toContain('image-drop-zone--active');
+    expect(dropZone.classes()).toContain('app-file-dropzone--drag-valid');
 
     await dropZone.trigger('dragleave', { dataTransfer: createDataTransfer(new File(['img'], 'drag.png', { type: 'image/png' })) });
-    expect(dropZone.classes()).not.toContain('image-drop-zone--active');
+    expect(dropZone.classes()).toContain('app-file-dropzone--idle');
   });
 
   it('muestra error claro al soltar archivo no valido', async () => {
@@ -240,7 +256,7 @@ describe('MonitorControls', () => {
       dataTransfer: createDataTransfer(invalidFile)
     });
 
-    expect(wrapper.get('[data-testid="monitor-image-import-feedback"]').text()).toContain('no es una imagen valida');
+    expect(wrapper.get('[data-testid="monitor-image-import-feedback"]').text()).toContain('Formato no permitido');
     expect(wrapper.emitted('uploadImage')).toBeUndefined();
   });
 
