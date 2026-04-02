@@ -10,9 +10,12 @@ import {
   ArrowUturnLeftIcon,
   ArrowUturnRightIcon,
   BoltIcon,
+  GlobeAltIcon,
   MagnifyingGlassMinusIcon,
   MagnifyingGlassPlusIcon,
   PaintBrushIcon,
+  PhotoIcon,
+  RectangleGroupIcon,
   TrashIcon,
   XMarkIcon
 } from '@heroicons/vue/24/outline';
@@ -28,6 +31,13 @@ import {
 } from '../types/transitions';
 
 type ImageImportFailureReason = 'empty' | 'not-image';
+type SourceTabId = 'local-image' | 'external-url' | 'external-app';
+
+const SOURCE_TABS: Array<{ id: SourceTabId; label: string }> = [
+  { id: 'local-image', label: 'Imagen local' },
+  { id: 'external-url', label: 'URL externa' },
+  { id: 'external-app', label: 'Aplicacion externa' }
+];
 
 const props = defineProps<{
   monitorId: string;
@@ -62,8 +72,13 @@ const emit = defineEmits<{
 const imageImportFeedback = ref<string | null>(null);
 const externalUrlFeedback = ref<string | null>(null);
 const externalUrlDraft = ref('');
+const isSourceModalOpen = ref(false);
+const activeSourceTab = ref<SourceTabId>('local-image');
 const isContentEditorModalOpen = ref(false);
+const sourceModalTitleId = computed(() => `monitor-source-modal-title-${props.monitorId}`);
+const sourceModalTabListId = computed(() => `monitor-source-tablist-${props.monitorId}`);
 const contentEditorModalTitleId = computed(() => `monitor-content-editor-title-${props.monitorId}`);
+const sourceModalTriggerButton = ref<HTMLButtonElement | null>(null);
 const contentEditorTriggerButton = ref<HTMLButtonElement | null>(null);
 const bodyScrollSnapshot = ref<{
   overflow: string;
@@ -189,6 +204,24 @@ const externalAppCaptureFeedback = computed(() => {
   return 'Sin captura externa activa.';
 });
 
+const sourceTabButtonId = (tabId: SourceTabId): string =>
+  `monitor-source-tab-${props.monitorId}-${tabId}`;
+
+const sourceTabPanelId = (tabId: SourceTabId): string =>
+  `monitor-source-panel-${props.monitorId}-${tabId}`;
+
+const resolveDefaultSourceTab = (): SourceTabId => {
+  if (props.state.isExternalAppCapturePending || props.state.isExternalAppCaptureActive) {
+    return 'external-app';
+  }
+
+  if (props.state.activeMediaItem?.kind === 'external-url') {
+    return 'external-url';
+  }
+
+  return 'local-image';
+};
+
 const lockBodyScroll = () => {
   if (typeof document === 'undefined' || bodyScrollSnapshot.value) {
     return;
@@ -227,13 +260,34 @@ const closeContentEditorModal = () => {
   });
 };
 
+const openSourceModal = () => {
+  activeSourceTab.value = resolveDefaultSourceTab();
+  isSourceModalOpen.value = true;
+};
+
+const closeSourceModal = () => {
+  isSourceModalOpen.value = false;
+  void nextTick(() => {
+    sourceModalTriggerButton.value?.focus();
+  });
+};
+
 const onWindowKeydown = (event: KeyboardEvent) => {
-  if (event.key === 'Escape' && isContentEditorModalOpen.value) {
+  if (event.key !== 'Escape') {
+    return;
+  }
+
+  if (isSourceModalOpen.value) {
+    closeSourceModal();
+    return;
+  }
+
+  if (isContentEditorModalOpen.value) {
     closeContentEditorModal();
   }
 };
 
-watch(isContentEditorModalOpen, (isOpen) => {
+watch(() => isSourceModalOpen.value || isContentEditorModalOpen.value, (isOpen) => {
   if (isOpen) {
     lockBodyScroll();
     return;
@@ -256,6 +310,20 @@ onBeforeUnmount(() => {
   <div class="space-y-4">
     <div class="monitor-action-toolbar" data-testid="monitor-action-toolbar">
       <div class="monitor-action-toolbar-group" data-testid="monitor-action-toolbar-left">
+        <button
+          v-if="showMonitorUtilities"
+          ref="sourceModalTriggerButton"
+          type="button"
+          class="btn-with-icon btn-sm btn-slate-soft monitor-source-btn"
+          data-testid="monitor-open-source-modal"
+          title="Seleccionar fuente"
+          aria-label="Seleccionar fuente"
+          @click="openSourceModal"
+        >
+          <PhotoIcon aria-hidden="true" class="btn-icon" />
+          Fuentes
+        </button>
+
         <button
           v-if="showMonitorUtilities"
           type="button"
@@ -320,150 +388,238 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="surface-panel">
-      <label class="section-kicker-muted mb-2 block text-[11px]">Imagen local</label>
-      <p
-        v-if="effectiveFileImportBlocked"
-        data-testid="monitor-file-import-blocked-feedback"
-        class="mb-2 text-xs text-amber-200"
+    <div
+      v-if="isSourceModalOpen"
+      data-testid="monitor-source-modal-overlay"
+      class="app-modal-overlay"
+      @click.self="closeSourceModal"
+    >
+      <section
+        data-testid="monitor-source-modal"
+        class="app-modal-panel app-modal-panel--md"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="sourceModalTitleId"
       >
-        {{ effectiveFileImportBlockedMessage }}
-      </p>
-      <div class="mt-2 space-y-2">
-        <div class="w-full" @focusin="clearImageImportFeedback">
-          <AppFileDropzone
-            data-testid="monitor-image-drop-zone"
-            accept="image/*"
-            :multiple="false"
-            :disable-picker="effectiveFileImportBlocked"
-            pick-button-test-id="monitor-image-select-button"
-            @files-selected="onImageFilesSelected"
-            @cleared="onImageDropzoneCleared"
-            @error="onImageDropzoneError"
-          />
-        </div>
-        <div class="flex justify-end">
+        <header class="app-modal-header">
+          <div>
+            <p class="section-kicker">Contenido del monitor</p>
+            <h3 :id="sourceModalTitleId" class="mt-1 text-lg font-semibold text-slate-100">
+              Seleccionar fuente
+            </h3>
+          </div>
           <button
             type="button"
+            class="app-modal-close-btn"
+            data-testid="monitor-source-modal-close"
+            aria-label="Cerrar selector de fuente"
+            @click="closeSourceModal"
+          >
+            <XMarkIcon aria-hidden="true" class="h-4 w-4" />
+          </button>
+        </header>
+
+        <div class="app-modal-body">
+          <div
+            :id="sourceModalTabListId"
+            class="monitor-source-tabs"
+            role="tablist"
+            aria-label="Tipos de fuente"
+          >
+            <button
+              v-for="tab in SOURCE_TABS"
+              :id="sourceTabButtonId(tab.id)"
+              :key="tab.id"
+              type="button"
+              role="tab"
+              class="app-tab-btn btn-sm"
+              :class="activeSourceTab === tab.id ? 'app-tab-btn--active' : 'app-tab-btn--inactive'"
+              :aria-selected="activeSourceTab === tab.id"
+              :aria-controls="sourceTabPanelId(tab.id)"
+              :tabindex="activeSourceTab === tab.id ? 0 : -1"
+              :data-testid="`monitor-source-tab-${tab.id}`"
+              @click="activeSourceTab = tab.id"
+            >
+              <PhotoIcon v-if="tab.id === 'local-image'" aria-hidden="true" class="btn-icon" />
+              <GlobeAltIcon v-else-if="tab.id === 'external-url'" aria-hidden="true" class="btn-icon" />
+              <RectangleGroupIcon v-else aria-hidden="true" class="btn-icon" />
+              {{ tab.label }}
+            </button>
+          </div>
+
+          <section
+            v-if="activeSourceTab === 'local-image'"
+            :id="sourceTabPanelId('local-image')"
+            role="tabpanel"
+            :aria-labelledby="sourceTabButtonId('local-image')"
+            data-testid="monitor-source-panel-local-image"
+            class="surface-panel mt-3 space-y-2"
+          >
+            <label class="section-kicker-muted block text-[11px]">Imagen local</label>
+            <p
+              v-if="effectiveFileImportBlocked"
+              data-testid="monitor-file-import-blocked-feedback"
+              class="text-xs text-amber-200"
+            >
+              {{ effectiveFileImportBlockedMessage }}
+            </p>
+            <div class="w-full" @focusin="clearImageImportFeedback">
+              <AppFileDropzone
+                data-testid="monitor-image-drop-zone"
+                accept="image/*"
+                :multiple="false"
+                :disable-picker="effectiveFileImportBlocked"
+                pick-button-test-id="monitor-image-select-button"
+                @files-selected="onImageFilesSelected"
+                @cleared="onImageDropzoneCleared"
+                @error="onImageDropzoneError"
+              />
+            </div>
+            <p v-if="imageImportFeedback" data-testid="monitor-image-import-feedback" class="text-xs text-amber-200">
+              {{ imageImportFeedback }}
+            </p>
+          </section>
+
+          <section
+            v-else-if="activeSourceTab === 'external-url'"
+            :id="sourceTabPanelId('external-url')"
+            role="tabpanel"
+            :aria-labelledby="sourceTabButtonId('external-url')"
+            data-testid="monitor-source-panel-external-url"
+            class="surface-panel mt-3 space-y-2"
+          >
+            <label class="section-kicker-muted block text-[11px]">URL externa segura</label>
+            <div class="flex flex-wrap items-center gap-2">
+              <input
+                v-model="externalUrlDraft"
+                data-testid="monitor-external-url-input"
+                type="text"
+                class="form-control flex-1"
+                placeholder="https://example.com"
+              />
+              <button
+                type="button"
+                data-testid="monitor-external-url-apply"
+                class="btn-with-icon btn-sm btn-indigo-soft"
+                @click="assignExternalUrl"
+              >
+                Cargar URL
+              </button>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                data-testid="monitor-external-url-back"
+                class="btn-with-icon btn-sm btn-slate-soft"
+                :disabled="!activeExternalUrl"
+                @click="navigateExternalUrl('back')"
+              >
+                <ArrowLeftIcon aria-hidden="true" class="btn-icon" />
+                Atras
+              </button>
+              <button
+                type="button"
+                data-testid="monitor-external-url-forward"
+                class="btn-with-icon btn-sm btn-slate-soft"
+                :disabled="!activeExternalUrl"
+                @click="navigateExternalUrl('forward')"
+              >
+                <ArrowRightIcon aria-hidden="true" class="btn-icon" />
+                Adelante
+              </button>
+              <button
+                type="button"
+                data-testid="monitor-external-url-reload"
+                class="btn-with-icon btn-sm btn-emerald-soft"
+                :disabled="!activeExternalUrl"
+                @click="reloadExternalUrl"
+              >
+                <ArrowPathIcon aria-hidden="true" class="btn-icon" />
+                Recargar
+              </button>
+            </div>
+
+            <p
+              v-if="externalUrlFeedback"
+              data-testid="monitor-external-url-feedback"
+              class="text-xs text-slate-300/90"
+            >
+              {{ externalUrlFeedback }}
+            </p>
+            <p
+              v-if="state.lastError"
+              data-testid="monitor-external-url-error"
+              class="text-xs text-amber-200"
+            >
+              {{ state.lastError }}
+            </p>
+          </section>
+
+          <section
+            v-else
+            :id="sourceTabPanelId('external-app')"
+            role="tabpanel"
+            :aria-labelledby="sourceTabButtonId('external-app')"
+            data-testid="monitor-source-panel-external-app"
+            class="surface-panel mt-3 space-y-2"
+          >
+            <label class="section-kicker-muted block text-[11px]">Aplicacion externa</label>
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                data-testid="monitor-external-app-capture-start"
+                class="btn-with-icon btn-sm btn-indigo-soft"
+                :disabled="state.isExternalAppCapturePending"
+                @click="emit('startExternalAppCapture', monitorId)"
+              >
+                <ArrowPathIcon aria-hidden="true" class="btn-icon" />
+                Capturar App
+              </button>
+            </div>
+            <p data-testid="monitor-external-app-capture-feedback" class="text-xs text-slate-300/90">
+              {{ externalAppCaptureFeedback }}
+            </p>
+          </section>
+        </div>
+
+        <footer class="app-modal-footer">
+          <button
+            v-if="activeSourceTab === 'local-image'"
+            type="button"
+            data-testid="monitor-image-clear"
             class="btn-with-icon btn-sm btn-rose-soft"
             @click="emit('clearImage', monitorId)"
           >
             <TrashIcon aria-hidden="true" class="btn-icon" />
-            Limpiar
+            Limpiar imagen
           </button>
-        </div>
-      </div>
-      <p v-if="imageImportFeedback" data-testid="monitor-image-import-feedback" class="mt-2 text-xs text-amber-200">
-        {{ imageImportFeedback }}
-      </p>
-    </div>
 
-    <div class="surface-panel">
-      <label class="section-kicker-muted mb-2 block text-[11px]">URL externa segura</label>
-      <div class="flex flex-wrap items-center gap-2">
-        <input
-          v-model="externalUrlDraft"
-          data-testid="monitor-external-url-input"
-          type="text"
-          class="form-control flex-1"
-          placeholder="https://example.com"
-        />
-        <button
-          type="button"
-          data-testid="monitor-external-url-apply"
-          class="btn-with-icon btn-sm btn-indigo-soft"
-          @click="assignExternalUrl"
-        >
-          Cargar URL
-        </button>
-      </div>
+          <button
+            v-else-if="activeSourceTab === 'external-url'"
+            type="button"
+            data-testid="monitor-external-url-clear"
+            class="btn-with-icon btn-sm btn-rose-soft"
+            :disabled="!activeExternalUrl"
+            @click="clearExternalUrl"
+          >
+            <TrashIcon aria-hidden="true" class="btn-icon" />
+            Detener URL
+          </button>
 
-      <div class="mt-2 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          data-testid="monitor-external-url-back"
-          class="btn-with-icon btn-sm btn-slate-soft"
-          :disabled="!activeExternalUrl"
-          @click="navigateExternalUrl('back')"
-        >
-          <ArrowLeftIcon aria-hidden="true" class="btn-icon" />
-          Atras
-        </button>
-        <button
-          type="button"
-          data-testid="monitor-external-url-forward"
-          class="btn-with-icon btn-sm btn-slate-soft"
-          :disabled="!activeExternalUrl"
-          @click="navigateExternalUrl('forward')"
-        >
-          <ArrowRightIcon aria-hidden="true" class="btn-icon" />
-          Adelante
-        </button>
-        <button
-          type="button"
-          data-testid="monitor-external-url-reload"
-          class="btn-with-icon btn-sm btn-emerald-soft"
-          :disabled="!activeExternalUrl"
-          @click="reloadExternalUrl"
-        >
-          <ArrowPathIcon aria-hidden="true" class="btn-icon" />
-          Recargar
-        </button>
-        <button
-          type="button"
-          data-testid="monitor-external-url-clear"
-          class="btn-with-icon btn-sm btn-rose-soft"
-          :disabled="!activeExternalUrl"
-          @click="clearExternalUrl"
-        >
-          <TrashIcon aria-hidden="true" class="btn-icon" />
-          Detener
-        </button>
-      </div>
-
-      <p
-        v-if="externalUrlFeedback"
-        data-testid="monitor-external-url-feedback"
-        class="mt-2 text-xs text-slate-300/90"
-      >
-        {{ externalUrlFeedback }}
-      </p>
-      <p
-        v-if="state.lastError"
-        data-testid="monitor-external-url-error"
-        class="mt-2 text-xs text-amber-200"
-      >
-        {{ state.lastError }}
-      </p>
-    </div>
-
-    <div class="surface-panel">
-      <label class="section-kicker-muted mb-2 block text-[11px]">Aplicacion externa</label>
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          data-testid="monitor-external-app-capture-start"
-          class="btn-with-icon btn-sm btn-indigo-soft"
-          :disabled="state.isExternalAppCapturePending"
-          @click="emit('startExternalAppCapture', monitorId)"
-        >
-          <ArrowPathIcon aria-hidden="true" class="btn-icon" />
-          Capturar App
-        </button>
-        <button
-          type="button"
-          data-testid="monitor-external-app-capture-stop"
-          class="btn-with-icon btn-sm btn-rose-soft"
-          :disabled="!state.isExternalAppCaptureActive && !state.isExternalAppCapturePending"
-          @click="emit('stopExternalAppCapture', monitorId)"
-        >
-          <TrashIcon aria-hidden="true" class="btn-icon" />
-          Detener captura
-        </button>
-      </div>
-      <p data-testid="monitor-external-app-capture-feedback" class="mt-2 text-xs text-slate-300/90">
-        {{ externalAppCaptureFeedback }}
-      </p>
+          <button
+            v-else
+            type="button"
+            data-testid="monitor-external-app-capture-stop"
+            class="btn-with-icon btn-sm btn-rose-soft"
+            :disabled="!state.isExternalAppCaptureActive && !state.isExternalAppCapturePending"
+            @click="emit('stopExternalAppCapture', monitorId)"
+          >
+            <TrashIcon aria-hidden="true" class="btn-icon" />
+            Detener captura
+          </button>
+        </footer>
+      </section>
     </div>
 
     <div

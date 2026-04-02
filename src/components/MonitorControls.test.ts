@@ -20,11 +20,36 @@ const createDataTransfer = (file: File): DataTransfer =>
   }) as unknown as DataTransfer;
 
 describe('MonitorControls', () => {
+  it('ubica el boton de fuentes a la izquierda de pizarra y abre el modal', async () => {
+    const state = createDefaultMonitorState();
+    state.isWindowOpen = true;
+
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state,
+        showMonitorUtilities: true
+      }
+    });
+
+    const leftGroup = wrapper.get('[data-testid="monitor-action-toolbar-left"]');
+    const actions = leftGroup.findAll('button').map((button) => button.attributes('data-testid'));
+
+    expect(actions).toEqual(['monitor-open-source-modal', 'monitor-open-whiteboard', 'monitor-flash-id']);
+    expect(wrapper.find('[data-testid="monitor-source-modal"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
+
+    expect(wrapper.get('[data-testid="monitor-source-modal"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="monitor-source-panel-local-image"]').exists()).toBe(true);
+  });
+
   it('abre y cierra modal de edicion de contenido con controles de mover/rotar', async () => {
     const wrapper = mount(MonitorControls, {
       props: {
         monitorId: 'monitor-1',
         state: createDefaultMonitorState(),
+        showMonitorUtilities: true,
         isFileImportBlocked: false,
         fileImportBlockedMessage: 'bloqueado'
       }
@@ -49,7 +74,7 @@ describe('MonitorControls', () => {
     expect(wrapper.find('[data-testid="monitor-content-editor-modal"]').exists()).toBe(false);
   });
 
-  it('muestra acciones compactas icon-only con tooltip', async () => {
+  it('mantiene acciones compactas en toolbar y emite utilidades del monitor', async () => {
     const state = createDefaultMonitorState();
     state.isWindowOpen = true;
 
@@ -69,11 +94,17 @@ describe('MonitorControls', () => {
     const leftGroup = wrapper.get('[data-testid="monitor-action-toolbar-left"]');
     const rightGroup = wrapper.get('[data-testid="monitor-action-toolbar-right"]');
 
+    expect(leftGroup.find('[data-testid="monitor-open-source-modal"]').exists()).toBe(true);
     expect(leftGroup.find('[data-testid="monitor-open-whiteboard"]').exists()).toBe(true);
     expect(leftGroup.find('[data-testid="monitor-flash-id"]').exists()).toBe(true);
     expect(rightGroup.find('[data-testid="monitor-open-content-editor"]').exists()).toBe(true);
     expect(rightGroup.find('[data-testid="monitor-request-fullscreen"]').exists()).toBe(true);
     expect(rightGroup.find('[data-testid="monitor-close-window"]').exists()).toBe(true);
+
+    const sourceButton = wrapper.get('[data-testid="monitor-open-source-modal"]');
+    expect(sourceButton.text()).toContain('Fuentes');
+    expect(sourceButton.attributes('title')).toBe('Seleccionar fuente');
+    expect(sourceButton.attributes('aria-label')).toBe('Seleccionar fuente');
 
     const whiteboardButton = wrapper.get('[data-testid="monitor-open-whiteboard"]');
     expect(whiteboardButton.text().trim()).toBe('');
@@ -110,16 +141,66 @@ describe('MonitorControls', () => {
     expect(wrapper.emitted('closeWindow')).toEqual([['monitor-1']]);
   });
 
+  it('permite alternar tabs de fuente y renderiza solo el panel activo', async () => {
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state: createDefaultMonitorState(),
+        showMonitorUtilities: true
+      }
+    });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
+
+    expect(wrapper.get('[data-testid="monitor-source-tab-local-image"]').attributes('aria-selected')).toBe('true');
+    expect(wrapper.find('[data-testid="monitor-source-panel-local-image"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="monitor-source-panel-external-url"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="monitor-source-tab-external-url"]').trigger('click');
+    expect(wrapper.get('[data-testid="monitor-source-tab-external-url"]').attributes('aria-selected')).toBe('true');
+    expect(wrapper.find('[data-testid="monitor-source-panel-local-image"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="monitor-source-panel-external-url"]').exists()).toBe(true);
+
+    await wrapper.get('[data-testid="monitor-source-tab-external-app"]').trigger('click');
+    expect(wrapper.get('[data-testid="monitor-source-tab-external-app"]').attributes('aria-selected')).toBe('true');
+    expect(wrapper.find('[data-testid="monitor-source-panel-external-url"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="monitor-source-panel-external-app"]').exists()).toBe(true);
+  });
+
+  it('cierra modal de fuentes por boton de cabecera y Escape', async () => {
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state: createDefaultMonitorState(),
+        showMonitorUtilities: true
+      }
+    });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
+    expect(wrapper.find('[data-testid="monitor-source-modal"]').exists()).toBe(true);
+
+    await wrapper.get('[data-testid="monitor-source-modal-close"]').trigger('click');
+    expect(wrapper.find('[data-testid="monitor-source-modal"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-testid="monitor-source-modal"]').exists()).toBe(false);
+  });
+
   it('no emite uploadImage al hacer click en el input sin change', async () => {
     const wrapper = mount(MonitorControls, {
       props: {
         monitorId: 'monitor-1',
         state: createDefaultMonitorState(),
+        showMonitorUtilities: true,
         isFileImportBlocked: false,
         fileImportBlockedMessage: 'bloqueado'
       }
     });
 
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
     await wrapper.get('[data-testid="monitor-image-select-button"]').trigger('click');
 
     expect(wrapper.emitted('uploadImage')).toBeUndefined();
@@ -130,10 +211,13 @@ describe('MonitorControls', () => {
       props: {
         monitorId: 'monitor-1',
         state: createDefaultMonitorState(),
+        showMonitorUtilities: true,
         isFileImportBlocked: false,
         fileImportBlockedMessage: 'bloqueado'
       }
     });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
 
     const input = wrapper.get('[data-testid="app-file-dropzone-hidden-input"]').element as HTMLInputElement;
     const imageFile = new File(['image-binary'], 'cover.png', { type: 'image/png' });
@@ -153,10 +237,13 @@ describe('MonitorControls', () => {
       props: {
         monitorId: 'monitor-1',
         state: createDefaultMonitorState(),
+        showMonitorUtilities: true,
         isFileImportBlocked: true,
         fileImportBlockedMessage: 'Para importar archivo, sal del fullscreen o usa Drag & Drop / pegar imagen.'
       }
     });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
 
     const button = wrapper.get('[data-testid="monitor-image-select-button"]');
     expect(button.attributes('disabled')).toBeDefined();
@@ -168,10 +255,13 @@ describe('MonitorControls', () => {
       props: {
         monitorId: 'monitor-1',
         state: createDefaultMonitorState(),
+        showMonitorUtilities: true,
         isFileImportBlocked: true,
         fileImportBlockedMessage: 'Para importar archivo, sal del fullscreen o usa Drag & Drop / pegar imagen.'
       }
     });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
 
     const imageFile = new File(['img'], 'dropped-fullscreen.png', { type: 'image/png' });
     await wrapper.get('[data-testid="monitor-image-drop-zone"]').trigger('drop', {
@@ -186,10 +276,13 @@ describe('MonitorControls', () => {
       props: {
         monitorId: 'monitor-1',
         state: createDefaultMonitorState(),
+        showMonitorUtilities: true,
         isFileImportBlocked: true,
         fileImportBlockedMessage: 'Para importar archivo, sal del fullscreen o usa Drag & Drop / pegar imagen.'
       }
     });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
 
     const imageFile = new File(['img'], 'pasted-fullscreen.png', { type: 'image/png' });
     await wrapper.get('[data-testid="monitor-image-drop-zone"]').trigger('paste', {
@@ -204,10 +297,13 @@ describe('MonitorControls', () => {
       props: {
         monitorId: 'monitor-1',
         state: createDefaultMonitorState(),
+        showMonitorUtilities: true,
         isFileImportBlocked: false,
         fileImportBlockedMessage: 'bloqueado'
       }
     });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
 
     const imageFile = new File(['img'], 'dropped.png', { type: 'image/png' });
     const dataTransfer = createDataTransfer(imageFile);
@@ -222,10 +318,13 @@ describe('MonitorControls', () => {
       props: {
         monitorId: 'monitor-1',
         state: createDefaultMonitorState(),
+        showMonitorUtilities: true,
         isFileImportBlocked: false,
         fileImportBlockedMessage: 'bloqueado'
       }
     });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
 
     wrapper.getComponent(AppFileDropzone).vm.$emit('cleared');
     await wrapper.vm.$nextTick();
@@ -238,10 +337,13 @@ describe('MonitorControls', () => {
       props: {
         monitorId: 'monitor-1',
         state: createDefaultMonitorState(),
+        showMonitorUtilities: true,
         isFileImportBlocked: false,
         fileImportBlockedMessage: 'bloqueado'
       }
     });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
 
     const imageFile = new File(['img'], 'pasted.png', { type: 'image/png' });
     const clipboardData = createDataTransfer(imageFile);
@@ -256,10 +358,13 @@ describe('MonitorControls', () => {
       props: {
         monitorId: 'monitor-1',
         state: createDefaultMonitorState(),
+        showMonitorUtilities: true,
         isFileImportBlocked: false,
         fileImportBlockedMessage: 'bloqueado'
       }
     });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
 
     const dropZone = wrapper.get('[data-testid="monitor-image-drop-zone"]');
     await dropZone.trigger('dragenter', { dataTransfer: createDataTransfer(new File(['img'], 'drag.png', { type: 'image/png' })) });
@@ -274,10 +379,13 @@ describe('MonitorControls', () => {
       props: {
         monitorId: 'monitor-1',
         state: createDefaultMonitorState(),
+        showMonitorUtilities: true,
         isFileImportBlocked: false,
         fileImportBlockedMessage: 'bloqueado'
       }
     });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
 
     const invalidFile = new File(['txt'], 'nota.txt', { type: 'text/plain' });
     await wrapper.get('[data-testid="monitor-image-drop-zone"]').trigger('drop', {
@@ -299,6 +407,7 @@ describe('MonitorControls', () => {
       props: {
         monitorId: 'monitor-1',
         state,
+        showMonitorUtilities: true,
         isFileImportBlocked: false,
         fileImportBlockedMessage: 'bloqueado'
       }
@@ -318,9 +427,13 @@ describe('MonitorControls', () => {
     const wrapper = mount(MonitorControls, {
       props: {
         monitorId: 'monitor-1',
-        state: createDefaultMonitorState()
+        state: createDefaultMonitorState(),
+        showMonitorUtilities: true
       }
     });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
+    await wrapper.get('[data-testid="monitor-source-tab-external-url"]').trigger('click');
 
     await wrapper.get('[data-testid="monitor-external-url-input"]').setValue('https://example.com/news');
     await wrapper.get('[data-testid="monitor-external-url-apply"]').trigger('click');
@@ -334,9 +447,13 @@ describe('MonitorControls', () => {
     const wrapper = mount(MonitorControls, {
       props: {
         monitorId: 'monitor-1',
-        state: createDefaultMonitorState()
+        state: createDefaultMonitorState(),
+        showMonitorUtilities: true
       }
     });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
+    await wrapper.get('[data-testid="monitor-source-tab-external-app"]').trigger('click');
 
     await wrapper.get('[data-testid="monitor-external-app-capture-start"]').trigger('click');
 
@@ -362,9 +479,13 @@ describe('MonitorControls', () => {
     const wrapper = mount(MonitorControls, {
       props: {
         monitorId: 'monitor-1',
-        state
+        state,
+        showMonitorUtilities: true
       }
     });
+
+    await wrapper.get('[data-testid="monitor-open-source-modal"]').trigger('click');
+    await wrapper.get('[data-testid="monitor-source-tab-external-url"]').trigger('click');
 
     const back = wrapper.get('[data-testid="monitor-external-url-back"]');
     const forward = wrapper.get('[data-testid="monitor-external-url-forward"]');
