@@ -6,37 +6,36 @@ Ultima actualizacion: 2026-04-03
 
 Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para proyeccion/control de contenido multi-monitor.
 
-Nota Mantenimiento (2026-03-31): se completo la reestructuracion a monorepo PNPM; el frontend se movio a `mythr-prism-front/`, se agrego scaffold `mythr-prism-back/` y la orquestacion global queda en la raiz (`README.md`, `package.json`, `pnpm-workspace.yaml`). Este backlog continua en `mythr-prism-front/docs/backlog.md`.
-Nota Roadmap (2026-03-31): cierre formal de MVP completado al 100%; a partir de este punto el foco operativo pasa a V1.
-
-Nota UX (2026-03-30): en Playlist se reforzo comportamiento operativo de modales con overlay fijo + bloqueo de scroll de fondo, y se aplico truncado visual de `source` largos (incluye data URI) manteniendo valor completo por `title`.
-Nota Bugfix/UX (2026-03-30): se robustecio el manejo de fullscreen en ventanas esclavas frente a salidas forzadas por navegador/SO (ej. al abrir file picker en la ventana principal): ahora se detecta perdida externa via `fullscreenchange`, se conserva la intencion de fullscreen por monitor, se habilita CTA de reactivacion rapida en la esclava (`Reactivar Fullscreen`) y el master muestra feedback explicito con los monitores afectados.
-Nota Bugfix (2026-03-30): en runtime de ventana esclava se elimino la reinicializacion agresiva de `<video>` (`video.load()` en transiciones de contenido) para evitar salidas involuntarias de fullscreen durante `SET_IMAGE`/`SET_MEDIA`; se agregaron pruebas de regresion para validar que esos mensajes no disparan operaciones de salida de fullscreen.
-Nota Bugfix (2026-03-30): se corrigio estado "congelado" en ventana esclava tras repetir ciclo fullscreen -> volver al master -> seleccionar archivo; ahora la solicitud de fullscreen tiene guardas ante promesas pendientes, se agrego cierre local visible (overlay + boton rapido) y el master envia `REQUEST_CLOSE` como failsafe antes de cerrar, con pruebas de regresion para repeticion de flujo y comandos de cierre.
-Nota Bugfix Critico (2026-03-30): se elimino el bloqueo al seleccionar imagen despues de una salida de fullscreen provocada por file picker; el master ya no envia data URI pesadas por `postMessage` (usa `blob:` runtime + `data:` persistible), la esclava aplica imagen de forma diferida/no bloqueante con trazas acotadas de eventos clave y se agregaron pruebas de regresion del flujo abrir/cancelar + seleccionar + cierre local/remoto.
-Nota Bugfix (2026-03-30): se elimino la causa raiz del freeze tras salida forzada de fullscreen sin evento `fullscreenchange` (al abrir selector de archivo en master): el runtime esclavo ahora reconcilia estado via `focus`/`visibilitychange` + watchdog, evita clears por payloads invalidos (`SET_IMAGE`/`SET_MEDIA`) y agrega cierre robusto (salida de fullscreen + fallback de error) sin recrear ventana.
-Nota Bugfix Critico (2026-03-30): se identifico causa raiz adicional del freeze al mero click en `Seleccionar archivo` (sin `change`): el master escuchaba `pagehide` y ejecutaba `shutdownAllWindows`, enviando `REQUEST_CLOSE` durante la apertura del file picker; se retiro ese cierre por `pagehide`, se mantiene cierre por `beforeunload`/desmontaje y se agrego regresion para validar que la ventana esclava sigue operable y cerrable tras ese click.
-Nota Bugfix Critico (2026-03-30): se retiro una mitigacion inestable en la esclava (`focus`/`visibilitychange` + watchdog) porque reintroducia rutas de reconciliacion agresiva durante apertura de file picker en master; el runtime queda acotado a eventos minimos (`fullscreenchange` + accion explicita) con dedupe/throttle estricto de `FULLSCREEN_STATUS` para evitar floods y preservar estabilidad de cierre local/remoto.
-Nota Bugfix Critico (2026-03-30): se implementaron 3 mitigaciones end-to-end para fullscreen + file picker: (1) bloqueo del selector nativo cuando existe al menos una esclava en fullscreen, con feedback operativo y fallback recomendado; (2) import de imagen por Drag & Drop y pegado desde portapapeles en Monitores y formularios de Playlist; (3) apertura de esclavas en ruta same-origin (`/slave.html?monitorId&instanceToken`) para eliminar dependencia del popup `blob:` y reducir congelamientos asociados al dialogo nativo.
-Nota UX (2026-03-30): se unifico el patron de import por archivo en todos los puntos `Seleccionar archivo` (Monitores + alta/edicion de Playlist) incorporando `dragenter/dragover/dragleave/drop`, estado visual activo de drop target y mensaje explicito para archivos no imagen, manteniendo pegado desde portapapeles y seleccion manual segun estado de fullscreen.
-Nota UX (2026-03-30): en las tabs de cabecera `Monitores/Playlist` se ajusto el layout a icono sobre texto y se escalo ligeramente el tamano de iconos, manteniendo semantica accesible y comportamiento actual.
-Nota UX (2026-03-30): se movieron las tabs globales `Monitores/Playlist` a la cabecera de la app y la accion `Cerrar todas las ventanas` paso a la barra contextual de Monitores junto al filtro de visibilidad.
-Nota Mantenimiento (2026-03-30): se movio la hoja global a `src/assets/styles/style.css` y se extrajeron clases semanticas reutilizables (botones, modales, tabs, tarjetas y filas de formulario) para reducir utilidades Tailwind repetidas sin cambios funcionales.
-Nota Mantenimiento (2026-03-30): se corrigieron warnings de analisis estatico en `App.vue` y `PlaylistManager.vue` (checks `typeof` redundantes y jerarquia HTML invalida dentro de boton de thumbnail) sin cambios funcionales.
-Nota UX (2026-03-30): en los dialogos actuales de Playlist (preview/alta/edicion) se estandarizo boton de cierre en header (derecha, con `aria-label`), se elimino cierre redundante en footer de preview y se mantuvieron acciones de formulario (`Guardar/Cancelar`) sin duplicar cierre generico.
-Nota Bugfix (2026-03-30): los modales de Playlist (preview/alta/edicion) ahora se renderizan con `Teleport` a `body` para evitar desplazamientos del backdrop/dialogo causados por contextos de posicionamiento en contenedores con efectos visuales; se agregaron pruebas de regresion de anclaje a viewport.
-Nota Bugfix (2026-03-30): se corrigio la replicacion en modo espejo cuando el origen envia imagen; el destino ya no recibe un `SET_MEDIA` nulo despues del `SET_IMAGE`, por lo que deja el estado "Esperando contenido..." y mantiene degradacion parcial si algun destino no esta disponible.
-Nota Bugfix (2026-03-30): al salir/recargar la pantalla master se intenta cerrar automaticamente todas las ventanas esclavas via `beforeunload` (y desmontaje de app), con cierre tolerante a errores para evitar pantallas huerfanas bloqueadas.
-Nota Bugfix/UX (2026-03-30): modo espejo ahora preserva visualizacion del origen durante la replicacion, al desactivar limpia de inmediato contenido espejado en destinos abiertos y resetea configuracion (`enabled=false`, `source=null`, `destinations=[]`); ademas, el control de activacion se reemplazo por boton de accion claro (`Iniciar espejo`/`Finalizar espejo`).
-Nota Mantenimiento (2026-03-30): se corrigieron warnings por `max-w` duplicado en `PlaylistManager.vue` extrayendo el ancho de modal a variantes reutilizables (`app-modal-panel--sm/md/lg`) y eliminando utilidades redundantes en template.
-Nota Mantenimiento (2026-03-30): se corrigio nullability en `PlaylistManager.vue` (TS18047) al editar `muted` de video, encapsulando el cambio en un handler tipado con guard explicito de `editingItem` sin cambios de UX/flujo.
-Nota UX (2026-03-30): se aplico una convencion global para modales activos de Playlist (alta, edicion, preview): centrados en viewport, con `max-h/max-w` relativos a pantalla, `body` con scroll interno y `header/footer` sticky siempre visibles.
-Nota UX (2026-03-30): la thumbnail de cada item en Playlist ahora abre un modal de vista ampliada con cierre por boton/Escape/click fuera, metadata del item y fallback claro cuando la preview no esta disponible.
-Nota UX (2026-03-30): se limpiaron textos de botones de apertura de dialogo (sin mencionar "modal") y se unifico el estilo de checkboxes inline con un componente reutilizable accesible (`AppCheckbox`).
-Nota UX (2026-03-30): en cada item de playlist los controles `Subir`, `Bajar`, `Editar` y `Eliminar` se mostraron en una sola fila con `flex-nowrap`; en pantallas estrechas el bloque de acciones usa `overflow-x-auto` para evitar salto de linea.
-Nota UX (2026-03-30): se introdujo iconografia consistente con Heroicons en botones y cabeceras de dialogos (icono + texto, iconos decorativos con `aria-hidden="true"`) para mejorar legibilidad operativa sin saturar la interfaz.
-Nota UX (2026-03-30): en formularios de alta/edicion de Playlist se refino el layout por filas (Titulo/Tipo, Source/Archivo local, Duracion-Inicio-Fin y fila final de `Mute` con ayuda contextual) manteniendo validaciones y flujo actual.
-Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas y agrega drag and drop nativo con feedback de item arrastrado/destino, manteniendo `Subir/Bajar` como fallback accesible.
+- Nota Mantenimiento (2026-03-31): se completo la reestructuracion a monorepo PNPM; el frontend se movio a `mythr-prism-front/`, se agrego scaffold `mythr-prism-back/` y la orquestacion global queda en la raiz (`README.md`, `package.json`, `pnpm-workspace.yaml`). Este backlog continua en `mythr-prism-front/docs/backlog.md`.
+- Nota Roadmap (2026-03-31): cierre formal de MVP completado al 100%; a partir de este punto el foco operativo pasa a V1.
+- Nota UX (2026-03-30): en Playlist se reforzo comportamiento operativo de modales con overlay fijo + bloqueo de scroll de fondo, y se aplico truncado visual de `source` largos (incluye data URI) manteniendo valor completo por `title`.
+- Nota Bugfix/UX (2026-03-30): se robustecio el manejo de fullscreen en ventanas esclavas frente a salidas forzadas por navegador/SO (ej. al abrir file picker en la ventana principal): ahora se detecta perdida externa via `fullscreenchange`, se conserva la intencion de fullscreen por monitor, se habilita CTA de reactivacion rapida en la esclava (`Reactivar Fullscreen`) y el master muestra feedback explicito con los monitores afectados.
+- Nota Bugfix (2026-03-30): en runtime de ventana esclava se elimino la reinicializacion agresiva de `<video>` (`video.load()` en transiciones de contenido) para evitar salidas involuntarias de fullscreen durante `SET_IMAGE`/`SET_MEDIA`; se agregaron pruebas de regresion para validar que esos mensajes no disparan operaciones de salida de fullscreen.
+- Nota Bugfix (2026-03-30): se corrigio estado "congelado" en ventana esclava tras repetir ciclo fullscreen -> volver al master -> seleccionar archivo; ahora la solicitud de fullscreen tiene guardas ante promesas pendientes, se agrego cierre local visible (overlay + boton rapido) y el master envia `REQUEST_CLOSE` como failsafe antes de cerrar, con pruebas de regresion para repeticion de flujo y comandos de cierre.
+- Nota Bugfix Critico (2026-03-30): se elimino el bloqueo al seleccionar imagen despues de una salida de fullscreen provocada por file picker; el master ya no envia data URI pesadas por `postMessage` (usa `blob:` runtime + `data:` persistible), la esclava aplica imagen de forma diferida/no bloqueante con trazas acotadas de eventos clave y se agregaron pruebas de regresion del flujo abrir/cancelar + seleccionar + cierre local/remoto.
+- Nota Bugfix (2026-03-30): se elimino la causa raiz del freeze tras salida forzada de fullscreen sin evento `fullscreenchange` (al abrir selector de archivo en master): el runtime esclavo ahora reconcilia estado via `focus`/`visibilitychange` + watchdog, evita clears por payloads invalidos (`SET_IMAGE`/`SET_MEDIA`) y agrega cierre robusto (salida de fullscreen + fallback de error) sin recrear ventana.
+- Nota Bugfix Critico (2026-03-30): se identifico causa raiz adicional del freeze al mero click en `Seleccionar archivo` (sin `change`): el master escuchaba `pagehide` y ejecutaba `shutdownAllWindows`, enviando `REQUEST_CLOSE` durante la apertura del file picker; se retiro ese cierre por `pagehide`, se mantiene cierre por `beforeunload`/desmontaje y se agrego regresion para validar que la ventana esclava sigue operable y cerrable tras ese click.
+- Nota Bugfix Critico (2026-03-30): se retiro una mitigacion inestable en la esclava (`focus`/`visibilitychange` + watchdog) porque reintroducia rutas de reconciliacion agresiva durante apertura de file picker en master; el runtime queda acotado a eventos minimos (`fullscreenchange` + accion explicita) con dedupe/throttle estricto de `FULLSCREEN_STATUS` para evitar floods y preservar estabilidad de cierre local/remoto.
+- Nota Bugfix Critico (2026-03-30): se implementaron 3 mitigaciones end-to-end para fullscreen + file picker: (1) bloqueo del selector nativo cuando existe al menos una esclava en fullscreen, con feedback operativo y fallback recomendado; (2) import de imagen por Drag & Drop y pegado desde portapapeles en Monitores y formularios de Playlist; (3) apertura de esclavas en ruta same-origin (`/slave.html?monitorId&instanceToken`) para eliminar dependencia del popup `blob:` y reducir congelamientos asociados al dialogo nativo.
+- Nota UX (2026-03-30): se unifico el patron de import por archivo en todos los puntos `Seleccionar archivo` (Monitores + alta/edicion de Playlist) incorporando `dragenter/dragover/dragleave/drop`, estado visual activo de drop target y mensaje explicito para archivos no imagen, manteniendo pegado desde portapapeles y seleccion manual segun estado de fullscreen.
+- Nota UX (2026-03-30): en las tabs de cabecera `Monitores/Playlist` se ajusto el layout a icono sobre texto y se escalo ligeramente el tamano de iconos, manteniendo semantica accesible y comportamiento actual.
+- Nota UX (2026-03-30): se movieron las tabs globales `Monitores/Playlist` a la cabecera de la app y la accion `Cerrar todas las ventanas` paso a la barra contextual de Monitores junto al filtro de visibilidad.
+- Nota Mantenimiento (2026-03-30): se movio la hoja global a `src/assets/styles/style.css` y se extrajeron clases semanticas reutilizables (botones, modales, tabs, tarjetas y filas de formulario) para reducir utilidades Tailwind repetidas sin cambios funcionales.
+- Nota Mantenimiento (2026-03-30): se corrigieron warnings de analisis estatico en `App.vue` y `PlaylistManager.vue` (checks `typeof` redundantes y jerarquia HTML invalida dentro de boton de thumbnail) sin cambios funcionales.
+- Nota UX (2026-03-30): en los dialogos actuales de Playlist (preview/alta/edicion) se estandarizo boton de cierre en header (derecha, con `aria-label`), se elimino cierre redundante en footer de preview y se mantuvieron acciones de formulario (`Guardar/Cancelar`) sin duplicar cierre generico.
+- Nota Bugfix (2026-03-30): los modales de Playlist (preview/alta/edicion) ahora se renderizan con `Teleport` a `body` para evitar desplazamientos del backdrop/dialogo causados por contextos de posicionamiento en contenedores con efectos visuales; se agregaron pruebas de regresion de anclaje a viewport.
+- Nota Bugfix (2026-03-30): se corrigio la replicacion en modo espejo cuando el origen envia imagen; el destino ya no recibe un `SET_MEDIA` nulo despues del `SET_IMAGE`, por lo que deja el estado "Esperando contenido..." y mantiene degradacion parcial si algun destino no esta disponible.
+- Nota Bugfix (2026-03-30): al salir/recargar la pantalla master se intenta cerrar automaticamente todas las ventanas esclavas via `beforeunload` (y desmontaje de app), con cierre tolerante a errores para evitar pantallas huerfanas bloqueadas.
+- Nota Bugfix/UX (2026-03-30): modo espejo ahora preserva visualizacion del origen durante la replicacion, al desactivar limpia de inmediato contenido espejado en destinos abiertos y resetea configuracion (`enabled=false`, `source=null`, `destinations=[]`); ademas, el control de activacion se reemplazo por boton de accion claro (`Iniciar espejo`/`Finalizar espejo`).
+- Nota Mantenimiento (2026-03-30): se corrigieron warnings por `max-w` duplicado en `PlaylistManager.vue` extrayendo el ancho de modal a variantes reutilizables (`app-modal-panel--sm/md/lg`) y eliminando utilidades redundantes en template.
+- Nota Mantenimiento (2026-03-30): se corrigio nullability en `PlaylistManager.vue` (TS18047) al editar `muted` de video, encapsulando el cambio en un handler tipado con guard explicito de `editingItem` sin cambios de UX/flujo.
+- Nota UX (2026-03-30): se aplico una convencion global para modales activos de Playlist (alta, edicion, preview): centrados en viewport, con `max-h/max-w` relativos a pantalla, `body` con scroll interno y `header/footer` sticky siempre visibles.
+- Nota UX (2026-03-30): la thumbnail de cada item en Playlist ahora abre un modal de vista ampliada con cierre por boton/Escape/click fuera, metadata del item y fallback claro cuando la preview no esta disponible.
+- Nota UX (2026-03-30): se limpiaron textos de botones de apertura de dialogo (sin mencionar "modal") y se unifico el estilo de checkboxes inline con un componente reutilizable accesible (`AppCheckbox`).
+- Nota UX (2026-03-30): en cada item de playlist los controles `Subir`, `Bajar`, `Editar` y `Eliminar` se mostraron en una sola fila con `flex-nowrap`; en pantallas estrechas el bloque de acciones usa `overflow-x-auto` para evitar salto de linea.
+- Nota UX (2026-03-30): se introdujo iconografia consistente con Heroicons en botones y cabeceras de dialogos (icono + texto, iconos decorativos con `aria-hidden="true"`) para mejorar legibilidad operativa sin saturar la interfaz.
+- Nota UX (2026-03-30): en formularios de alta/edicion de Playlist se refino el layout por filas (Titulo/Tipo, Source/Archivo local, Duracion-Inicio-Fin y fila final de `Mute` con ayuda contextual) manteniendo validaciones y flujo actual.
+- Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas y agrega drag and drop nativo con feedback de item arrastrado/destino, manteniendo `Subir/Bajar` como fallback accesible.
 
 ### Reglas de actualizacion
 
@@ -54,7 +53,7 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 | Fase | Progreso |
 | --- | --- |
 | MVP | 100% |
-| V1 | 67% |
+| V1 | 71% |
 | V2 | 0% |
 
 > Referencia de calculo sugerida: `tareas completadas / tareas totales de la fase * 100`.
@@ -193,7 +192,7 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 
 ## V1
 
-**Progreso V1 (features): 57% (4/7 completadas)**
+**Progreso V1 (features): 71% (5/7 completadas)**
 
 ### Arranque V1 (checklist corto)
 
@@ -263,28 +262,29 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
     - Restricciones de permisos por contexto/gesto de usuario pueden limitar inicio remoto de captura.
     - Diferencias de comportamiento entre navegadores pueden requerir fallback por estrategia B.
 
-- [ ] **Fuentes de monitor en modal con pestanas**
+- [x] **Fuentes de monitor en modal con pestanas**
   - Prioridad: `V1` por mejora de usabilidad operativa; reduce ruido visual en tarjetas de monitor y mantiene un flujo focalizado por tipo de fuente.
   - Historia de usuario: como operador, quiero abrir un unico dialogo para elegir y operar la fuente del monitor (imagen local, URL o app externa) sin ver tres bloques simultaneos.
   - Dependencias: barra de acciones del monitor, patron global de modales (`overlay fijo + header/body/footer + escape`), eventos actuales de carga/URL/captura externa.
+  - Estado: `completed`.
   - Descripcion tecnica:
-    - [ ] Agregar boton `Fuentes` en la fila de acciones del monitor (a la izquierda de `Pizarra`).
-    - [ ] Migrar controles de `Imagen local`, `URL externa` y `Aplicacion externa` a un modal con tabs accesibles (`tablist/tab/tabpanel`).
-    - [ ] Conservar handlers y feedback actuales (upload/drop/paste/clear, set/reload/back/forward/clear URL, start/stop captura app).
-    - [ ] Retirar bloques inline legacy para mantener la tarjeta compacta.
+    - [x] Agregar boton `Fuentes` en la fila de acciones del monitor (a la izquierda de `Pizarra`).
+    - [x] Migrar controles de `Imagen local`, `URL externa` y `Aplicacion externa` a un modal con tabs accesibles (`tablist/tab/tabpanel`).
+    - [x] Conservar handlers y feedback actuales (upload/drop/paste/clear, set/reload/back/forward/clear URL, start/stop captura app).
+    - [x] Retirar bloques inline legacy para mantener la tarjeta compacta.
   - Subtareas:
-    - [ ] Implementar estado/UX del modal de fuentes con bloqueo de scroll y cierre por Escape/boton.
-    - [ ] Implementar tabs con estado activo y contenido exclusivo por fuente.
-    - [ ] Reubicar acciones de limpiar/detener como acciones contextuales del footer.
-    - [ ] Ajustar estilos semanticos y tests de regresion de UI/eventos.
+    - [x] Implementar estado/UX del modal de fuentes con bloqueo de scroll y cierre por Escape/boton.
+    - [x] Implementar tabs con estado activo y contenido exclusivo por fuente.
+    - [x] Reubicar acciones de limpiar/detener como acciones contextuales del footer.
+    - [x] Ajustar estilos semanticos y tests de regresion de UI/eventos.
   - Criterios de aceptacion:
-    - [ ] Existe un boton `Fuentes` visible en controles de monitor externo, ubicado antes de `Pizarra`.
-    - [ ] El modal abre/cierra correctamente por boton, cierre de cabecera y Escape, sin scroll de fondo.
-    - [ ] Solo se visualiza una fuente activa por vez en interfaz (sin triple bloque simultaneo).
-    - [ ] No hay regresiones en emisiones de eventos para import de imagen, URL externa y captura de app.
+    - [x] Existe un boton `Fuentes` visible en controles de monitor externo, ubicado antes de `Pizarra`.
+    - [x] El modal abre/cierra correctamente por boton, cierre de cabecera y Escape, sin scroll de fondo.
+    - [x] Solo se visualiza una fuente activa por vez en interfaz (sin triple bloque simultaneo).
+    - [x] No hay regresiones en emisiones de eventos para import de imagen, URL externa y captura de app.
   - DoD:
-    - [ ] Cobertura de tests para apertura/cierre modal, tabs y eventos criticos de cada fuente.
-    - [ ] Validacion minima ejecutada (`typecheck`, `test`, `build`) sin regresiones.
+    - [x] Cobertura de tests para apertura/cierre modal, tabs y eventos criticos de cada fuente.
+    - [x] Validacion minima ejecutada (`typecheck`, `test`, `build`) sin regresiones.
 
 - [ ] **Monitor virtual remoto (Cloud Sync)**
   - Titulo: Vincular dispositivos externos (tablets/moviles) como monitores virtuales via WebSockets.
@@ -402,3 +402,4 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 - 2026-03-31: Thumbnails completado para MVP operativo actual: runtime esclavo emite captura reducida periodica con limite de frecuencia, el master mantiene estado de miniaturas por monitor no persistente y Monitores incorpora grid de previews en vivo con fallback claro.
 - 2026-03-31: Pizarra en vivo completado para MVP: cada tarjeta de monitor secundario permite abrir pizarra, la edicion en master usa referencia de miniatura y sincroniza overlay de trazos (set/undo/clear) en runtime esclavo sin romper fullscreen/thumbnail/handshake.
 - 2026-03-31: Mejora UX post-MVP de pizarra en vivo: toolbar visual con botones iconograficos accesibles (herramientas, color, grosor, undo, limpiar) y nuevas formas basicas (flecha/circulo/rectangulo/linea) con preview click+drag sincronizado al overlay slave.
+- 2026-04-03: V1 `Fuentes de monitor en modal con pestanas` completada e integrada en `development`; se actualizan checklist/subtareas/DoD y el avance V1 pasa a 71% (5/7).
