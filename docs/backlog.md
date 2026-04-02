@@ -54,7 +54,7 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 | Fase | Progreso |
 | --- | --- |
 | MVP | 100% |
-| V1 | 0% |
+| V1 | 67% |
 | V2 | 0% |
 
 > Referencia de calculo sugerida: `tareas completadas / tareas totales de la fase * 100`.
