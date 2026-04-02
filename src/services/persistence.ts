@@ -10,6 +10,7 @@ import {
   sanitizeContentTransition,
   type ContentTransition
 } from '../types/transitions';
+import { validateExternalUrl } from './externalUrlPolicy';
 import { cloneSerializable } from '../utils/cloneSerializable';
 
 export const SESSION_STORAGE_KEY = 'mythr-prism.session';
@@ -21,6 +22,7 @@ export interface PersistedMonitorState {
   transform: MonitorTransform;
   contentTransition: ContentTransition;
   imageDataUrl: string | null;
+  externalUrl: string | null;
   customName: string | null;
 }
 
@@ -163,6 +165,7 @@ const sanitizeMonitorState = (value: unknown): PersistedMonitorState => {
       transform: { ...DEFAULT_TRANSFORM },
       contentTransition: { ...DEFAULT_CONTENT_TRANSITION },
       imageDataUrl: null,
+      externalUrl: null,
       customName: null
     };
   }
@@ -171,9 +174,19 @@ const sanitizeMonitorState = (value: unknown): PersistedMonitorState => {
     transform: sanitizeTransform(value.transform),
     contentTransition: sanitizeContentTransition(value.contentTransition),
     imageDataUrl: sanitizeImageDataUrl(value.imageDataUrl),
+    externalUrl: sanitizeExternalUrl(value.externalUrl),
     customName: sanitizeMonitorCustomName(value.customName)
   };
 };
+
+function sanitizeExternalUrl(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const validation = validateExternalUrl(value);
+  return validation.ok ? validation.normalizedUrl : null;
+}
 
 const sanitizeMonitorStateMap = (value: unknown): PersistedMonitorStateMap => {
   if (!isRecord(value)) {
@@ -233,7 +246,10 @@ const sanitizePlaylistItem = (value: unknown): MultimediaItem | null => {
   const id = toNonEmptyString(value.id);
   const name = toNonEmptyString(value.name);
   const source = toNonEmptyString(value.source);
-  const kind = value.kind === 'image' || value.kind === 'video' ? value.kind : null;
+  const kind =
+    value.kind === 'image' || value.kind === 'video' || value.kind === 'external-url'
+      ? value.kind
+      : null;
 
   if (!id || !name || !source || !kind) {
     return null;
@@ -251,6 +267,20 @@ const sanitizePlaylistItem = (value: unknown): MultimediaItem | null => {
       name,
       source,
       durationMs
+    };
+  }
+
+  if (kind === 'external-url') {
+    const validation = validateExternalUrl(source);
+    if (!validation.ok || !validation.normalizedUrl) {
+      return null;
+    }
+
+    return {
+      id,
+      kind: 'external-url',
+      name,
+      source: validation.normalizedUrl
     };
   }
 

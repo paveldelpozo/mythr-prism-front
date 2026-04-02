@@ -10,6 +10,9 @@ export type MasterMessageType =
   | 'FLASH_MONITOR_ID'
   | 'SET_IMAGE'
   | 'SET_MEDIA'
+  | 'EXTERNAL_URL_RELOAD'
+  | 'EXTERNAL_URL_BACK'
+  | 'EXTERNAL_URL_FORWARD'
   | 'VIDEO_SYNC_PLAY'
   | 'VIDEO_SYNC_PAUSE'
   | 'VIDEO_SYNC_SEEK'
@@ -85,6 +88,9 @@ export type MasterToSlaveMessage =
   | MessageEnvelope<'FLASH_MONITOR_ID', FlashMonitorIdPayload>
   | MessageEnvelope<'SET_IMAGE', { imageDataUrl: string | null; transition?: ContentTransition }>
   | MessageEnvelope<'SET_MEDIA', { item: MultimediaItem | null; transition?: ContentTransition }>
+  | MessageEnvelope<'EXTERNAL_URL_RELOAD', { reason: string }>
+  | MessageEnvelope<'EXTERNAL_URL_BACK', { reason: string }>
+  | MessageEnvelope<'EXTERNAL_URL_FORWARD', { reason: string }>
   | MessageEnvelope<'VIDEO_SYNC_PLAY', VideoSyncPlayPayload>
   | MessageEnvelope<'VIDEO_SYNC_PAUSE', VideoSyncPausePayload>
   | MessageEnvelope<'VIDEO_SYNC_SEEK', VideoSyncSeekPayload>

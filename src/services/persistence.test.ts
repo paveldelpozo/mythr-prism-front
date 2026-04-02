@@ -45,7 +45,8 @@ describe('services/persistence', () => {
             type: 'fade',
             durationMs: 99999
           },
-          imageDataUrl: 42
+          imageDataUrl: 42,
+          externalUrl: 'http://localhost/internal'
         }
       },
       playlist: [
@@ -96,7 +97,8 @@ describe('services/persistence', () => {
                   type: 'invalid',
                   durationMs: -10
                 },
-                imageDataUrl: 10
+                imageDataUrl: 10,
+                externalUrl: 'https://content.example.com/ok'
               }
             },
             playback: {
@@ -122,6 +124,7 @@ describe('services/persistence', () => {
       durationMs: 5000
     });
     expect(loaded.monitors.m1.imageDataUrl).toBeNull();
+    expect(loaded.monitors.m1.externalUrl).toBeNull();
     expect(loaded.monitors.m1.customName).toBeNull();
     expect(loaded.playlist).toHaveLength(1);
     expect(loaded.playback.targetMonitorIds).toEqual(['m1']);
@@ -139,6 +142,7 @@ describe('services/persistence', () => {
       durationMs: 120
     });
     expect(loaded.layouts[0]?.snapshot.monitors.m1.imageDataUrl).toBeNull();
+    expect(loaded.layouts[0]?.snapshot.monitors.m1.externalUrl).toBe('https://content.example.com/ok');
     expect(loaded.layouts[0]?.snapshot.playback.targetMonitorIds).toEqual(['m1']);
     expect(loaded.layouts[0]?.snapshot.playback.currentIndex).toBe(0);
     expect(loaded.layouts[0]?.snapshot.playback.intervalSeconds).toBe(1);
@@ -193,6 +197,7 @@ describe('services/persistence', () => {
 
     expect(loaded.ui.showOnlyProjectable).toBe(false);
     expect(loaded.monitors.m2.imageDataUrl).toBe('data:image/png;base64,BBB');
+    expect(loaded.monitors.m2.externalUrl).toBeNull();
     expect(loaded.monitors.m2.customName).toBeNull();
     expect(loaded.playback.targetMonitorIds).toEqual(['m2']);
     expect(loaded.playback.autoplay).toBe(true);
@@ -425,5 +430,52 @@ describe('services/persistence', () => {
     const loaded = loadPersistedSession();
 
     expect(loaded.monitors.m1?.customName).toBe('Pantalla principal de escenario con nombre largo para clamping 1234567890');
+    expect(loaded.monitors.m1?.externalUrl).toBeNull();
+  });
+
+  it('descarta items external-url con dominios bloqueados y mantiene dominios permitidos', () => {
+    storage.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify({
+        version: SESSION_SCHEMA_VERSION,
+        ui: {
+          showOnlyProjectable: true,
+          panelPreferences: {}
+        },
+        monitors: {},
+        playlist: [
+          {
+            id: 'url-1',
+            kind: 'external-url',
+            name: 'Bloqueado',
+            source: 'http://localhost/private'
+          },
+          {
+            id: 'url-2',
+            kind: 'external-url',
+            name: 'Permitido',
+            source: 'https://example.com/allowed'
+          }
+        ],
+        playback: {
+          targetMonitorIds: [],
+          currentIndex: 0,
+          autoplay: false,
+          intervalSeconds: 5
+        },
+        mirror: {
+          enabled: false,
+          sourceMonitorId: null,
+          targetMonitorIds: []
+        },
+        layouts: []
+      })
+    );
+
+    const loaded = loadPersistedSession();
+
+    expect(loaded.playlist).toHaveLength(1);
+    expect(loaded.playlist[0]?.kind).toBe('external-url');
+    expect(loaded.playlist[0]?.source).toBe('https://example.com/allowed');
   });
 });

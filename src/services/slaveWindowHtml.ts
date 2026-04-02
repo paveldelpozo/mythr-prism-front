@@ -59,6 +59,13 @@ export const createSlaveWindowHtml = ({
         display: none;
         background: #000;
       }
+      #externalUrlFrame {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        display: none;
+        background: #000;
+      }
       #empty {
         font-size: 14px;
         letter-spacing: 0.08em;
@@ -182,6 +189,7 @@ export const createSlaveWindowHtml = ({
         <div id="wrapper">
           <img id="image" alt="Imagen transmitida" />
           <video id="video" autoplay playsinline></video>
+          <iframe id="externalUrlFrame" title="Contenido externo" referrerpolicy="no-referrer"></iframe>
           <p id="empty">Esperando imagen...</p>
         </div>
         <canvas id="whiteboard"></canvas>
@@ -226,6 +234,7 @@ export const createSlaveWindowHtml = ({
         const wrapper = document.getElementById('wrapper');
         const image = document.getElementById('image');
         const video = document.getElementById('video');
+        const externalUrlFrame = document.getElementById('externalUrlFrame');
         const empty = document.getElementById('empty');
         const whiteboardCanvas = document.getElementById('whiteboard');
         const transitionVeil = document.getElementById('transitionVeil');
@@ -251,6 +260,8 @@ export const createSlaveWindowHtml = ({
         let thumbnailCaptureBlockedUntilMs = 0;
         let lastThumbnailDataUrl = null;
         let imageRenderRequestId = 0;
+        let externalUrlRenderRequestId = 0;
+        let externalUrlLoadTimeoutId = null;
         let monitorIdentifyFlashTimeoutId = null;
         let transitionTimeoutId = null;
         let transitionSequenceId = 0;
@@ -826,10 +837,19 @@ export const createSlaveWindowHtml = ({
         const clearViewportMedia = () => {
           clearScheduledSyncAction();
 
+          if (externalUrlLoadTimeoutId !== null) {
+            window.clearTimeout(externalUrlLoadTimeoutId);
+            externalUrlLoadTimeoutId = null;
+          }
+          externalUrlRenderRequestId += 1;
+
           image.src = '';
           image.style.display = 'none';
 
           stopVideoPlayback(true);
+
+          externalUrlFrame.removeAttribute('src');
+          externalUrlFrame.style.display = 'none';
 
           empty.style.display = 'block';
           empty.textContent = 'Esperando contenido...';
@@ -837,7 +857,7 @@ export const createSlaveWindowHtml = ({
         };
 
         const hasVisibleMedia = () =>
-          image.style.display !== 'none' || video.style.display !== 'none';
+          image.style.display !== 'none' || video.style.display !== 'none' || externalUrlFrame.style.display !== 'none';
 
         const ensureViewportFallbackVisible = () => {
           if (!hasVisibleMedia()) {
@@ -953,6 +973,133 @@ export const createSlaveWindowHtml = ({
             empty.style.display = 'block';
             empty.textContent = 'No se pudo reproducir el video en esta ventana.';
           });
+        };
+
+        const showExternalUrl = (source) => {
+          let parsed;
+          try {
+            parsed = new URL(source);
+          } catch {
+            postToMaster('SLAVE_ERROR', {
+              message: 'La URL externa recibida no es valida.'
+            });
+            return;
+          }
+
+          if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+            postToMaster('SLAVE_ERROR', {
+              message: 'Solo se permiten URLs externas http:// o https://.'
+            });
+            return;
+          }
+
+          clearViewportMedia();
+          externalUrlRenderRequestId += 1;
+          const requestId = externalUrlRenderRequestId;
+
+          empty.style.display = 'block';
+          empty.textContent = 'Cargando URL externa...';
+
+          const completeRender = () => {
+            if (requestId !== externalUrlRenderRequestId) {
+              return;
+            }
+
+            if (externalUrlLoadTimeoutId !== null) {
+              window.clearTimeout(externalUrlLoadTimeoutId);
+              externalUrlLoadTimeoutId = null;
+            }
+
+            externalUrlFrame.style.display = 'block';
+            empty.style.display = 'none';
+            requestThumbnailRefresh(0);
+          };
+
+          externalUrlFrame.onload = () => {
+            completeRender();
+          };
+
+          externalUrlFrame.onerror = () => {
+            if (requestId !== externalUrlRenderRequestId) {
+              return;
+            }
+
+            empty.style.display = 'block';
+            empty.textContent = 'No se pudo cargar la URL externa. Revisa la politica de seguridad o intenta recargar.';
+            externalUrlFrame.style.display = 'none';
+            postToMaster('SLAVE_ERROR', {
+              message: 'Fallo la carga de la URL externa en la ventana esclava.'
+            });
+          };
+
+          externalUrlFrame.src = parsed.toString();
+          externalUrlLoadTimeoutId = window.setTimeout(() => {
+            if (requestId !== externalUrlRenderRequestId) {
+              return;
+            }
+
+            empty.style.display = 'block';
+            empty.textContent = 'La URL externa tardo demasiado en cargar. Usa Recargar o verifica conectividad.';
+            postToMaster('SLAVE_ERROR', {
+              message: 'Timeout al cargar la URL externa.'
+            });
+          }, 8000);
+        };
+
+        const isExternalUrlVisible = () =>
+          externalUrlFrame.style.display !== 'none' && typeof externalUrlFrame.src === 'string' && externalUrlFrame.src.length > 0;
+
+        const reloadExternalUrl = () => {
+          if (!isExternalUrlVisible()) {
+            postToMaster('SLAVE_ERROR', {
+              message: 'No hay una URL externa activa para recargar.'
+            });
+            return;
+          }
+
+          try {
+            const frameWindow = externalUrlFrame.contentWindow;
+            if (frameWindow) {
+              frameWindow.location.reload();
+              return;
+            }
+
+            externalUrlFrame.src = externalUrlFrame.src;
+          } catch {
+            postToMaster('SLAVE_ERROR', {
+              message: 'No fue posible recargar la URL externa en esta ventana.'
+            });
+          }
+        };
+
+        const navigateExternalUrl = (direction) => {
+          if (!isExternalUrlVisible()) {
+            postToMaster('SLAVE_ERROR', {
+              message: 'No hay una URL externa activa para navegar historial.'
+            });
+            return;
+          }
+
+          const frameWindow = externalUrlFrame.contentWindow;
+          if (!frameWindow) {
+            postToMaster('SLAVE_ERROR', {
+              message: 'No fue posible acceder al historial de la URL externa.'
+            });
+            return;
+          }
+
+          try {
+            if (direction === 'back') {
+              frameWindow.history.back();
+              return;
+            }
+
+            frameWindow.history.forward();
+          } catch {
+            postToMaster('SLAVE_ERROR', {
+              message: 'La navegacion atras/adelante no esta disponible para esta URL externa.'
+            });
+          }
         };
 
         const postToMaster = (type, payload) => {
@@ -1235,6 +1382,13 @@ export const createSlaveWindowHtml = ({
               return;
             }
 
+            if (item.kind === 'external-url' && typeof item.source === 'string' && item.source.length > 0) {
+              runContentTransition(transition, () => {
+                showExternalUrl(item.source);
+              });
+              return;
+            }
+
             postToMaster('SLAVE_ERROR', {
               message: 'SET_MEDIA ignorado: item no soportado o incompleto.'
             });
@@ -1347,6 +1501,21 @@ export const createSlaveWindowHtml = ({
             return;
           }
 
+          if (message.type === 'EXTERNAL_URL_RELOAD') {
+            reloadExternalUrl();
+            return;
+          }
+
+          if (message.type === 'EXTERNAL_URL_BACK') {
+            navigateExternalUrl('back');
+            return;
+          }
+
+          if (message.type === 'EXTERNAL_URL_FORWARD') {
+            navigateExternalUrl('forward');
+            return;
+          }
+
           if (message.type === 'PING') {
             postToMaster('PONG', { timestamp: Date.now() });
           }
@@ -1370,6 +1539,10 @@ export const createSlaveWindowHtml = ({
           clearMonitorIdFlash();
           clearTransitionTimeout();
           clearScheduledThumbnailCapture();
+          if (externalUrlLoadTimeoutId !== null) {
+            window.clearTimeout(externalUrlLoadTimeoutId);
+            externalUrlLoadTimeoutId = null;
+          }
           if (pendingFullscreenReportTimeoutId !== null) {
             window.clearTimeout(pendingFullscreenReportTimeoutId);
             pendingFullscreenReportTimeoutId = null;

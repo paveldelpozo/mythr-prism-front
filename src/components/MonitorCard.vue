@@ -38,6 +38,10 @@ const emit = defineEmits<{
     action: { type: 'rotate'; value: number } | { type: 'scale'; value: number } | { type: 'move'; value: { x?: number; y?: number } } | { type: 'reset' }
   ];
   setContentTransition: [monitorId: string, transition: ContentTransition];
+  assignExternalUrl: [monitorId: string, url: string];
+  reloadExternalUrl: [monitorId: string];
+  clearExternalUrl: [monitorId: string];
+  navigateExternalUrl: [monitorId: string, direction: 'back' | 'forward'];
 }>();
 
 const isInfoPanelOpen = ref(false);
@@ -334,6 +338,10 @@ onBeforeUnmount(() => {
       @close-window="emit('closeWindow', $event)"
       @upload-image="(id, file, source) => emit('uploadImage', id, file, source)"
       @clear-image="emit('clearImage', $event)"
+      @assign-external-url="(id, url) => emit('assignExternalUrl', id, url)"
+      @reload-external-url="emit('reloadExternalUrl', $event)"
+      @clear-external-url="emit('clearExternalUrl', $event)"
+      @navigate-external-url="(id, direction) => emit('navigateExternalUrl', id, direction)"
       @transform="(id, action) => emit('transform', id, action)"
       @set-content-transition="(id, transition) => emit('setContentTransition', id, transition)"
     />

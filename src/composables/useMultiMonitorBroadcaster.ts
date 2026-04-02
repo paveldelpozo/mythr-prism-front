@@ -39,6 +39,7 @@ import {
   type MonitorWhiteboardStateMap,
   type WhiteboardState
 } from '../types/whiteboard';
+import { validateExternalUrl } from '../services/externalUrlPolicy';
 
 type TransformAction =
   | { type: 'rotate'; value: number }
@@ -60,6 +61,8 @@ interface SetImageForMonitorOptions {
   renderSource?: string | null;
   transition?: ContentTransition;
 }
+
+type ExternalUrlNavigationDirection = 'back' | 'forward';
 
 type VideoSyncCommandType = 'VIDEO_SYNC_PLAY' | 'VIDEO_SYNC_PAUSE' | 'VIDEO_SYNC_SEEK' | 'VIDEO_SYNC_TIME';
 
@@ -101,6 +104,13 @@ const createDescriptor = (
 
 const createInstanceToken = (monitorId: string): string =>
   `${monitorId}-${crypto.randomUUID()}`;
+
+const createExternalUrlItem = (url: string): MultimediaItem => ({
+  id: `external-url-${Date.now()}`,
+  kind: 'external-url',
+  name: `URL: ${url}`,
+  source: url
+});
 
 const matchesDetailedScreen = (screen: ScreenDetailed, target: ScreenDetailed): boolean => {
   if (screen === target) {
@@ -180,6 +190,9 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     state.transform = { ...persistedState.transform };
     state.contentTransition = sanitizeContentTransition(persistedState.contentTransition);
     state.imageDataUrl = persistedState.imageDataUrl;
+    state.activeMediaItem = persistedState.externalUrl
+      ? createExternalUrlItem(persistedState.externalUrl)
+      : null;
 
     if (persistedState.customName) {
       monitorCustomNameById[monitorId] = persistedState.customName;
@@ -227,6 +240,10 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
         transform: { ...state.transform },
         contentTransition: sanitizeContentTransition(state.contentTransition),
         imageDataUrl: state.imageDataUrl,
+        externalUrl:
+          state.activeMediaItem?.kind === 'external-url'
+            ? state.activeMediaItem.source
+            : null,
         customName: monitorCustomNameById[monitorId] ?? null
       };
     });
@@ -980,6 +997,21 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
   const setPlaylistItemForMonitor = (monitorId: string, item: MultimediaItem | null): boolean => {
     const state = getMonitorState(monitorId);
     const transition = sanitizeContentTransition(state.contentTransition);
+
+    if (item?.kind === 'external-url') {
+      const validation = validateExternalUrl(item.source);
+      if (!validation.ok || !validation.normalizedUrl) {
+        state.lastError = validation.message ?? 'La URL externa no cumple la politica de seguridad.';
+        replicateSourceToMirrorTargets(monitorId);
+        return false;
+      }
+
+      item = {
+        ...item,
+        source: validation.normalizedUrl
+      };
+    }
+
     state.activeMediaItem = item;
     setMonitorThumbnail(monitorId, null, null);
 
@@ -995,6 +1027,78 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     const sent = sendToSlave(monitorId, message);
     replicateSourceToMirrorTargets(monitorId);
     return sent;
+  };
+
+  const setExternalUrlForMonitor = (monitorId: string, url: string): boolean => {
+    const validation = validateExternalUrl(url);
+    if (!validation.ok || !validation.normalizedUrl) {
+      setMonitorError(
+        monitorId,
+        validation.message ?? 'La URL externa no cumple la politica de seguridad.'
+      );
+      return false;
+    }
+
+    const item = createExternalUrlItem(validation.normalizedUrl);
+    const sent = setPlaylistItemForMonitor(monitorId, item);
+    if (sent) {
+      setMonitorError(monitorId, null);
+    }
+    return sent;
+  };
+
+  const clearExternalUrlForMonitor = (monitorId: string) => {
+    const state = getMonitorState(monitorId);
+    if (state.activeMediaItem?.kind !== 'external-url') {
+      return;
+    }
+
+    state.activeMediaItem = null;
+    setImageForMonitorWithOptions(monitorId, null, {
+      renderSource: null,
+      transition: state.contentTransition
+    });
+  };
+
+  const reloadExternalUrlForMonitor = (monitorId: string): boolean => {
+    const state = getMonitorState(monitorId);
+    if (state.activeMediaItem?.kind !== 'external-url') {
+      setMonitorError(monitorId, 'No hay una URL externa activa para recargar.');
+      return false;
+    }
+
+    const message = buildMasterMessage(monitorId, 'EXTERNAL_URL_RELOAD', {
+      reason: 'operator-reload'
+    });
+
+    if (!message) {
+      setMonitorError(monitorId, 'No hay una ventana activa para recargar la URL externa.');
+      return false;
+    }
+
+    return sendToSlave(monitorId, message);
+  };
+
+  const navigateExternalUrlForMonitor = (
+    monitorId: string,
+    direction: ExternalUrlNavigationDirection
+  ): boolean => {
+    const state = getMonitorState(monitorId);
+    if (state.activeMediaItem?.kind !== 'external-url') {
+      setMonitorError(monitorId, 'No hay una URL externa activa para navegar.');
+      return false;
+    }
+
+    const message = direction === 'back'
+      ? buildMasterMessage(monitorId, 'EXTERNAL_URL_BACK', { reason: 'operator-back' })
+      : buildMasterMessage(monitorId, 'EXTERNAL_URL_FORWARD', { reason: 'operator-forward' });
+
+    if (!message) {
+      setMonitorError(monitorId, 'No hay una ventana activa para navegar la URL externa.');
+      return false;
+    }
+
+    return sendToSlave(monitorId, message);
   };
 
   const requestFullscreen = (monitorId: string) => {
@@ -1153,6 +1257,10 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     setMonitorCustomName,
     setContentTransitionForMonitor,
     setImageForMonitor,
+    setExternalUrlForMonitor,
+    clearExternalUrlForMonitor,
+    reloadExternalUrlForMonitor,
+    navigateExternalUrlForMonitor,
     setWhiteboardStateForMonitor,
     undoWhiteboardForMonitor,
     setPlaylistItemForMonitor

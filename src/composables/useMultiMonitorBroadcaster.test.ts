@@ -20,6 +20,13 @@ const videoItem = (id: string): MultimediaItem => ({
   muted: true
 });
 
+const externalUrlItem = (id: string, source: string): MultimediaItem => ({
+  id,
+  kind: 'external-url',
+  name: `URL ${id}`,
+  source
+});
+
 const createHarness = () => {
   let api!: ReturnType<typeof useMultiMonitorBroadcaster>;
 
@@ -484,6 +491,52 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
       type: 'fade',
       durationMs: 5000
     });
+  });
+
+  it('rechaza URL bloqueada y expone feedback operativo', () => {
+    const api = createHarness();
+
+    const applied = api.setExternalUrlForMonitor('m1', 'http://localhost:8080/private');
+
+    expect(applied).toBe(false);
+    expect(api.monitorStates.m1?.lastError).toContain('bloqueado');
+  });
+
+  it('envia comando SET_MEDIA con external-url y permite controles de recarga/navegacion', async () => {
+    const { popups, mirrorTargetId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(mirrorTargetId);
+
+    const popup = popups[0];
+    popup.postMessage.mockClear();
+
+    api.setPlaylistItemForMonitor(
+      mirrorTargetId,
+      externalUrlItem('url-1', 'https://example.com/safe')
+    );
+    api.reloadExternalUrlForMonitor(mirrorTargetId);
+    api.navigateExternalUrlForMonitor(mirrorTargetId, 'back');
+    api.navigateExternalUrlForMonitor(mirrorTargetId, 'forward');
+
+    const sentMessages = popup.postMessage.mock.calls.map(([message]) => message);
+    expect(sentMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'SET_MEDIA',
+          payload: expect.objectContaining({
+            item: expect.objectContaining({
+              kind: 'external-url',
+              source: 'https://example.com/safe'
+            })
+          })
+        }),
+        expect.objectContaining({ type: 'EXTERNAL_URL_RELOAD' }),
+        expect.objectContaining({ type: 'EXTERNAL_URL_BACK' }),
+        expect.objectContaining({ type: 'EXTERNAL_URL_FORWARD' })
+      ])
+    );
   });
 
   it('abre ventana esclava en ruta same-origin y completa handshake basico', async () => {
