@@ -200,29 +200,29 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 - [ ] Definir criterio de aceptacion y validacion minima antes de marcar `in-progress`.
 - [ ] Integrar por merge a `development`; luego promover `development` -> `main` al cerrar el lote.
 
-- [ ] **Flash ID monitores**
+- [x] **Flash ID monitores**
   - Dependencias: deteccion/listado de monitores.
   - Hecho: cada monitor puede mostrar un identificador temporal para mapeo fisico.
   - Subtareas:
-    - [ ] Comando de flash por monitor.
-    - [ ] Overlay numerico de alta visibilidad.
-    - [ ] Timeout y retorno automatico a estado previo.
+    - [x] Comando de flash por monitor.
+    - [x] Overlay numerico de alta visibilidad.
+    - [x] Timeout y retorno automatico a estado previo.
 
-- [ ] **Transiciones**
+- [x] **Transiciones**
   - Dependencias: cambio de escena/layout funcional.
   - Hecho: cambios de contenido aplican transiciones seleccionables sin artefactos visibles.
   - Subtareas:
-    - [ ] Catalogo inicial (cut, fade, wipe).
-    - [ ] Parametros de duracion.
-    - [ ] Integracion en flujo de cambio de escena.
+    - [x] Catalogo inicial (cut, fade, wipe).
+    - [x] Parametros de duracion.
+    - [x] Integracion en flujo de cambio de escena.
 
-- [ ] **URLs externas**
+- [x] **URLs externas**
   - Dependencias: renderer web embebido seguro.
   - Hecho: se cargan URLs permitidas con controles minimos de navegacion y fallback en error.
   - Subtareas:
-    - [ ] Politica de allowlist/bloqueo.
-    - [ ] Carga y recarga controlada.
-    - [ ] Estado de error y recovery visual.
+    - [x] Politica de allowlist/bloqueo.
+    - [x] Carga y recarga controlada.
+    - [x] Estado de error y recovery visual.
 
 - [ ] **Captura y retransmision de aplicaciones externas**
   - Titulo: Compartir ventana de aplicacion externa en monitor secundario.

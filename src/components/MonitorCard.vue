@@ -288,7 +288,7 @@ onBeforeUnmount(() => {
     <p class="mb-4 mt-2 text-[11px] text-slate-300/75">{{ thumbnailCapturedAtLabel }}</p>
 
     <div
-      v-if="!monitor.isMasterAppScreen"
+      v-if="!monitor.isMasterAppScreen && !state.isWindowOpen"
       class="monitor-card-actions"
       data-testid="monitor-card-actions"
     >
@@ -332,8 +332,11 @@ onBeforeUnmount(() => {
       v-else
       :monitor-id="monitor.id"
       :state="state"
+      :show-monitor-utilities="!monitor.isMasterAppScreen"
       :is-file-import-blocked="isFileImportBlocked"
       :file-import-blocked-message="fileImportBlockedMessage"
+      @open-whiteboard="emit('openWhiteboard', $event)"
+      @flash-monitor-id="emit('flashMonitorId', $event)"
       @request-fullscreen="emit('requestFullscreen', $event)"
       @close-window="emit('closeWindow', $event)"
       @upload-image="(id, file, source) => emit('uploadImage', id, file, source)"

@@ -9,8 +9,10 @@ import {
   ArrowsPointingOutIcon,
   ArrowUturnLeftIcon,
   ArrowUturnRightIcon,
+  BoltIcon,
   MagnifyingGlassMinusIcon,
   MagnifyingGlassPlusIcon,
+  PaintBrushIcon,
   TrashIcon,
   XMarkIcon
 } from '@heroicons/vue/24/outline';
@@ -30,6 +32,7 @@ type ImageImportFailureReason = 'empty' | 'not-image';
 const props = defineProps<{
   monitorId: string;
   state: MonitorRuntimeState;
+  showMonitorUtilities?: boolean;
   isFileImportBlocked?: boolean;
   fileImportBlockedMessage?: string;
 }>();
@@ -45,6 +48,8 @@ const emit = defineEmits<{
   ];
   requestFullscreen: [monitorId: string];
   closeWindow: [monitorId: string];
+  openWhiteboard: [monitorId: string];
+  flashMonitorId: [monitorId: string];
   setContentTransition: [monitorId: string, transition: ContentTransition];
   assignExternalUrl: [monitorId: string, url: string];
   reloadExternalUrl: [monitorId: string];
@@ -235,6 +240,72 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="space-y-4">
+    <div class="monitor-action-toolbar" data-testid="monitor-action-toolbar">
+      <div class="monitor-action-toolbar-group" data-testid="monitor-action-toolbar-left">
+        <button
+          v-if="showMonitorUtilities"
+          type="button"
+          class="monitor-action-btn btn-emerald-soft"
+          data-testid="monitor-open-whiteboard"
+          :disabled="!state.isWindowOpen"
+          :title="state.isWindowOpen ? 'Abrir pizarra' : 'Abre la ventana del monitor para usar la pizarra'"
+          :aria-label="state.isWindowOpen ? 'Abrir pizarra' : 'Abrir pizarra (deshabilitado: ventana cerrada)'"
+          @click="emit('openWhiteboard', monitorId)"
+        >
+          <PaintBrushIcon aria-hidden="true" class="btn-icon" />
+        </button>
+
+        <button
+          v-if="showMonitorUtilities"
+          type="button"
+          class="monitor-action-btn btn-indigo-soft"
+          data-testid="monitor-flash-id"
+          :disabled="!state.isWindowOpen"
+          :title="state.isWindowOpen ? 'Destacar pantalla para identificar monitor' : 'Abre la ventana del monitor para identificarlo'"
+          :aria-label="state.isWindowOpen ? 'Identificar monitor' : 'Identificar monitor (deshabilitado: ventana cerrada)'"
+          @click="emit('flashMonitorId', monitorId)"
+        >
+          <BoltIcon aria-hidden="true" class="btn-icon" />
+        </button>
+      </div>
+
+      <div class="monitor-action-toolbar-group monitor-action-toolbar-group--end" data-testid="monitor-action-toolbar-right">
+        <button
+          ref="contentEditorTriggerButton"
+          type="button"
+          data-testid="monitor-open-content-editor"
+          class="monitor-action-btn btn-slate-soft"
+          title="Editar contenido"
+          aria-label="Editar contenido"
+          @click="openContentEditorModal"
+        >
+          <AdjustmentsHorizontalIcon aria-hidden="true" class="btn-icon" />
+        </button>
+
+        <button
+          type="button"
+          data-testid="monitor-request-fullscreen"
+          class="monitor-action-btn btn-indigo-soft"
+          :title="fullscreenActionLabel"
+          :aria-label="fullscreenActionLabel"
+          @click="emit('requestFullscreen', monitorId)"
+        >
+          <ArrowsPointingOutIcon aria-hidden="true" class="btn-icon" />
+        </button>
+
+        <button
+          type="button"
+          data-testid="monitor-close-window"
+          class="monitor-action-btn btn-rose-soft"
+          title="Cerrar ventana"
+          aria-label="Cerrar ventana"
+          @click="emit('closeWindow', monitorId)"
+        >
+          <XMarkIcon aria-hidden="true" class="btn-icon" />
+        </button>
+      </div>
+    </div>
+
     <div class="surface-panel">
       <label class="section-kicker-muted mb-2 block text-[11px]">Imagen local</label>
       <p
@@ -350,42 +421,6 @@ onBeforeUnmount(() => {
       >
         {{ state.lastError }}
       </p>
-    </div>
-
-    <div class="monitor-action-toolbar" data-testid="monitor-action-toolbar">
-      <button
-        ref="contentEditorTriggerButton"
-        type="button"
-        data-testid="monitor-open-content-editor"
-        class="monitor-action-btn btn-slate-soft"
-        title="Editar contenido"
-        aria-label="Editar contenido"
-        @click="openContentEditorModal"
-      >
-        <AdjustmentsHorizontalIcon aria-hidden="true" class="btn-icon" />
-      </button>
-
-      <button
-        type="button"
-        data-testid="monitor-request-fullscreen"
-        class="monitor-action-btn btn-indigo-soft"
-        :title="fullscreenActionLabel"
-        :aria-label="fullscreenActionLabel"
-        @click="emit('requestFullscreen', monitorId)"
-      >
-        <ArrowsPointingOutIcon aria-hidden="true" class="btn-icon" />
-      </button>
-
-      <button
-        type="button"
-        data-testid="monitor-close-window"
-        class="monitor-action-btn btn-rose-soft"
-        title="Cerrar ventana"
-        aria-label="Cerrar ventana"
-        @click="emit('closeWindow', monitorId)"
-      >
-        <XMarkIcon aria-hidden="true" class="btn-icon" />
-      </button>
     </div>
 
     <div

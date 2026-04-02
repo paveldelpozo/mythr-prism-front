@@ -191,7 +191,15 @@
   }
 
   .monitor-action-toolbar {
-    @apply flex w-full items-center gap-1.5 overflow-x-auto pb-0.5;
+    @apply mb-3 flex w-full items-center justify-between gap-2 overflow-x-auto pb-0.5;
+  }
+
+  .monitor-action-toolbar-group {
+    @apply flex shrink-0 items-center gap-1.5;
+  }
+
+  .monitor-action-toolbar-group--end {
+    @apply ml-auto;
   }
 
   .monitor-action-btn {

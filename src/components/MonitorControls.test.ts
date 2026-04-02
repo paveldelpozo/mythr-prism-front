@@ -50,10 +50,14 @@ describe('MonitorControls', () => {
   });
 
   it('muestra acciones compactas icon-only con tooltip', async () => {
+    const state = createDefaultMonitorState();
+    state.isWindowOpen = true;
+
     const wrapper = mount(MonitorControls, {
       props: {
         monitorId: 'monitor-1',
-        state: createDefaultMonitorState(),
+        state,
+        showMonitorUtilities: true,
         isFileImportBlocked: false,
         fileImportBlockedMessage: 'bloqueado'
       }
@@ -61,6 +65,25 @@ describe('MonitorControls', () => {
 
     const toolbar = wrapper.get('[data-testid="monitor-action-toolbar"]');
     expect(toolbar.classes()).toContain('monitor-action-toolbar');
+
+    const leftGroup = wrapper.get('[data-testid="monitor-action-toolbar-left"]');
+    const rightGroup = wrapper.get('[data-testid="monitor-action-toolbar-right"]');
+
+    expect(leftGroup.find('[data-testid="monitor-open-whiteboard"]').exists()).toBe(true);
+    expect(leftGroup.find('[data-testid="monitor-flash-id"]').exists()).toBe(true);
+    expect(rightGroup.find('[data-testid="monitor-open-content-editor"]').exists()).toBe(true);
+    expect(rightGroup.find('[data-testid="monitor-request-fullscreen"]').exists()).toBe(true);
+    expect(rightGroup.find('[data-testid="monitor-close-window"]').exists()).toBe(true);
+
+    const whiteboardButton = wrapper.get('[data-testid="monitor-open-whiteboard"]');
+    expect(whiteboardButton.text().trim()).toBe('');
+    expect(whiteboardButton.attributes('title')).toBe('Abrir pizarra');
+    expect(whiteboardButton.attributes('aria-label')).toBe('Abrir pizarra');
+
+    const flashButton = wrapper.get('[data-testid="monitor-flash-id"]');
+    expect(flashButton.text().trim()).toBe('');
+    expect(flashButton.attributes('title')).toBe('Destacar pantalla para identificar monitor');
+    expect(flashButton.attributes('aria-label')).toBe('Identificar monitor');
 
     const editButton = wrapper.get('[data-testid="monitor-open-content-editor"]');
     expect(editButton.text().trim()).toBe('');
@@ -77,8 +100,13 @@ describe('MonitorControls', () => {
     expect(closeButton.attributes('title')).toBe('Cerrar ventana');
     expect(closeButton.attributes('aria-label')).toBe('Cerrar ventana');
 
+    await whiteboardButton.trigger('click');
+    await flashButton.trigger('click');
+
     await closeButton.trigger('click');
 
+    expect(wrapper.emitted('openWhiteboard')).toEqual([['monitor-1']]);
+    expect(wrapper.emitted('flashMonitorId')).toEqual([['monitor-1']]);
     expect(wrapper.emitted('closeWindow')).toEqual([['monitor-1']]);
   });
 

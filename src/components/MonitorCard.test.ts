@@ -51,7 +51,22 @@ const mountCard = (overrides?: Partial<{ state: MonitorRuntimeState; thumbnail: 
       stubs: {
         MonitorControls: defineComponent({
           name: 'MonitorControls',
-          template: '<div data-testid="monitor-controls-stub" />'
+          emits: ['openWhiteboard', 'flashMonitorId'],
+          template: `
+            <div data-testid="monitor-controls-stub">
+              <div data-testid="monitor-action-toolbar">
+                <div data-testid="monitor-action-toolbar-left">
+                  <button data-testid="monitor-open-whiteboard" @click="$emit('openWhiteboard', 'monitor-1')"></button>
+                  <button data-testid="monitor-flash-id" @click="$emit('flashMonitorId', 'monitor-1')"></button>
+                </div>
+                <div data-testid="monitor-action-toolbar-right">
+                  <button data-testid="monitor-open-content-editor"></button>
+                  <button data-testid="monitor-request-fullscreen"></button>
+                  <button data-testid="monitor-close-window"></button>
+                </div>
+              </div>
+            </div>
+          `
         })
       }
     }
@@ -137,9 +152,6 @@ describe('MonitorCard', () => {
     const wrapper = mountCard();
 
     const whiteboardButton = wrapper.get('[data-testid="monitor-open-whiteboard"]');
-    expect(whiteboardButton.attributes('disabled')).toBeUndefined();
-    expect(whiteboardButton.attributes('title')).toBe('Abrir pizarra');
-    expect(whiteboardButton.text().trim()).toBe('');
 
     await whiteboardButton.trigger('click');
 
@@ -166,23 +178,25 @@ describe('MonitorCard', () => {
     const wrapper = mountCard();
 
     const flashButton = wrapper.get('[data-testid="monitor-flash-id"]');
-    expect(flashButton.attributes('disabled')).toBeUndefined();
-    expect(flashButton.attributes('title')).toBe('Destacar pantalla para identificar monitor');
-    expect(flashButton.text().trim()).toBe('');
 
     await flashButton.trigger('click');
 
     expect(wrapper.emitted('flashMonitorId')?.[0]).toEqual(['monitor-1']);
   });
 
-  it('agrupa acciones rapidas en barra compacta de una sola linea', () => {
+  it('agrupa acciones en una sola fila con utilidades a la izquierda y control de ventana a la derecha', () => {
     const wrapper = mountCard();
 
-    const toolbar = wrapper.get('[data-testid="monitor-card-actions"]');
+    const toolbar = wrapper.get('[data-testid="monitor-action-toolbar"]');
+    const leftGroup = wrapper.get('[data-testid="monitor-action-toolbar-left"]');
+    const rightGroup = wrapper.get('[data-testid="monitor-action-toolbar-right"]');
 
-    expect(toolbar.classes()).toContain('monitor-card-actions');
-    expect(toolbar.find('[data-testid="monitor-open-whiteboard"]').exists()).toBe(true);
-    expect(toolbar.find('[data-testid="monitor-flash-id"]').exists()).toBe(true);
+    expect(toolbar.exists()).toBe(true);
+    expect(leftGroup.find('[data-testid="monitor-open-whiteboard"]').exists()).toBe(true);
+    expect(leftGroup.find('[data-testid="monitor-flash-id"]').exists()).toBe(true);
+    expect(rightGroup.find('[data-testid="monitor-open-content-editor"]').exists()).toBe(true);
+    expect(rightGroup.find('[data-testid="monitor-request-fullscreen"]').exists()).toBe(true);
+    expect(rightGroup.find('[data-testid="monitor-close-window"]').exists()).toBe(true);
   });
 
   it('deshabilita identificar monitor cuando la ventana esta cerrada', async () => {
