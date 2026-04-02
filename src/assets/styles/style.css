@@ -324,6 +324,54 @@
     @apply opacity-60;
   }
 
+  .app-file-dropzone {
+    @apply flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-slate-500/40 bg-slate-900/35 px-3 py-6 text-center transition-colors;
+  }
+
+  .app-file-dropzone-wrap {
+    @apply w-full;
+  }
+
+  .app-file-dropzone--idle {
+    @apply border-slate-500/40 bg-slate-900/35;
+  }
+
+  .app-file-dropzone--drag-valid {
+    @apply border-emerald-300/80 bg-emerald-500/10;
+  }
+
+  .app-file-dropzone--drag-invalid {
+    @apply border-rose-300/80 bg-rose-500/10;
+  }
+
+  .app-file-dropzone--paste-active {
+    @apply border-cyan-300/80 bg-cyan-500/10;
+  }
+
+  .app-file-dropzone--disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
+
+  .app-file-dropzone-item {
+    @apply flex items-center gap-2 rounded-lg border border-slate-700/75 bg-slate-900/55 p-2;
+  }
+
+  .app-file-dropzone-item-preview {
+    @apply flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-700/70 bg-slate-950/70;
+  }
+
+  .app-file-dropzone-thumb {
+    @apply h-full w-full object-cover;
+  }
+
+  .app-file-dropzone-badge-wrap {
+    @apply flex flex-col items-center gap-1;
+  }
+
+  .app-file-dropzone-badge {
+    @apply rounded border border-slate-500/60 bg-slate-800/80 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] text-slate-100;
+  }
+
   .app-modal-overlay {
     @apply fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4;
   }

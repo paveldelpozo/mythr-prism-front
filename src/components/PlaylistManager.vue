@@ -21,6 +21,7 @@ import {
 } from '@heroicons/vue/24/solid';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue';
 import AppCheckbox from './ui/AppCheckbox.vue';
+import AppFileDropzone from './ui/AppFileDropzone.vue';
 import { usePlaylistThumbnails } from '../composables/usePlaylistThumbnails';
 import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
 import {
@@ -35,12 +36,6 @@ import {
   type ContentTransition,
   type ContentTransitionType
 } from '../types/transitions';
-import {
-  pickImageFromClipboard,
-  pickImageFromDataTransfer,
-  pickImageFromFileList,
-  type ImageImportFailureReason
-} from '../utils/imageFileImport';
 
 const DEFAULT_IMAGE_DURATION_MS = 5000;
 const DEFAULT_ITEM_START_AT_MS = 0;
@@ -86,10 +81,6 @@ const newVideoMuted = ref(true);
 const formError = ref<string | null>(null);
 const newImageFileFeedback = ref<string | null>(null);
 const itemImageFileFeedback = ref<Record<string, string>>({});
-const isAddImageDropZoneActive = ref(false);
-const addImageDropZoneDragDepth = ref(0);
-const isEditImageDropZoneActive = ref(false);
-const editImageDropZoneDragDepth = ref(0);
 const isAddModalOpen = ref(false);
 const editingItemId = ref<string | null>(null);
 const editingItemSnapshot = ref<MultimediaItem | null>(null);
@@ -405,28 +396,6 @@ const readFileAsDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-const toImportFailureMessage = (reason: ImageImportFailureReason | null): string =>
-  reason === 'not-image'
-    ? 'El archivo seleccionado no es una imagen valida.'
-    : 'No se selecciono ninguna imagen.';
-
-const resolveImageFileOrFeedback = (
-  selection: { file: File | null; reason: ImageImportFailureReason | null },
-  onFeedback: (message: string) => void
-): File | null => {
-  if (effectiveFileImportBlocked.value) {
-    onFeedback(effectiveFileImportBlockedMessage.value);
-    return null;
-  }
-
-  if (!selection.file) {
-    onFeedback(toImportFailureMessage(selection.reason));
-    return null;
-  }
-
-  return selection.file;
-};
-
 const toImageDataSource = async (file: File): Promise<string> => {
   const dataUrl = await readFileAsDataUrl(file);
   if (!dataUrl.startsWith(IMAGE_DATA_URL_PREFIX)) {
@@ -460,72 +429,6 @@ const resetNewItemForm = () => {
   newVideoMuted.value = true;
   formError.value = null;
   newImageFileFeedback.value = null;
-  isAddImageDropZoneActive.value = false;
-  addImageDropZoneDragDepth.value = 0;
-};
-
-const resetAddImageDropZoneState = () => {
-  addImageDropZoneDragDepth.value = 0;
-  isAddImageDropZoneActive.value = false;
-};
-
-const resetEditImageDropZoneState = () => {
-  editImageDropZoneDragDepth.value = 0;
-  isEditImageDropZoneActive.value = false;
-};
-
-const onAddImageDragEnter = (event: DragEvent) => {
-  event.preventDefault();
-  addImageDropZoneDragDepth.value += 1;
-  isAddImageDropZoneActive.value = newItemKind.value === 'image' && !effectiveFileImportBlocked.value;
-};
-
-const onAddImageDragOver = (event: DragEvent) => {
-  event.preventDefault();
-  const acceptsDrop = newItemKind.value === 'image' && !effectiveFileImportBlocked.value;
-
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = acceptsDrop ? 'copy' : 'none';
-  }
-
-  if (acceptsDrop) {
-    isAddImageDropZoneActive.value = true;
-  }
-};
-
-const onAddImageDragLeave = (event: DragEvent) => {
-  event.preventDefault();
-  addImageDropZoneDragDepth.value = Math.max(0, addImageDropZoneDragDepth.value - 1);
-  if (addImageDropZoneDragDepth.value === 0) {
-    isAddImageDropZoneActive.value = false;
-  }
-};
-
-const onEditImageDragEnter = (event: DragEvent) => {
-  event.preventDefault();
-  editImageDropZoneDragDepth.value += 1;
-  isEditImageDropZoneActive.value = editingItem.value?.kind === 'image' && !effectiveFileImportBlocked.value;
-};
-
-const onEditImageDragOver = (event: DragEvent) => {
-  event.preventDefault();
-  const acceptsDrop = editingItem.value?.kind === 'image' && !effectiveFileImportBlocked.value;
-
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = acceptsDrop ? 'copy' : 'none';
-  }
-
-  if (acceptsDrop) {
-    isEditImageDropZoneActive.value = true;
-  }
-};
-
-const onEditImageDragLeave = (event: DragEvent) => {
-  event.preventDefault();
-  editImageDropZoneDragDepth.value = Math.max(0, editImageDropZoneDragDepth.value - 1);
-  if (editImageDropZoneDragDepth.value === 0) {
-    isEditImageDropZoneActive.value = false;
-  }
 };
 
 const openAddModal = () => {
@@ -822,68 +725,16 @@ const updateItemSource = (itemId: string, value: string) => {
   updateItem(itemId, (item) => ({ ...item, source: value }));
 };
 
-const onNewImageFileChange = async (event: Event) => {
-  const target = event.target as HTMLInputElement;
+const importNewImageFile = async (file: File) => {
+  if (effectiveFileImportBlocked.value) {
+    newImageFileFeedback.value = effectiveFileImportBlockedMessage.value;
+    return;
+  }
+
   formError.value = null;
 
-  const file = resolveImageFileOrFeedback(
-    pickImageFromFileList(target.files),
-    (message) => {
-      newImageFileFeedback.value = message;
-    }
-  );
-  if (!file) {
-    target.value = '';
-    return;
-  }
-
-  try {
-    newItemSource.value = await toImageDataSource(file);
-    newImageFileFeedback.value = 'Imagen convertida a data URI correctamente.';
-  } catch (error) {
-    newImageFileFeedback.value = error instanceof Error ? error.message : 'No se pudo procesar la imagen.';
-  } finally {
-    target.value = '';
-  }
-};
-
-const onItemImageFileChange = async (itemId: string, event: Event) => {
-  const target = event.target as HTMLInputElement;
-  const item = props.items.find((entry) => entry.id === itemId);
-
-  if (!item || item.kind !== 'image') {
-    target.value = '';
-    return;
-  }
-
-  const file = resolveImageFileOrFeedback(
-    pickImageFromFileList(target.files),
-    (message) => {
-      setItemImageFeedback(itemId, message);
-    }
-  );
-  if (!file) {
-    target.value = '';
-    return;
-  }
-
-  try {
-    const source = await toImageDataSource(file);
-    updateItemSource(itemId, source);
-    setItemImageFeedback(itemId, 'Imagen convertida a data URI correctamente.');
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'No se pudo procesar la imagen.';
-    setItemImageFeedback(itemId, message);
-  } finally {
-    target.value = '';
-  }
-};
-
-const importNewImageFromTransfer = async (selection: { file: File | null; reason: ImageImportFailureReason | null }) => {
-  const file = resolveImageFileOrFeedback(selection, (message) => {
-    newImageFileFeedback.value = message;
-  });
-  if (!file) {
+  if (!file.type.startsWith('image/')) {
+    newImageFileFeedback.value = 'El archivo seleccionado no es una imagen valida.';
     return;
   }
 
@@ -895,53 +746,11 @@ const importNewImageFromTransfer = async (selection: { file: File | null; reason
   }
 };
 
-const importEditingImageFromTransfer = async (
-  itemId: string,
-  selection: { file: File | null; reason: ImageImportFailureReason | null }
-) => {
-  const file = resolveImageFileOrFeedback(selection, (message) => {
-    setItemImageFeedback(itemId, message);
-  });
-  if (!file) {
+const importEditingImageFile = async (itemId: string, file: File) => {
+  if (effectiveFileImportBlocked.value) {
+    setItemImageFeedback(itemId, effectiveFileImportBlockedMessage.value);
     return;
   }
-
-  try {
-    const source = await toImageDataSource(file);
-    updateItemSource(itemId, source);
-    setItemImageFeedback(itemId, 'Imagen convertida a data URI correctamente.');
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'No se pudo procesar la imagen.';
-    setItemImageFeedback(itemId, message);
-  }
-};
-
-const onNewImageDrop = (event: DragEvent) => {
-  event.preventDefault();
-  resetAddImageDropZoneState();
-
-  if (newItemKind.value !== 'image') {
-    newImageFileFeedback.value = 'Disponible solo para items de imagen.';
-    return;
-  }
-
-  void importNewImageFromTransfer(pickImageFromDataTransfer(event.dataTransfer));
-};
-
-const onNewImagePaste = (event: ClipboardEvent) => {
-  resetAddImageDropZoneState();
-
-  if (newItemKind.value !== 'image') {
-    return;
-  }
-
-  event.preventDefault();
-  void importNewImageFromTransfer(pickImageFromClipboard(event.clipboardData));
-};
-
-const onEditingImageDrop = (itemId: string, event: DragEvent) => {
-  event.preventDefault();
-  resetEditImageDropZoneState();
 
   const item = props.items.find((entry) => entry.id === itemId);
   if (!item || item.kind !== 'image') {
@@ -949,19 +758,57 @@ const onEditingImageDrop = (itemId: string, event: DragEvent) => {
     return;
   }
 
-  void importEditingImageFromTransfer(itemId, pickImageFromDataTransfer(event.dataTransfer));
-};
-
-const onEditingImagePaste = (itemId: string, event: ClipboardEvent) => {
-  resetEditImageDropZoneState();
-
-  const item = props.items.find((entry) => entry.id === itemId);
-  if (!item || item.kind !== 'image') {
+  if (!file.type.startsWith('image/')) {
+    setItemImageFeedback(itemId, 'El archivo seleccionado no es una imagen valida.');
     return;
   }
 
-  event.preventDefault();
-  void importEditingImageFromTransfer(itemId, pickImageFromClipboard(event.clipboardData));
+  try {
+    const source = await toImageDataSource(file);
+    updateItemSource(itemId, source);
+    setItemImageFeedback(itemId, 'Imagen convertida a data URI correctamente.');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'No se pudo procesar la imagen.';
+    setItemImageFeedback(itemId, message);
+  }
+};
+
+const onNewImageFilesSelected = (files: File[]) => {
+  const file = files[0] ?? null;
+  if (!file) {
+    newImageFileFeedback.value = 'No se selecciono ninguna imagen.';
+    return;
+  }
+
+  void importNewImageFile(file);
+};
+
+const onNewImageDropzoneCleared = () => {
+  newItemSource.value = '';
+  newImageFileFeedback.value = null;
+};
+
+const onEditingImageFilesSelected = (itemId: string, files: File[]) => {
+  const file = files[0] ?? null;
+  if (!file) {
+    setItemImageFeedback(itemId, 'No se selecciono ninguna imagen.');
+    return;
+  }
+
+  void importEditingImageFile(itemId, file);
+};
+
+const onEditingImageDropzoneCleared = (itemId: string) => {
+  updateItemSource(itemId, '');
+  clearItemImageFeedback(itemId);
+};
+
+const onNewImageDropzoneError = (message: string) => {
+  newImageFileFeedback.value = message;
+};
+
+const onEditingImageDropzoneError = (itemId: string, message: string) => {
+  setItemImageFeedback(itemId, message);
 };
 
 const updateImageDuration = (itemId: string, value: number) => {
@@ -1100,8 +947,6 @@ watch(isAddModalOpen, (isOpen) => {
 });
 
 watch(editingItemId, (itemId) => {
-  resetEditImageDropZoneState();
-
   if (!itemId) {
     return;
   }
@@ -1615,15 +1460,8 @@ onBeforeUnmount(() => {
             />
           </label>
 
-          <label v-if="newItemKind === 'image'" class="form-field">
+          <label v-if="newItemKind === 'image'" class="form-field md:col-span-2">
             Archivo local (imagen)
-            <input
-              type="file"
-              accept="image/*"
-              :disabled="effectiveFileImportBlocked"
-              class="form-file-control"
-              @change="onNewImageFileChange"
-            />
             <span
               v-if="effectiveFileImportBlocked"
               data-testid="playlist-add-file-import-blocked-feedback"
@@ -1631,24 +1469,17 @@ onBeforeUnmount(() => {
             >
               {{ effectiveFileImportBlockedMessage }}
             </span>
-              <div
-                data-testid="playlist-add-image-drop-zone"
-                class="image-drop-zone mt-2"
-                :class="[
-                  isAddImageDropZoneActive ? 'image-drop-zone--active' : '',
-                  effectiveFileImportBlocked ? 'image-drop-zone--disabled' : ''
-                ]"
-                role="button"
-                tabindex="0"
-                @dragenter="onAddImageDragEnter"
-                @dragover="onAddImageDragOver"
-                @dragleave="onAddImageDragLeave"
-                @drop="onNewImageDrop"
-                @paste="onNewImagePaste"
-                @blur="resetAddImageDropZoneState"
-              >
-                Arrastra una imagen o pega desde portapapeles (Ctrl/Cmd+V).
-              </div>
+            <AppFileDropzone
+              data-testid="playlist-add-image-drop-zone"
+              class="mt-2"
+              accept="image/*"
+              :multiple="false"
+              :disable-picker="effectiveFileImportBlocked"
+              pick-button-test-id="playlist-add-image-select-button"
+              @files-selected="onNewImageFilesSelected"
+              @cleared="onNewImageDropzoneCleared"
+              @error="onNewImageDropzoneError"
+            />
           </label>
           </div>
 
@@ -1821,13 +1652,6 @@ onBeforeUnmount(() => {
 
           <label v-if="editingItem.kind === 'image'" class="form-field">
             Archivo local (imagen)
-            <input
-              type="file"
-              accept="image/*"
-              :disabled="effectiveFileImportBlocked"
-                class="form-file-control"
-              @change="onItemImageFileChange(editingItem.id, $event)"
-            />
             <span
               v-if="effectiveFileImportBlocked"
               data-testid="playlist-edit-file-import-blocked-feedback"
@@ -1835,24 +1659,17 @@ onBeforeUnmount(() => {
             >
               {{ effectiveFileImportBlockedMessage }}
             </span>
-              <div
-                data-testid="playlist-edit-image-drop-zone"
-                class="image-drop-zone mt-2"
-                :class="[
-                  isEditImageDropZoneActive ? 'image-drop-zone--active' : '',
-                  effectiveFileImportBlocked ? 'image-drop-zone--disabled' : ''
-                ]"
-                role="button"
-                tabindex="0"
-                @dragenter="onEditImageDragEnter"
-                @dragover="onEditImageDragOver"
-                @dragleave="onEditImageDragLeave"
-                @drop="onEditingImageDrop(editingItem.id, $event)"
-                @paste="onEditingImagePaste(editingItem.id, $event)"
-                @blur="resetEditImageDropZoneState"
-              >
-                Arrastra una imagen o pega desde portapapeles (Ctrl/Cmd+V).
-              </div>
+            <AppFileDropzone
+              data-testid="playlist-edit-image-drop-zone"
+              class="mt-2"
+              accept="image/*"
+              :multiple="false"
+              :disable-picker="effectiveFileImportBlocked"
+              pick-button-test-id="playlist-edit-image-select-button"
+              @files-selected="onEditingImageFilesSelected(editingItem.id, $event)"
+              @cleared="onEditingImageDropzoneCleared(editingItem.id)"
+              @error="onEditingImageDropzoneError(editingItem.id, $event)"
+            />
           </label>
           </div>
 
