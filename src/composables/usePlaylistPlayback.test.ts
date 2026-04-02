@@ -66,7 +66,13 @@ const imageItem = (id: string, durationMs = 1500): MultimediaItem => ({
   kind: 'image',
   name: `Image ${id}`,
   source: `data:image/png;base64,${id}`,
-  durationMs
+  durationMs,
+  startAtMs: 0,
+  endAtMs: null,
+  transition: {
+    type: 'cut',
+    durationMs: 450
+  }
 });
 
 const videoItem = (id: string, startAtMs = 3000): MultimediaItem => ({
@@ -74,8 +80,13 @@ const videoItem = (id: string, startAtMs = 3000): MultimediaItem => ({
   kind: 'video',
   name: `Video ${id}`,
   source: `https://cdn/${id}.mp4`,
+  durationMs: 5000,
   startAtMs,
   endAtMs: null,
+  transition: {
+    type: 'fade',
+    durationMs: 450
+  },
   muted: true
 });
 
@@ -158,6 +169,27 @@ describe('composables/usePlaylistPlayback', () => {
 
       expect(playback.value.currentIndex).toBe(1);
       expect(applied.at(-1)?.item?.id).toBe('b');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ignora Inicio/Fin legacy para items no-video y usa duracion', () => {
+    vi.useFakeTimers();
+    try {
+      const clippedImage: MultimediaItem = {
+        ...imageItem('legacy-image', 2500),
+        startAtMs: 1000,
+        endAtMs: 4000
+      };
+      const { api, playback } = createHarness([clippedImage, imageItem('next', 2500)], {
+        autoplay: true
+      });
+
+      api.start();
+      vi.advanceTimersByTime(2600);
+
+      expect(playback.value.currentIndex).toBe(1);
     } finally {
       vi.useRealTimers();
     }

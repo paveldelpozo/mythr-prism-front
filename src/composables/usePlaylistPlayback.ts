@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue';
 import type { MultimediaItem, PlaylistPlaybackState } from '../types/playlist';
+import type { ContentTransition } from '../types/transitions';
 import {
   buildVideoSyncPlan,
   resolveExpectedVideoTimeMs,
@@ -16,7 +17,11 @@ import type {
 interface UsePlaylistPlaybackOptions {
   items: Ref<MultimediaItem[]>;
   playback: Ref<PlaylistPlaybackState>;
-  applyItemToMonitor: (monitorId: string, item: MultimediaItem | null) => boolean;
+  applyItemToMonitor: (
+    monitorId: string,
+    item: MultimediaItem | null,
+    transition?: ContentTransition
+  ) => boolean;
   isMonitorReady: (monitorId: string) => boolean;
   sendVideoSyncCommand?: <TType extends VideoSyncCommandType>(
     monitorId: string,
@@ -52,12 +57,12 @@ interface VideoSyncRuntimeContext {
 }
 
 const resolveAdvanceDelayMs = (item: MultimediaItem, fallbackIntervalSeconds: number): number => {
-  if (item.kind === 'image') {
-    return Math.max(1000, Math.round(item.durationMs));
-  }
-
   if (item.kind === 'video' && item.endAtMs !== null && item.endAtMs > item.startAtMs) {
     return Math.max(1000, Math.round(item.endAtMs - item.startAtMs));
+  }
+
+  if (item.durationMs > 0) {
+    return Math.max(1000, Math.round(item.durationMs));
   }
 
   return Math.max(1000, Math.round(fallbackIntervalSeconds * 1000));
@@ -297,7 +302,7 @@ export const usePlaylistPlayback = ({
         return;
       }
 
-      const sent = applyItemToMonitor(monitorId, item);
+      const sent = applyItemToMonitor(monitorId, item, item.transition);
       if (!sent) {
         failedMonitorIds.push(monitorId);
         return;

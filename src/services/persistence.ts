@@ -4,7 +4,12 @@ import {
   type MirrorModeConfig,
   sanitizeMirrorModeConfig
 } from '../types/mirrorMode';
-import { isMultimediaItem, type MultimediaItem, type PlaylistPlaybackState } from '../types/playlist';
+import {
+  DEFAULT_PLAYLIST_ITEM_TRANSITION,
+  isMultimediaItem,
+  type MultimediaItem,
+  type PlaylistPlaybackState
+} from '../types/playlist';
 import {
   DEFAULT_CONTENT_TRANSITION,
   sanitizeContentTransition,
@@ -255,18 +260,23 @@ const sanitizePlaylistItem = (value: unknown): MultimediaItem | null => {
     return null;
   }
 
-  if (kind === 'image') {
-    const durationMs = toFiniteNumberOrNull(value.durationMs);
-    if (durationMs === null || durationMs <= 0) {
-      return null;
-    }
+  const durationMs = Math.max(1, toFiniteInteger(value.durationMs, 5000));
+  const startAtMs = Math.max(0, toFiniteInteger(value.startAtMs, 0));
+  const endAtMsRaw = value.endAtMs;
+  const endAtMs = endAtMsRaw === null ? null : toFiniteNumberOrNull(endAtMsRaw);
+  const safeEndAtMs = endAtMs === null || endAtMs >= startAtMs ? endAtMs : null;
+  const transition = sanitizeContentTransition(value.transition ?? DEFAULT_PLAYLIST_ITEM_TRANSITION);
 
+  if (kind === 'image') {
     return {
       id,
       kind: 'image',
       name,
       source,
-      durationMs
+      durationMs,
+      startAtMs: 0,
+      endAtMs: null,
+      transition
     };
   }
 
@@ -280,23 +290,12 @@ const sanitizePlaylistItem = (value: unknown): MultimediaItem | null => {
       id,
       kind: 'external-url',
       name,
-      source: validation.normalizedUrl
+      source: validation.normalizedUrl,
+      durationMs,
+      startAtMs: 0,
+      endAtMs: null,
+      transition
     };
-  }
-
-  const startAtMs = toFiniteNumberOrNull(value.startAtMs);
-  if (startAtMs === null || startAtMs < 0) {
-    return null;
-  }
-
-  const endAtMsRaw = value.endAtMs;
-  const endAtMs = endAtMsRaw === null ? null : toFiniteNumberOrNull(endAtMsRaw);
-  if (endAtMsRaw !== null && (endAtMs === null || endAtMs < startAtMs)) {
-    return null;
-  }
-
-  if (typeof value.muted !== 'boolean') {
-    return null;
   }
 
   return {
@@ -304,9 +303,11 @@ const sanitizePlaylistItem = (value: unknown): MultimediaItem | null => {
     kind: 'video',
     name,
     source,
+    durationMs,
     startAtMs,
-    endAtMs,
-    muted: value.muted
+    endAtMs: safeEndAtMs,
+    transition,
+    muted: typeof value.muted === 'boolean' ? value.muted : true
   };
 };
 

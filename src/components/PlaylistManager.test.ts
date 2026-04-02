@@ -35,12 +35,20 @@ const createPlaybackState = (overrides?: Partial<PlaylistPlaybackState>): Playli
   ...overrides
 });
 
+const createTransition = () => ({
+  type: 'cut' as const,
+  durationMs: 450
+});
+
 const createImage = (id: string, name: string): MultimediaItem => ({
   id,
   kind: 'image',
   name,
   source: `data:image/png;base64,${id}`,
-  durationMs: 5000
+  durationMs: 5000,
+  startAtMs: 0,
+  endAtMs: null,
+  transition: createTransition()
 });
 
 const createVideo = (id: string, name: string): MultimediaItem => ({
@@ -48,8 +56,10 @@ const createVideo = (id: string, name: string): MultimediaItem => ({
   kind: 'video',
   name,
   source: `https://cdn/${id}.mp4`,
+  durationMs: 5000,
   startAtMs: 0,
   endAtMs: null,
+  transition: createTransition(),
   muted: true
 });
 
@@ -223,6 +233,7 @@ describe('components/PlaylistManager', () => {
     });
 
     await openAddModal(wrapper);
+    expect(getLayoutGroupOrder(wrapper, 'add-item-modal')).toEqual(['primary', 'source', 'timing', 'transition']);
     const closeButton = wrapper.get('[data-testid="close-add-item-modal-header"]');
     expect(closeButton.attributes('aria-label')).toBe('Cerrar dialogo de alta');
 
@@ -588,7 +599,10 @@ describe('components/PlaylistManager', () => {
             kind: 'image',
             name: 'Largo',
             source: longSource,
-            durationMs: 5000
+            durationMs: 5000,
+            startAtMs: 0,
+            endAtMs: null,
+            transition: createTransition()
           }
         ],
         monitors: [createMonitor('m1', 'Monitor 1')],
@@ -923,7 +937,7 @@ describe('components/PlaylistManager', () => {
     expect(payload[0]?.source.startsWith('data:image/png;base64,')).toBe(true);
   });
 
-  it('marca zona de drop como deshabilitada cuando el item no es imagen', async () => {
+  it('oculta zona de drop cuando el item no es imagen', async () => {
     const wrapper = mount(PlaylistManager, {
       props: {
         items: [],
@@ -938,8 +952,7 @@ describe('components/PlaylistManager', () => {
     await openAddModal(wrapper);
     await wrapper.get('[data-testid="add-item-modal"] select').setValue('video');
 
-    const dropZone = wrapper.get('[data-testid="playlist-add-image-drop-zone"]');
-    expect(dropZone.classes()).toContain('image-drop-zone--disabled');
+    expect(wrapper.find('[data-testid="playlist-add-image-drop-zone"]').exists()).toBe(false);
   });
 
   it('muestra error claro al soltar archivo no imagen en alta', async () => {
@@ -1124,7 +1137,7 @@ describe('components/PlaylistManager', () => {
 
     await openAddModal(wrapper);
     await wrapper.get('[data-testid="add-item-modal"] select').setValue('video');
-    expect(getLayoutGroupOrder(wrapper, 'add-item-modal')).toEqual(['primary', 'source', 'timing', 'mute']);
+    expect(getLayoutGroupOrder(wrapper, 'add-item-modal')).toEqual(['primary', 'source', 'timing', 'mute', 'transition']);
     expect(wrapper.get('[data-testid="new-video-muted-help"]').text()).toBe(
       'Evita picos de audio al cargar el video en pantalla.'
     );
@@ -1133,14 +1146,20 @@ describe('components/PlaylistManager', () => {
       .get('[data-testid="add-item-modal"]')
       .find('[data-layout-group="source"]');
     expect(sourceRow.find('input[type="text"]').exists()).toBe(true);
-    expect(sourceRow.find('input[type="file"]').exists()).toBe(true);
+    expect(sourceRow.find('input[type="file"]').exists()).toBe(false);
 
     const timingRow = wrapper
       .get('[data-testid="add-item-modal"]')
       .find('[data-layout-group="timing"]');
-    expect(timingRow.text()).toContain('Duracion (ms)');
-    expect(timingRow.text()).toContain('Inicio (ms)');
-    expect(timingRow.text()).toContain('Fin (ms, opcional)');
+    expect(timingRow.text()).not.toContain('Duracion (ms)');
+    expect(timingRow.text()).toContain('Inicio de video (ms)');
+    expect(timingRow.text()).toContain('Fin de video (ms, opcional)');
+
+    const transitionRow = wrapper
+      .get('[data-testid="add-item-modal"]')
+      .find('[data-layout-group="transition"]');
+    expect(transitionRow.text()).toContain('Transicion');
+    expect(wrapper.text()).toContain('El recorte temporal (Inicio/Fin) aplica solo a videos.');
 
     await wrapper.get('input[placeholder="Promo apertura"]').setValue('Video sin mute');
     await wrapper.get('input[placeholder="https://... o data:image/..."]').setValue('https://cdn/video.mp4');
@@ -1161,7 +1180,7 @@ describe('components/PlaylistManager', () => {
     expect(createdVideo.muted).toBe(false);
   });
 
-  it('mantiene orden de grupos y ayuda de mute en modal de edicion para video', async () => {
+  it('mantiene orden de grupos, transicion separada y ayuda de mute en modal de edicion para video', async () => {
     const wrapper = mount(PlaylistManager, {
       props: {
         items: [createVideo('vid-1', 'Video 1')],
@@ -1175,7 +1194,7 @@ describe('components/PlaylistManager', () => {
 
     await wrapper.get('[data-testid="open-edit-item-modal-vid-1"]').trigger('click');
 
-    expect(getLayoutGroupOrder(wrapper, 'edit-item-modal')).toEqual(['primary', 'source', 'timing', 'mute']);
+    expect(getLayoutGroupOrder(wrapper, 'edit-item-modal')).toEqual(['primary', 'source', 'timing', 'mute', 'transition']);
     expect(wrapper.get('[data-testid="edit-video-muted-help"]').text()).toBe(
       'Silencia el audio durante el inicio para evitar sobresaltos.'
     );
@@ -1184,14 +1203,95 @@ describe('components/PlaylistManager', () => {
       .get('[data-testid="edit-item-modal"]')
       .find('[data-layout-group="source"]');
     expect(sourceRow.find('input[type="text"]').exists()).toBe(true);
-    expect(sourceRow.find('input[type="file"]').exists()).toBe(true);
+    expect(sourceRow.find('input[type="file"]').exists()).toBe(false);
 
     const timingRow = wrapper
       .get('[data-testid="edit-item-modal"]')
       .find('[data-layout-group="timing"]');
+    expect(timingRow.text()).not.toContain('Duracion (ms)');
+    expect(timingRow.text()).toContain('Inicio de video (ms)');
+    expect(timingRow.text()).toContain('Fin de video (ms, opcional)');
+
+    const transitionRow = wrapper
+      .get('[data-testid="edit-item-modal"]')
+      .find('[data-layout-group="transition"]');
+    expect(transitionRow.text()).toContain('Transicion');
+    expect(wrapper.text()).toContain('El recorte temporal (Inicio/Fin) aplica solo a videos.');
+  });
+
+  it('oculta Inicio/Fin y mantiene Duracion visible en alta para imagen y URL externa', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await openAddModal(wrapper);
+
+    const timingRow = wrapper
+      .get('[data-testid="add-item-modal"]')
+      .find('[data-layout-group="timing"]');
+
     expect(timingRow.text()).toContain('Duracion (ms)');
-    expect(timingRow.text()).toContain('Inicio (ms)');
-    expect(timingRow.text()).toContain('Fin (ms, opcional)');
+    expect(timingRow.text()).not.toContain('Inicio de video (ms)');
+    expect(timingRow.text()).not.toContain('Fin de video (ms, opcional)');
+    const transitionRow = wrapper
+      .get('[data-testid="add-item-modal"]')
+      .find('[data-layout-group="transition"]');
+    expect(transitionRow.text()).toContain('Transicion');
+    expect(wrapper.text()).not.toContain('El recorte temporal (Inicio/Fin) aplica solo a videos.');
+
+    await wrapper.get('[data-testid="add-item-modal"] select').setValue('external-url');
+    expect(getLayoutGroupOrder(wrapper, 'add-item-modal')).toEqual(['primary', 'source', 'timing', 'transition']);
+
+    expect(timingRow.text()).toContain('Duracion (ms)');
+    expect(timingRow.text()).not.toContain('Inicio de video (ms)');
+    expect(timingRow.text()).not.toContain('Fin de video (ms, opcional)');
+    expect(transitionRow.text()).toContain('Transicion');
+    expect(wrapper.text()).not.toContain('El recorte temporal (Inicio/Fin) aplica solo a videos.');
+  });
+
+  it('oculta Inicio/Fin y mantiene Duracion visible en edicion para image/external-url', async () => {
+    const wrapper = mount(PlaylistManager, {
+      props: {
+        items: [createImage('img-1', 'Imagen 1')],
+        monitors: [createMonitor('m1', 'Monitor 1')],
+        monitorStates: createMonitorStates(),
+        playbackState: createPlaybackState(),
+        playbackFeedback: '',
+        isPlaying: false
+      }
+    });
+
+    await wrapper.get('[data-testid="open-edit-item-modal-img-1"]').trigger('click');
+    expect(getLayoutGroupOrder(wrapper, 'edit-item-modal')).toEqual(['primary', 'source', 'timing', 'transition']);
+
+    const timingRow = wrapper
+      .get('[data-testid="edit-item-modal"]')
+      .find('[data-layout-group="timing"]');
+
+    expect(timingRow.text()).toContain('Duracion (ms)');
+    expect(timingRow.text()).not.toContain('Inicio de video (ms)');
+    expect(timingRow.text()).not.toContain('Fin de video (ms, opcional)');
+    const transitionRow = wrapper
+      .get('[data-testid="edit-item-modal"]')
+      .find('[data-layout-group="transition"]');
+    expect(transitionRow.text()).toContain('Transicion');
+    expect(wrapper.text()).not.toContain('El recorte temporal (Inicio/Fin) aplica solo a videos.');
+
+    await wrapper.get('[data-testid="edit-item-modal"] select').setValue('external-url');
+    expect(getLayoutGroupOrder(wrapper, 'edit-item-modal')).toEqual(['primary', 'source', 'timing', 'transition']);
+
+    expect(timingRow.text()).toContain('Duracion (ms)');
+    expect(timingRow.text()).not.toContain('Inicio de video (ms)');
+    expect(timingRow.text()).not.toContain('Fin de video (ms, opcional)');
+    expect(transitionRow.text()).toContain('Transicion');
+    expect(wrapper.text()).not.toContain('El recorte temporal (Inicio/Fin) aplica solo a videos.');
   });
 
   it('incluye boton de cerrar en header de edicion y mantiene guardar/cancelar operativos', async () => {

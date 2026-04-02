@@ -1,3 +1,9 @@
+import {
+  CONTENT_TRANSITION_TYPES,
+  DEFAULT_CONTENT_TRANSITION,
+  type ContentTransition
+} from './transitions';
+
 export const MEDIA_ITEM_KINDS = ['image', 'video', 'external-url'] as const;
 
 export type MediaItemKind = (typeof MEDIA_ITEM_KINDS)[number];
@@ -7,17 +13,18 @@ interface MultimediaItemBase {
   kind: MediaItemKind;
   name: string;
   source: string;
+  durationMs: number;
+  startAtMs: number;
+  endAtMs: number | null;
+  transition: ContentTransition;
 }
 
 export interface ImageMultimediaItem extends MultimediaItemBase {
   kind: 'image';
-  durationMs: number;
 }
 
 export interface VideoMultimediaItem extends MultimediaItemBase {
   kind: 'video';
-  startAtMs: number;
-  endAtMs: number | null;
   muted: boolean;
 }
 
@@ -40,6 +47,20 @@ export interface PlaylistPlaybackState {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
+const isTransitionShape = (value: unknown): value is ContentTransition => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.type === 'string' &&
+    CONTENT_TRANSITION_TYPES.includes(value.type as ContentTransition['type']) &&
+    typeof value.durationMs === 'number' &&
+    Number.isFinite(value.durationMs) &&
+    value.durationMs > 0
+  );
+};
+
 const isMediaItemKind = (value: unknown): value is MediaItemKind =>
   typeof value === 'string' && MEDIA_ITEM_KINDS.includes(value as MediaItemKind);
 
@@ -55,7 +76,18 @@ const isBaseItemShape = (value: unknown): value is MultimediaItemBase => {
     typeof value.name === 'string' &&
     value.name.length > 0 &&
     typeof value.source === 'string' &&
-    value.source.length > 0
+    value.source.length > 0 &&
+    typeof value.durationMs === 'number' &&
+    Number.isFinite(value.durationMs) &&
+    value.durationMs > 0 &&
+    typeof value.startAtMs === 'number' &&
+    Number.isFinite(value.startAtMs) &&
+    value.startAtMs >= 0 &&
+    (value.endAtMs === null ||
+      (typeof value.endAtMs === 'number' &&
+        Number.isFinite(value.endAtMs) &&
+        value.endAtMs >= value.startAtMs)) &&
+    isTransitionShape(value.transition)
   );
 };
 
@@ -66,26 +98,13 @@ export const isMultimediaItem = (value: unknown): value is MultimediaItem => {
 
   const raw = value as unknown as Record<string, unknown>;
 
-  if (value.kind === 'image') {
-    return (
-      typeof raw.durationMs === 'number' &&
-      Number.isFinite(raw.durationMs) &&
-      raw.durationMs > 0
-    );
-  }
-
-  if (value.kind === 'external-url') {
+  if (value.kind === 'image' || value.kind === 'external-url') {
     return true;
   }
 
-  return (
-    typeof raw.startAtMs === 'number' &&
-    Number.isFinite(raw.startAtMs) &&
-    raw.startAtMs >= 0 &&
-    (raw.endAtMs === null ||
-      (typeof raw.endAtMs === 'number' &&
-        Number.isFinite(raw.endAtMs) &&
-        raw.endAtMs >= raw.startAtMs)) &&
-    typeof raw.muted === 'boolean'
-  );
+  return typeof raw.muted === 'boolean';
+};
+
+export const DEFAULT_PLAYLIST_ITEM_TRANSITION: ContentTransition = {
+  ...DEFAULT_CONTENT_TRANSITION
 };

@@ -994,9 +994,13 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     setImageForMonitorWithOptions(monitorId, imageDataUrl, options);
   };
 
-  const setPlaylistItemForMonitor = (monitorId: string, item: MultimediaItem | null): boolean => {
+  const setPlaylistItemForMonitor = (
+    monitorId: string,
+    item: MultimediaItem | null,
+    transitionOverride?: ContentTransition
+  ): boolean => {
     const state = getMonitorState(monitorId);
-    const transition = sanitizeContentTransition(state.contentTransition);
+    const transition = sanitizeContentTransition(transitionOverride ?? state.contentTransition);
 
     if (item?.kind === 'external-url') {
       const validation = validateExternalUrl(item.source);
