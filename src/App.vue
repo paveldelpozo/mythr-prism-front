@@ -21,6 +21,11 @@ import {
 import { DEFAULT_TRANSFORM } from './types/broadcaster';
 import { sanitizeMirrorModeConfig, type MirrorModeConfig } from './types/mirrorMode';
 import type { MultimediaItem, PlaylistPlaybackState } from './types/playlist';
+import {
+  DEFAULT_CONTENT_TRANSITION,
+  sanitizeContentTransition,
+  type ContentTransition
+} from './types/transitions';
 import { buildVideoSyncPlan } from './types/videoSync';
 import type { WhiteboardState } from './types/whiteboard';
 
@@ -94,6 +99,7 @@ const {
   setMirrorSourceMonitorId,
   setMirrorTargetMonitorIds,
   setMonitorCustomName,
+  setContentTransitionForMonitor,
   setImageForMonitor,
   setWhiteboardStateForMonitor,
   undoWhiteboardForMonitor,
@@ -165,6 +171,7 @@ const buildPersistableMonitorStateMap = (): PersistedMonitorStateMap => {
         translateX: state.transform.translateX,
         translateY: state.transform.translateY
       },
+      contentTransition: sanitizeContentTransition(state.contentTransition),
       imageDataUrl: typeof state.imageDataUrl === 'string' ? state.imageDataUrl : null,
       customName: typeof state.customName === 'string' ? state.customName : null
     };
@@ -243,6 +250,7 @@ const buildPersistableLayouts = (): PersistedLayout[] =>
               translateX: monitorState.transform.translateX,
               translateY: monitorState.transform.translateY
             },
+            contentTransition: sanitizeContentTransition(monitorState.contentTransition),
             imageDataUrl:
               typeof monitorState.imageDataUrl === 'string' ? monitorState.imageDataUrl : null,
             customName: typeof monitorState.customName === 'string' ? monitorState.customName : null
@@ -366,8 +374,12 @@ const onWhiteboardStateChange = (monitorId: string, state: WhiteboardState) => {
   setWhiteboardStateForMonitor(monitorId, state);
 };
 
-const uploadImage = (monitorId: string, file: File) => {
-  if (hasActiveFullscreenSlave.value) {
+const uploadImage = (
+  monitorId: string,
+  file: File,
+  source: 'file-picker' | 'drag-drop' | 'paste' = 'file-picker'
+) => {
+  if (source === 'file-picker' && hasActiveFullscreenSlave.value) {
     globalError.value = FILE_IMPORT_BLOCK_MESSAGE;
     return;
   }
@@ -438,8 +450,13 @@ const applyPersistedMonitorState = (monitorId: string, state: PersistedMonitorSt
     });
   }
 
+  setContentTransitionForMonitor(monitorId, sanitizeContentTransition(state.contentTransition));
   setImageForMonitor(monitorId, state.imageDataUrl);
   setMonitorCustomName(monitorId, state.customName ?? '');
+};
+
+const onMonitorTransitionChange = (monitorId: string, transition: ContentTransition) => {
+  setContentTransitionForMonitor(monitorId, transition);
 };
 
 const saveCurrentLayout = () => {
@@ -534,6 +551,7 @@ const loadSelectedLayout = () => {
   monitorIdsToApply.forEach((monitorId) => {
     const state = selectedLayout.snapshot.monitors[monitorId] ?? {
       transform: { ...DEFAULT_TRANSFORM },
+      contentTransition: { ...DEFAULT_CONTENT_TRANSITION },
       imageDataUrl: null,
       customName: null
     };
@@ -813,6 +831,7 @@ onBeforeUnmount(() => {
           @clear-image="(id) => setImageForMonitor(id, null)"
           @open-whiteboard="openWhiteboardEditor"
           @rename-monitor="setMonitorCustomName"
+          @set-content-transition="onMonitorTransitionChange"
           @transform="applyTransform"
         />
       </section>

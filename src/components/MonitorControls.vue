@@ -17,6 +17,13 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { MonitorRuntimeState } from '../types/broadcaster';
 import {
+  CONTENT_TRANSITION_TYPES,
+  TRANSITION_DURATION_MAX_MS,
+  TRANSITION_DURATION_MIN_MS,
+  type ContentTransition,
+  type ContentTransitionType
+} from '../types/transitions';
+import {
   pickImageFromClipboard,
   pickImageFromDataTransfer,
   pickImageFromFileList,
@@ -30,8 +37,10 @@ const props = defineProps<{
   fileImportBlockedMessage?: string;
 }>();
 
+type ImageImportSource = 'file-picker' | 'drag-drop' | 'paste';
+
 const emit = defineEmits<{
-  uploadImage: [monitorId: string, file: File];
+  uploadImage: [monitorId: string, file: File, source: ImageImportSource];
   clearImage: [monitorId: string];
   transform: [
     monitorId: string,
@@ -39,6 +48,7 @@ const emit = defineEmits<{
   ];
   requestFullscreen: [monitorId: string];
   closeWindow: [monitorId: string];
+  setContentTransition: [monitorId: string, transition: ContentTransition];
 }>();
 
 const imageImportFeedback = ref<string | null>(null);
@@ -55,6 +65,30 @@ const effectiveFileImportBlocked = computed(() => props.isFileImportBlocked);
 const effectiveFileImportBlockedMessage = computed(() =>
   props.fileImportBlockedMessage ?? 'Para importar archivo, sal del fullscreen o usa Drag & Drop / pegar imagen.'
 );
+const onTransitionTypeChange = (event: Event) => {
+  const nextType = (event.target as HTMLSelectElement).value as ContentTransitionType;
+  if (!CONTENT_TRANSITION_TYPES.includes(nextType)) {
+    return;
+  }
+
+  emit('setContentTransition', props.monitorId, {
+    type: nextType,
+    durationMs: props.state.contentTransition.durationMs
+  });
+};
+
+const onTransitionDurationInput = (event: Event) => {
+  const rawValue = Number((event.target as HTMLInputElement).value);
+  const fallback = props.state.contentTransition.durationMs;
+  const safeValue = Number.isFinite(rawValue)
+    ? Math.max(TRANSITION_DURATION_MIN_MS, Math.min(TRANSITION_DURATION_MAX_MS, Math.round(rawValue)))
+    : fallback;
+
+  emit('setContentTransition', props.monitorId, {
+    type: props.state.contentTransition.type,
+    durationMs: safeValue
+  });
+};
 
 const feedbackForFailureReason = (reason: ImageImportFailureReason): string =>
   reason === 'not-image'
@@ -65,8 +99,8 @@ const clearImageImportFeedback = () => {
   imageImportFeedback.value = null;
 };
 
-const emitImageFile = (file: File) => {
-  emit('uploadImage', props.monitorId, file);
+const emitImageFile = (file: File, source: ImageImportSource) => {
+  emit('uploadImage', props.monitorId, file, source);
   imageImportFeedback.value = `Imagen "${file.name}" lista para proyectar.`;
 };
 
@@ -85,7 +119,7 @@ const onFileChange = (event: Event) => {
     return;
   }
 
-  emitImageFile(selection.file);
+  emitImageFile(selection.file, 'file-picker');
   target.value = '';
 };
 
@@ -97,19 +131,17 @@ const resetImageDropZoneState = () => {
 const onImageDragEnter = (event: DragEvent) => {
   event.preventDefault();
   imageDropZoneDragDepth.value += 1;
-  isImageDropZoneActive.value = !effectiveFileImportBlocked.value;
+  isImageDropZoneActive.value = true;
 };
 
 const onImageDragOver = (event: DragEvent) => {
   event.preventDefault();
 
   if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = effectiveFileImportBlocked.value ? 'none' : 'copy';
+    event.dataTransfer.dropEffect = 'copy';
   }
 
-  if (!effectiveFileImportBlocked.value) {
-    isImageDropZoneActive.value = true;
-  }
+  isImageDropZoneActive.value = true;
 };
 
 const onImageDragLeave = (event: DragEvent) => {
@@ -124,27 +156,17 @@ const onImageDrop = (event: DragEvent) => {
   event.preventDefault();
   resetImageDropZoneState();
 
-  if (effectiveFileImportBlocked.value) {
-    imageImportFeedback.value = effectiveFileImportBlockedMessage.value;
-    return;
-  }
-
   const selection = pickImageFromDataTransfer(event.dataTransfer);
   if (!selection.file) {
     imageImportFeedback.value = feedbackForFailureReason(selection.reason ?? 'empty');
     return;
   }
 
-  emitImageFile(selection.file);
+  emitImageFile(selection.file, 'drag-drop');
 };
 
 const onImagePaste = (event: ClipboardEvent) => {
   resetImageDropZoneState();
-
-  if (effectiveFileImportBlocked.value) {
-    imageImportFeedback.value = effectiveFileImportBlockedMessage.value;
-    return;
-  }
 
   const selection = pickImageFromClipboard(event.clipboardData);
   if (!selection.file) {
@@ -153,7 +175,7 @@ const onImagePaste = (event: ClipboardEvent) => {
   }
 
   event.preventDefault();
-  emitImageFile(selection.file);
+  emitImageFile(selection.file, 'paste');
 };
 
 const fullscreenActionLabel = computed(() => {
@@ -258,10 +280,7 @@ onBeforeUnmount(() => {
       <div
         data-testid="monitor-image-drop-zone"
         class="image-drop-zone mt-3"
-        :class="[
-          isImageDropZoneActive ? 'image-drop-zone--active' : '',
-          effectiveFileImportBlocked ? 'image-drop-zone--disabled' : ''
-        ]"
+        :class="isImageDropZoneActive ? 'image-drop-zone--active' : ''"
         role="button"
         tabindex="0"
         @dragenter="onImageDragEnter"
@@ -411,6 +430,42 @@ onBeforeUnmount(() => {
                 Derecha
               </button>
             </div>
+          </div>
+
+          <div class="surface-panel">
+            <p class="section-kicker-muted mb-2 text-[11px]">Transicion de contenido</p>
+            <div class="grid gap-3 md:grid-cols-2">
+              <label class="form-field text-xs" for="monitor-transition-type">
+                Tipo
+                <select
+                  id="monitor-transition-type"
+                  data-testid="monitor-transition-type"
+                  class="form-control"
+                  :value="state.contentTransition.type"
+                  @change="onTransitionTypeChange"
+                >
+                  <option value="cut">Cut</option>
+                  <option value="fade">Fade</option>
+                  <option value="wipe">Wipe</option>
+                </select>
+              </label>
+              <label class="form-field text-xs" for="monitor-transition-duration">
+                Duracion (ms)
+                <input
+                  id="monitor-transition-duration"
+                  data-testid="monitor-transition-duration"
+                  type="number"
+                  class="form-control"
+                  :min="TRANSITION_DURATION_MIN_MS"
+                  :max="TRANSITION_DURATION_MAX_MS"
+                  :value="state.contentTransition.durationMs"
+                  @input="onTransitionDurationInput"
+                />
+              </label>
+            </div>
+            <p class="mt-2 text-xs text-slate-300/85">
+              Rango recomendado: {{ TRANSITION_DURATION_MIN_MS }}-{{ TRANSITION_DURATION_MAX_MS }} ms.
+            </p>
           </div>
 
           <p class="text-xs text-slate-300/80">

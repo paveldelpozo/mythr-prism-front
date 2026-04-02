@@ -12,6 +12,7 @@ import { computed } from 'vue';
 import MonitorCard from './MonitorCard.vue';
 import AppCheckbox from './ui/AppCheckbox.vue';
 import type { MonitorDescriptor, MonitorStateMap, MonitorThumbnailStateMap } from '../types/broadcaster';
+import type { ContentTransition } from '../types/transitions';
 
 const emit = defineEmits<{
   'update:showOnlyProjectable': [value: boolean];
@@ -28,7 +29,7 @@ const emit = defineEmits<{
   requestFullscreen: [monitorId: string];
   flashMonitorId: [monitorId: string];
   closeWindow: [monitorId: string];
-  uploadImage: [monitorId: string, file: File];
+  uploadImage: [monitorId: string, file: File, source: 'file-picker' | 'drag-drop' | 'paste'];
   clearImage: [monitorId: string];
   openWhiteboard: [monitorId: string];
   renameMonitor: [monitorId: string, nextName: string];
@@ -36,6 +37,7 @@ const emit = defineEmits<{
     monitorId: string,
     action: { type: 'rotate'; value: number } | { type: 'scale'; value: number } | { type: 'move'; value: { x?: number; y?: number } } | { type: 'reset' }
   ];
+  setContentTransition: [monitorId: string, transition: ContentTransition];
 }>();
 
 const props = defineProps<{
@@ -166,11 +168,12 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
         @request-fullscreen="emit('requestFullscreen', $event)"
         @flash-monitor-id="emit('flashMonitorId', $event)"
         @close-window="emit('closeWindow', $event)"
-        @upload-image="(id, file) => emit('uploadImage', id, file)"
+        @upload-image="(id, file, source) => emit('uploadImage', id, file, source)"
         @clear-image="emit('clearImage', $event)"
         @open-whiteboard="emit('openWhiteboard', $event)"
         @rename-monitor="(id, name) => emit('renameMonitor', id, name)"
         @transform="(id, action) => emit('transform', id, action)"
+        @set-content-transition="(id, transition) => emit('setContentTransition', id, transition)"
       />
     </div>
 

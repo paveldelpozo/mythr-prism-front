@@ -30,6 +30,10 @@ import type { PersistedMonitorStateMap } from '../services/persistence';
 import { cloneSerializable } from '../utils/cloneSerializable';
 import type { MultimediaItem } from '../types/playlist';
 import {
+  sanitizeContentTransition,
+  type ContentTransition
+} from '../types/transitions';
+import {
   createEmptyWhiteboardState,
   sanitizeWhiteboardState,
   type MonitorWhiteboardStateMap,
@@ -54,6 +58,7 @@ interface UseMultiMonitorBroadcasterOptions {
 
 interface SetImageForMonitorOptions {
   renderSource?: string | null;
+  transition?: ContentTransition;
 }
 
 type VideoSyncCommandType = 'VIDEO_SYNC_PLAY' | 'VIDEO_SYNC_PAUSE' | 'VIDEO_SYNC_SEEK' | 'VIDEO_SYNC_TIME';
@@ -173,6 +178,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     }
 
     state.transform = { ...persistedState.transform };
+    state.contentTransition = sanitizeContentTransition(persistedState.contentTransition);
     state.imageDataUrl = persistedState.imageDataUrl;
 
     if (persistedState.customName) {
@@ -219,6 +225,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     Object.entries(monitorStates).forEach(([monitorId, state]) => {
       serializableStates[monitorId] = {
         transform: { ...state.transform },
+        contentTransition: sanitizeContentTransition(state.contentTransition),
         imageDataUrl: state.imageDataUrl,
         customName: monitorCustomNameById[monitorId] ?? null
       };
@@ -468,18 +475,23 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
 
   const buildContentMessage = (
     monitorId: string,
-    state: MonitorRuntimeState
+    state: MonitorRuntimeState,
+    transitionOverride?: ContentTransition
   ): Extract<MasterToSlaveMessage, { type: 'SET_IMAGE' | 'SET_MEDIA' }> | null => {
+    const transition = sanitizeContentTransition(transitionOverride ?? state.contentTransition);
+
     if (state.activeMediaItem) {
       return buildMasterMessage(monitorId, 'SET_MEDIA', {
-        item: state.activeMediaItem
+        item: state.activeMediaItem,
+        transition
       });
     }
 
     const renderSource = resolveImageRenderSource(monitorId, state);
 
     return buildMasterMessage(monitorId, 'SET_IMAGE', {
-      imageDataUrl: renderSource
+      imageDataUrl: renderSource,
+      transition
     });
   };
 
@@ -524,6 +536,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
 
       const targetState = getMonitorState(targetMonitorId);
       targetState.transform = { ...sourceState.transform };
+      targetState.contentTransition = sanitizeContentTransition(sourceState.contentTransition);
       targetState.imageDataUrl = sourceState.imageDataUrl;
       targetState.activeMediaItem = sourceState.activeMediaItem;
       monitorWhiteboards[targetMonitorId] = sanitizeWhiteboardState(getMonitorWhiteboard(sourceMonitorId));
@@ -936,15 +949,18 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     const state = getMonitorState(monitorId);
     state.imageDataUrl = imageDataUrl;
     state.activeMediaItem = null;
+    const transition = sanitizeContentTransition(options.transition ?? state.contentTransition);
     const renderSource = options.renderSource === undefined
       ? imageDataUrl
       : options.renderSource;
 
     setMonitorThumbnail(monitorId, null, null);
     setMonitorImageRenderSource(monitorId, renderSource);
+    state.contentTransition = transition;
 
     const message = buildMasterMessage(monitorId, 'SET_IMAGE', {
-      imageDataUrl: resolveImageRenderSource(monitorId, state)
+      imageDataUrl: resolveImageRenderSource(monitorId, state),
+      transition
     });
     if (message) {
       sendToSlave(monitorId, message);
@@ -963,11 +979,13 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
 
   const setPlaylistItemForMonitor = (monitorId: string, item: MultimediaItem | null): boolean => {
     const state = getMonitorState(monitorId);
+    const transition = sanitizeContentTransition(state.contentTransition);
     state.activeMediaItem = item;
     setMonitorThumbnail(monitorId, null, null);
 
     const message = buildMasterMessage(monitorId, 'SET_MEDIA', {
-      item
+      item,
+      transition
     });
     if (!message) {
       replicateSourceToMirrorTargets(monitorId);
@@ -1054,6 +1072,12 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     replicateSourceToMirrorTargets(monitorId);
   };
 
+  const setContentTransitionForMonitor = (monitorId: string, nextTransition: ContentTransition) => {
+    const state = getMonitorState(monitorId);
+    state.contentTransition = sanitizeContentTransition(nextTransition);
+    replicateSourceToMirrorTargets(monitorId);
+  };
+
   const clearWhiteboardForMonitor = (monitorId: string) => {
     monitorWhiteboards[monitorId] = createEmptyWhiteboardState();
 
@@ -1127,6 +1151,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     setMirrorSourceMonitorId,
     setMirrorTargetMonitorIds,
     setMonitorCustomName,
+    setContentTransitionForMonitor,
     setImageForMonitor,
     setWhiteboardStateForMonitor,
     undoWhiteboardForMonitor,

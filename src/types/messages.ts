@@ -1,5 +1,6 @@
 import type { MonitorTransform } from './broadcaster';
 import type { MultimediaItem } from './playlist';
+import type { ContentTransition } from './transitions';
 import type { WhiteboardState } from './whiteboard';
 
 export const MESSAGE_CHANNEL = 'MMIB_V3_CHANNEL';
@@ -82,8 +83,8 @@ export interface VideoSyncTimePayload {
 export type MasterToSlaveMessage =
   | MessageEnvelope<'MASTER_INIT', MasterInitPayload>
   | MessageEnvelope<'FLASH_MONITOR_ID', FlashMonitorIdPayload>
-  | MessageEnvelope<'SET_IMAGE', { imageDataUrl: string | null }>
-  | MessageEnvelope<'SET_MEDIA', { item: MultimediaItem | null }>
+  | MessageEnvelope<'SET_IMAGE', { imageDataUrl: string | null; transition?: ContentTransition }>
+  | MessageEnvelope<'SET_MEDIA', { item: MultimediaItem | null; transition?: ContentTransition }>
   | MessageEnvelope<'VIDEO_SYNC_PLAY', VideoSyncPlayPayload>
   | MessageEnvelope<'VIDEO_SYNC_PAUSE', VideoSyncPausePayload>
   | MessageEnvelope<'VIDEO_SYNC_SEEK', VideoSyncSeekPayload>

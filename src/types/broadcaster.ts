@@ -1,4 +1,8 @@
 import type { MultimediaItem } from './playlist';
+import {
+  DEFAULT_CONTENT_TRANSITION,
+  type ContentTransition
+} from './transitions';
 
 export interface MonitorTransform {
   rotate: number;
@@ -25,6 +29,7 @@ export interface MonitorDescriptor {
 
 export interface MonitorRuntimeState {
   transform: MonitorTransform;
+  contentTransition: ContentTransition;
   imageDataUrl: string | null;
   activeMediaItem: MultimediaItem | null;
   isWindowOpen: boolean;
@@ -55,6 +60,7 @@ export const DEFAULT_TRANSFORM: MonitorTransform = {
 
 export const createDefaultMonitorState = (): MonitorRuntimeState => ({
   transform: { ...DEFAULT_TRANSFORM },
+  contentTransition: { ...DEFAULT_CONTENT_TRANSITION },
   imageDataUrl: null,
   activeMediaItem: null,
   isWindowOpen: false,
