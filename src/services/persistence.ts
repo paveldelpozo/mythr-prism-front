@@ -5,6 +5,11 @@ import {
   sanitizeMirrorModeConfig
 } from '../types/mirrorMode';
 import { isMultimediaItem, type MultimediaItem, type PlaylistPlaybackState } from '../types/playlist';
+import {
+  DEFAULT_CONTENT_TRANSITION,
+  sanitizeContentTransition,
+  type ContentTransition
+} from '../types/transitions';
 import { cloneSerializable } from '../utils/cloneSerializable';
 
 export const SESSION_STORAGE_KEY = 'mythr-prism.session';
@@ -14,6 +19,7 @@ const MIN_SCALE = 0.05;
 
 export interface PersistedMonitorState {
   transform: MonitorTransform;
+  contentTransition: ContentTransition;
   imageDataUrl: string | null;
   customName: string | null;
 }
@@ -155,6 +161,7 @@ const sanitizeMonitorState = (value: unknown): PersistedMonitorState => {
   if (!isRecord(value)) {
     return {
       transform: { ...DEFAULT_TRANSFORM },
+      contentTransition: { ...DEFAULT_CONTENT_TRANSITION },
       imageDataUrl: null,
       customName: null
     };
@@ -162,6 +169,7 @@ const sanitizeMonitorState = (value: unknown): PersistedMonitorState => {
 
   return {
     transform: sanitizeTransform(value.transform),
+    contentTransition: sanitizeContentTransition(value.contentTransition),
     imageDataUrl: sanitizeImageDataUrl(value.imageDataUrl),
     customName: sanitizeMonitorCustomName(value.customName)
   };

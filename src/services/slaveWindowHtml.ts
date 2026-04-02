@@ -72,6 +72,15 @@ export const createSlaveWindowHtml = ({
         height: 100%;
         pointer-events: none;
       }
+      #transitionVeil {
+        position: absolute;
+        inset: 0;
+        background: rgba(2, 6, 23, 0.98);
+        opacity: 0;
+        clip-path: inset(0 100% 0 0);
+        pointer-events: none;
+        z-index: 18;
+      }
       #monitorIdentifyFlash {
         position: absolute;
         inset: 0;
@@ -176,6 +185,7 @@ export const createSlaveWindowHtml = ({
           <p id="empty">Esperando imagen...</p>
         </div>
         <canvas id="whiteboard"></canvas>
+        <div id="transitionVeil" aria-hidden="true"></div>
         <div id="monitorIdentifyFlash" aria-live="polite">
           <strong id="monitorIdentifyFlashLabel">Identificando monitor</strong>
         </div>
@@ -200,6 +210,9 @@ export const createSlaveWindowHtml = ({
         const MONITOR_ID_FLASH_MIN_MS = 800;
         const MONITOR_ID_FLASH_MAX_MS = 5000;
         const IMAGE_APPLY_DEFER_MS = 0;
+        const TRANSITION_DEFAULT_DURATION_MS = 450;
+        const TRANSITION_MIN_DURATION_MS = 120;
+        const TRANSITION_MAX_DURATION_MS = 5000;
         const THUMBNAIL_CAPTURE_INTERVAL_MS = 1000;
         const THUMBNAIL_MAX_WIDTH = 320;
         const THUMBNAIL_IMAGE_QUALITY = 0.55;
@@ -215,6 +228,7 @@ export const createSlaveWindowHtml = ({
         const video = document.getElementById('video');
         const empty = document.getElementById('empty');
         const whiteboardCanvas = document.getElementById('whiteboard');
+        const transitionVeil = document.getElementById('transitionVeil');
         const monitorIdentifyFlash = document.getElementById('monitorIdentifyFlash');
         const monitorIdentifyFlashLabel = document.getElementById('monitorIdentifyFlashLabel');
         const thumbnailCanvas = document.createElement('canvas');
@@ -238,6 +252,8 @@ export const createSlaveWindowHtml = ({
         let lastThumbnailDataUrl = null;
         let imageRenderRequestId = 0;
         let monitorIdentifyFlashTimeoutId = null;
+        let transitionTimeoutId = null;
+        let transitionSequenceId = 0;
         const traceBuffer = [];
         let isTraceConsoleEnabled = false;
 
@@ -275,6 +291,111 @@ export const createSlaveWindowHtml = ({
             MONITOR_ID_FLASH_MIN_MS,
             Math.min(MONITOR_ID_FLASH_MAX_MS, Math.round(durationMs))
           );
+        };
+
+        const clearTransitionTimeout = () => {
+          if (transitionTimeoutId !== null) {
+            window.clearTimeout(transitionTimeoutId);
+            transitionTimeoutId = null;
+          }
+        };
+
+        const resetTransitionVeil = () => {
+          if (!transitionVeil) {
+            return;
+          }
+
+          transitionVeil.style.transition = 'none';
+          transitionVeil.style.opacity = '0';
+          transitionVeil.style.clipPath = 'inset(0 100% 0 0)';
+        };
+
+        const sanitizeTransitionPayload = (transitionPayload) => {
+          const type = transitionPayload?.type === 'fade' || transitionPayload?.type === 'wipe'
+            ? transitionPayload.type
+            : 'cut';
+          const rawDurationMs = Number(transitionPayload?.durationMs);
+          const durationMs = Number.isFinite(rawDurationMs)
+            ? Math.max(
+              TRANSITION_MIN_DURATION_MS,
+              Math.min(TRANSITION_MAX_DURATION_MS, Math.round(rawDurationMs))
+            )
+            : TRANSITION_DEFAULT_DURATION_MS;
+
+          return {
+            type,
+            durationMs
+          };
+        };
+
+        const runContentTransition = (transitionPayload, applyChange) => {
+          const transition = sanitizeTransitionPayload(transitionPayload);
+          transitionSequenceId += 1;
+          const sequenceId = transitionSequenceId;
+
+          clearTransitionTimeout();
+
+          if (!transitionVeil || transition.type === 'cut') {
+            resetTransitionVeil();
+            applyChange();
+            return;
+          }
+
+          const halfDurationMs = Math.max(60, Math.round(transition.durationMs / 2));
+          transitionVeil.style.transition = transition.type === 'fade'
+            ? 'opacity ' + halfDurationMs + 'ms ease'
+            : 'clip-path ' + halfDurationMs + 'ms ease';
+
+          if (transition.type === 'fade') {
+            transitionVeil.style.opacity = '0';
+            transitionVeil.style.clipPath = 'inset(0 0 0 0)';
+
+            requestAnimationFrame(() => {
+              if (sequenceId !== transitionSequenceId) {
+                return;
+              }
+
+              transitionVeil.style.opacity = '1';
+            });
+          } else {
+            transitionVeil.style.opacity = '1';
+            transitionVeil.style.clipPath = 'inset(0 100% 0 0)';
+
+            requestAnimationFrame(() => {
+              if (sequenceId !== transitionSequenceId) {
+                return;
+              }
+
+              transitionVeil.style.clipPath = 'inset(0 0 0 0)';
+            });
+          }
+
+          transitionTimeoutId = window.setTimeout(() => {
+            if (sequenceId !== transitionSequenceId) {
+              return;
+            }
+
+            applyChange();
+
+            transitionVeil.style.transition = transition.type === 'fade'
+              ? 'opacity ' + halfDurationMs + 'ms ease'
+              : 'clip-path ' + halfDurationMs + 'ms ease';
+
+            if (transition.type === 'fade') {
+              transitionVeil.style.opacity = '0';
+            } else {
+              transitionVeil.style.clipPath = 'inset(0 0 0 100%)';
+            }
+
+            transitionTimeoutId = window.setTimeout(() => {
+              if (sequenceId !== transitionSequenceId) {
+                return;
+              }
+
+              resetTransitionVeil();
+              clearTransitionTimeout();
+            }, halfDurationMs);
+          }, halfDurationMs);
         };
 
         const sanitizeFlashLabel = (value) => {
@@ -1055,14 +1176,19 @@ export const createSlaveWindowHtml = ({
                 : null
             });
             const imageDataUrl = message.payload.imageDataUrl;
+            const transition = message.payload.transition;
 
             if (imageDataUrl === null) {
-              clearViewportMedia();
+              runContentTransition(transition, () => {
+                clearViewportMedia();
+              });
               return;
             }
 
             if (typeof imageDataUrl === 'string' && imageDataUrl.length > 0) {
-              showImage(imageDataUrl);
+              runContentTransition(transition, () => {
+                showImage(imageDataUrl);
+              });
               return;
             }
 
@@ -1078,9 +1204,12 @@ export const createSlaveWindowHtml = ({
               kind: message.payload?.item?.kind ?? null
             });
             const item = message.payload.item;
+            const transition = message.payload.transition;
 
             if (item === null) {
-              clearViewportMedia();
+              runContentTransition(transition, () => {
+                clearViewportMedia();
+              });
               return;
             }
 
@@ -1093,12 +1222,16 @@ export const createSlaveWindowHtml = ({
             }
 
             if (item.kind === 'image' && typeof item.source === 'string' && item.source.length > 0) {
-              showImage(item.source);
+              runContentTransition(transition, () => {
+                showImage(item.source);
+              });
               return;
             }
 
             if (item.kind === 'video' && typeof item.source === 'string' && item.source.length > 0) {
-              showVideo(item);
+              runContentTransition(transition, () => {
+                showVideo(item);
+              });
               return;
             }
 
@@ -1235,6 +1368,7 @@ export const createSlaveWindowHtml = ({
         });
         window.addEventListener('beforeunload', () => {
           clearMonitorIdFlash();
+          clearTransitionTimeout();
           clearScheduledThumbnailCapture();
           if (pendingFullscreenReportTimeoutId !== null) {
             window.clearTimeout(pendingFullscreenReportTimeoutId);

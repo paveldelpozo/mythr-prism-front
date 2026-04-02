@@ -41,6 +41,10 @@ describe('services/persistence', () => {
             translateX: 10,
             translateY: -20
           },
+          contentTransition: {
+            type: 'fade',
+            durationMs: 99999
+          },
           imageDataUrl: 42
         }
       },
@@ -88,6 +92,10 @@ describe('services/persistence', () => {
                   translateX: 100,
                   translateY: 200
                 },
+                contentTransition: {
+                  type: 'invalid',
+                  durationMs: -10
+                },
                 imageDataUrl: 10
               }
             },
@@ -109,6 +117,10 @@ describe('services/persistence', () => {
     expect(loaded.ui.showOnlyProjectable).toBe(true);
     expect(loaded.ui.panelPreferences).toEqual({ monitor: true });
     expect(loaded.monitors.m1.transform.scale).toBe(0.05);
+    expect(loaded.monitors.m1.contentTransition).toEqual({
+      type: 'fade',
+      durationMs: 5000
+    });
     expect(loaded.monitors.m1.imageDataUrl).toBeNull();
     expect(loaded.monitors.m1.customName).toBeNull();
     expect(loaded.playlist).toHaveLength(1);
@@ -122,6 +134,10 @@ describe('services/persistence', () => {
     expect(loaded.layouts[0]?.createdAt).toBe('2026-03-30T12:00:00.000Z');
     expect(loaded.layouts[0]?.updatedAt).toBe('1970-01-01T00:00:00.000Z');
     expect(loaded.layouts[0]?.snapshot.monitors.m1.transform.scale).toBe(0.05);
+    expect(loaded.layouts[0]?.snapshot.monitors.m1.contentTransition).toEqual({
+      type: 'cut',
+      durationMs: 120
+    });
     expect(loaded.layouts[0]?.snapshot.monitors.m1.imageDataUrl).toBeNull();
     expect(loaded.layouts[0]?.snapshot.playback.targetMonitorIds).toEqual(['m1']);
     expect(loaded.layouts[0]?.snapshot.playback.currentIndex).toBe(0);

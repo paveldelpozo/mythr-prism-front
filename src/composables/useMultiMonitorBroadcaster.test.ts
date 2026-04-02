@@ -309,9 +309,9 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
         expect.objectContaining({
           type: 'SET_IMAGE',
           monitorId: mirrorTargetId,
-          payload: {
+          payload: expect.objectContaining({
             imageDataUrl: sourceImage
-          }
+          })
         })
       ])
     );
@@ -320,9 +320,9 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
         expect.objectContaining({
           type: 'SET_MEDIA',
           monitorId: mirrorTargetId,
-          payload: {
+          payload: expect.objectContaining({
             item: null
-          }
+          })
         })
       ])
     );
@@ -359,9 +359,9 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
         expect.objectContaining({
           type: 'SET_IMAGE',
           monitorId: sourceMonitorId,
-          payload: {
+          payload: expect.objectContaining({
             imageDataUrl: sourceImage
-          }
+          })
         })
       ])
     );
@@ -370,9 +370,9 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
         expect.objectContaining({
           type: 'SET_IMAGE',
           monitorId: mirrorTargetId,
-          payload: {
+          payload: expect.objectContaining({
             imageDataUrl: sourceImage
-          }
+          })
         })
       ])
     );
@@ -427,9 +427,9 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
         expect.objectContaining({
           type: 'SET_IMAGE',
           monitorId: mirrorTargetId,
-          payload: {
+          payload: expect.objectContaining({
             imageDataUrl: 'blob:runtime-upload'
-          }
+          })
         })
       ])
     );
@@ -453,6 +453,37 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
       ])
     );
     expect(popup.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('aplica transicion configurada en cambios directos y de playlist', async () => {
+    const { popups, mirrorTargetId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(mirrorTargetId);
+
+    const popup = popups[0];
+    popup.postMessage.mockClear();
+
+    api.setContentTransitionForMonitor(mirrorTargetId, {
+      type: 'fade',
+      durationMs: 99999
+    });
+    api.setImageForMonitor(mirrorTargetId, 'data:image/png;base64,TRANSITION_IMG');
+    api.setPlaylistItemForMonitor(mirrorTargetId, videoItem('transition-video'));
+
+    const sentMessages = popup.postMessage.mock.calls.map(([message]) => message);
+    const imageMessage = sentMessages.find((message) => message.type === 'SET_IMAGE');
+    const mediaMessage = sentMessages.find((message) => message.type === 'SET_MEDIA');
+
+    expect(imageMessage?.payload?.transition).toEqual({
+      type: 'fade',
+      durationMs: 5000
+    });
+    expect(mediaMessage?.payload?.transition).toEqual({
+      type: 'fade',
+      durationMs: 5000
+    });
   });
 
   it('abre ventana esclava en ruta same-origin y completa handshake basico', async () => {
@@ -557,9 +588,9 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
         expect.objectContaining({
           type: 'SET_IMAGE',
           monitorId: mirrorTargetId,
-          payload: {
+          payload: expect.objectContaining({
             imageDataUrl: null
-          }
+          })
         })
       ])
     );

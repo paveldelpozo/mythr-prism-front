@@ -58,6 +58,7 @@ const createLongSource = (): string => `data:image/png;base64,${'a'.repeat(180)}
 const createMonitorStates = (): MonitorStateMap => ({
   m1: {
     transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
+    contentTransition: { type: 'cut', durationMs: 450 },
     imageDataUrl: null,
     activeMediaItem: null,
     isWindowOpen: true,
@@ -71,6 +72,7 @@ const createMonitorStates = (): MonitorStateMap => ({
   },
   m2: {
     transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
+    contentTransition: { type: 'cut', durationMs: 450 },
     imageDataUrl: null,
     activeMediaItem: null,
     isWindowOpen: false,

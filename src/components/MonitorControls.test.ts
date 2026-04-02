@@ -117,7 +117,7 @@ describe('MonitorControls', () => {
 
     await wrapper.get('input[type="file"]').trigger('change');
 
-    expect(wrapper.emitted('uploadImage')).toEqual([['monitor-1', imageFile]]);
+    expect(wrapper.emitted('uploadImage')).toEqual([['monitor-1', imageFile, 'file-picker']]);
   });
 
   it('bloquea selector nativo cuando hay fullscreen activo', async () => {
@@ -135,6 +135,42 @@ describe('MonitorControls', () => {
     expect(wrapper.get('[data-testid="monitor-file-import-blocked-feedback"]').text()).toContain('sal del fullscreen');
   });
 
+  it('acepta drag and drop aunque fullscreen bloquee selector nativo', async () => {
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state: createDefaultMonitorState(),
+        isFileImportBlocked: true,
+        fileImportBlockedMessage: 'Para importar archivo, sal del fullscreen o usa Drag & Drop / pegar imagen.'
+      }
+    });
+
+    const imageFile = new File(['img'], 'dropped-fullscreen.png', { type: 'image/png' });
+    await wrapper.get('[data-testid="monitor-image-drop-zone"]').trigger('drop', {
+      dataTransfer: createDataTransfer(imageFile)
+    });
+
+    expect(wrapper.emitted('uploadImage')).toEqual([['monitor-1', imageFile, 'drag-drop']]);
+  });
+
+  it('acepta pegado desde portapapeles aunque fullscreen bloquee selector nativo', async () => {
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state: createDefaultMonitorState(),
+        isFileImportBlocked: true,
+        fileImportBlockedMessage: 'Para importar archivo, sal del fullscreen o usa Drag & Drop / pegar imagen.'
+      }
+    });
+
+    const imageFile = new File(['img'], 'pasted-fullscreen.png', { type: 'image/png' });
+    await wrapper.get('[data-testid="monitor-image-drop-zone"]').trigger('paste', {
+      clipboardData: createDataTransfer(imageFile)
+    });
+
+    expect(wrapper.emitted('uploadImage')).toEqual([['monitor-1', imageFile, 'paste']]);
+  });
+
   it('soporta import por drag and drop', async () => {
     const wrapper = mount(MonitorControls, {
       props: {
@@ -150,7 +186,7 @@ describe('MonitorControls', () => {
 
     await wrapper.get('[data-testid="monitor-image-drop-zone"]').trigger('drop', { dataTransfer });
 
-    expect(wrapper.emitted('uploadImage')).toEqual([['monitor-1', imageFile]]);
+    expect(wrapper.emitted('uploadImage')).toEqual([['monitor-1', imageFile, 'drag-drop']]);
   });
 
   it('soporta pegar imagen desde portapapeles', async () => {
@@ -168,7 +204,7 @@ describe('MonitorControls', () => {
 
     await wrapper.get('[data-testid="monitor-image-drop-zone"]').trigger('paste', { clipboardData });
 
-    expect(wrapper.emitted('uploadImage')).toEqual([['monitor-1', imageFile]]);
+    expect(wrapper.emitted('uploadImage')).toEqual([['monitor-1', imageFile, 'paste']]);
   });
 
   it('aplica feedback visual durante drag enter/leave', async () => {
@@ -206,5 +242,31 @@ describe('MonitorControls', () => {
 
     expect(wrapper.get('[data-testid="monitor-image-import-feedback"]').text()).toContain('no es una imagen valida');
     expect(wrapper.emitted('uploadImage')).toBeUndefined();
+  });
+
+  it('emite cambios de transicion con clamp de duracion', async () => {
+    const state = createDefaultMonitorState();
+    state.contentTransition = {
+      type: 'cut',
+      durationMs: 450
+    };
+
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state,
+        isFileImportBlocked: false,
+        fileImportBlockedMessage: 'bloqueado'
+      }
+    });
+
+    await wrapper.get('[data-testid="monitor-open-content-editor"]').trigger('click');
+    await wrapper.get('[data-testid="monitor-transition-type"]').setValue('wipe');
+    await wrapper.get('[data-testid="monitor-transition-duration"]').setValue('99999');
+
+    expect(wrapper.emitted('setContentTransition')).toEqual([
+      ['monitor-1', { type: 'wipe', durationMs: 450 }],
+      ['monitor-1', { type: 'cut', durationMs: 5000 }]
+    ]);
   });
 });

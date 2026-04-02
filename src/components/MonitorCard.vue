@@ -14,6 +14,7 @@ import type {
   MonitorRuntimeState,
   MonitorThumbnailState
 } from '../types/broadcaster';
+import type { ContentTransition } from '../types/transitions';
 
 const props = defineProps<{
   monitor: MonitorDescriptor;
@@ -28,7 +29,7 @@ const emit = defineEmits<{
   requestFullscreen: [monitorId: string];
   flashMonitorId: [monitorId: string];
   closeWindow: [monitorId: string];
-  uploadImage: [monitorId: string, file: File];
+  uploadImage: [monitorId: string, file: File, source: 'file-picker' | 'drag-drop' | 'paste'];
   clearImage: [monitorId: string];
   openWhiteboard: [monitorId: string];
   renameMonitor: [monitorId: string, nextName: string];
@@ -36,6 +37,7 @@ const emit = defineEmits<{
     monitorId: string,
     action: { type: 'rotate'; value: number } | { type: 'scale'; value: number } | { type: 'move'; value: { x?: number; y?: number } } | { type: 'reset' }
   ];
+  setContentTransition: [monitorId: string, transition: ContentTransition];
 }>();
 
 const isInfoPanelOpen = ref(false);
@@ -330,9 +332,10 @@ onBeforeUnmount(() => {
       :file-import-blocked-message="fileImportBlockedMessage"
       @request-fullscreen="emit('requestFullscreen', $event)"
       @close-window="emit('closeWindow', $event)"
-      @upload-image="(id, file) => emit('uploadImage', id, file)"
+      @upload-image="(id, file, source) => emit('uploadImage', id, file, source)"
       @clear-image="emit('clearImage', $event)"
       @transform="(id, action) => emit('transform', id, action)"
+      @set-content-transition="(id, transition) => emit('setContentTransition', id, transition)"
     />
 
     <div

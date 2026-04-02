@@ -40,6 +40,7 @@ const mockMonitors = ref<MonitorDescriptor[]>([
 const mockMonitorStates = reactive({
   master: {
     transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
+    contentTransition: { type: 'cut', durationMs: 450 },
     imageDataUrl: null,
     activeMediaItem: null,
     isWindowOpen: true,
@@ -53,6 +54,7 @@ const mockMonitorStates = reactive({
   },
   projector: {
     transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
+    contentTransition: { type: 'cut', durationMs: 450 },
     imageDataUrl: null,
     activeMediaItem: null,
     isWindowOpen: true,
@@ -72,6 +74,7 @@ const setMirrorEnabledSpy = vi.fn();
 const setMirrorSourceMonitorIdSpy = vi.fn();
 const setMirrorTargetMonitorIdsSpy = vi.fn();
 const setMonitorCustomNameSpy = vi.fn();
+const setContentTransitionForMonitorSpy = vi.fn();
 const setWhiteboardStateForMonitorSpy = vi.fn();
 const clearWhiteboardForMonitorSpy = vi.fn();
 const undoWhiteboardForMonitorSpy = vi.fn();
@@ -134,11 +137,13 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
     persistableMonitorStates: computed(() => ({
       master: {
         transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
+        contentTransition: { type: 'cut', durationMs: 450 },
         imageDataUrl: null,
         customName: null
       },
       projector: {
         transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
+        contentTransition: { type: 'cut', durationMs: 450 },
         imageDataUrl: null,
         customName: null
       }
@@ -152,6 +157,7 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
     setMirrorSourceMonitorId: setMirrorSourceMonitorIdSpy,
     setMirrorTargetMonitorIds: setMirrorTargetMonitorIdsSpy,
     setMonitorCustomName: setMonitorCustomNameSpy,
+    setContentTransitionForMonitor: setContentTransitionForMonitorSpy,
     setImageForMonitor: setImageForMonitorSpy,
     setWhiteboardStateForMonitor: setWhiteboardStateForMonitorSpy,
     undoWhiteboardForMonitor: undoWhiteboardForMonitorSpy,
@@ -284,6 +290,7 @@ describe('App integration base', () => {
     setMirrorSourceMonitorIdSpy.mockReset();
     setMirrorTargetMonitorIdsSpy.mockReset();
     setMonitorCustomNameSpy.mockReset();
+    setContentTransitionForMonitorSpy.mockReset();
     setWhiteboardStateForMonitorSpy.mockReset();
     clearWhiteboardForMonitorSpy.mockReset();
     undoWhiteboardForMonitorSpy.mockReset();
@@ -379,6 +386,7 @@ describe('App integration base', () => {
             monitors: {
               projector: {
                 transform: { rotate: 15, scale: 1.25, translateX: 30, translateY: -12 },
+                contentTransition: { type: 'wipe', durationMs: 800 },
                 imageDataUrl: 'data:image/png;base64,abc',
                 customName: null
               }
@@ -411,6 +419,10 @@ describe('App integration base', () => {
     expect(wrapper.get('[data-testid="monitorlist-layout-feedback"]').text()).toContain('restaurado');
     expect(wrapper.get('[data-testid="playlist-target"]').text()).toBe('projector');
     expect(applyTransformSpy).toHaveBeenCalled();
+    expect(setContentTransitionForMonitorSpy).toHaveBeenCalledWith('projector', {
+      type: 'wipe',
+      durationMs: 800
+    });
     expect(setImageForMonitorSpy).toHaveBeenCalledWith('projector', 'data:image/png;base64,abc');
   });
 

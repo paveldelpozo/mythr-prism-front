@@ -322,6 +322,19 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
     - [ ] Controles de similitud, suavizado y spill.
     - [ ] Presets base para fondos comunes.
 
+- [ ] **Expansion de transiciones (catalogo avanzado)**
+  - Dependencias: motor de transiciones V1 integrado en flujo de cambio de escena.
+  - Hecho: el catalogo de transiciones se amplia con variantes avanzadas aplicables sin artefactos visibles en cambios de contenido.
+  - Subtareas:
+    - [ ] Slide (left/right/up/down).
+    - [ ] Zoom in/out.
+    - [ ] Dip to black/white.
+    - [ ] Blur.
+    - [ ] Push.
+    - [ ] Cross-zoom.
+    - [ ] Iris.
+    - [ ] Pixelate.
+
 ## Sprint actual
 
 > Plan operativo inmediato del MVP (orden sugerido de ejecucion).

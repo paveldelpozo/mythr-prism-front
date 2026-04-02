@@ -25,6 +25,7 @@ const monitors: MonitorDescriptor[] = [
 const states: MonitorStateMap = {
   'monitor-1': {
     transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
+    contentTransition: { type: 'cut', durationMs: 450 },
     imageDataUrl: null,
     activeMediaItem: null,
     isWindowOpen: true,

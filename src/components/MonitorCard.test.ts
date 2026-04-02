@@ -22,6 +22,7 @@ const monitor: MonitorDescriptor = {
 
 const state: MonitorRuntimeState = {
   transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
+  contentTransition: { type: 'cut', durationMs: 450 },
   imageDataUrl: null,
   activeMediaItem: null,
   isWindowOpen: true,

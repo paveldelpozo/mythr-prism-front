@@ -145,6 +145,30 @@ describe('services/slaveWindowHtml mirror rendering', () => {
     expect(empty.style.display).toBe('none');
   });
 
+  it('aplica transicion fade sin romper render en SET_MEDIA de playlist', async () => {
+    mountSlaveRuntime();
+
+    dispatchSlaveMessage('SET_MEDIA', {
+      item: {
+        kind: 'image',
+        source: 'data:image/png;base64,PLAYLIST_FADE'
+      },
+      transition: {
+        type: 'fade',
+        durationMs: 180
+      }
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 260));
+    await flushImageRender();
+
+    const image = document.getElementById('image') as HTMLImageElement;
+    const transitionVeil = document.getElementById('transitionVeil') as HTMLElement;
+
+    expect(image.style.display).toBe('block');
+    expect(transitionVeil.style.opacity).toBe('0');
+  });
+
   it('no intenta salir de fullscreen al aplicar SET_IMAGE', () => {
     const { loadSpy, exitFullscreenMock } = mountSlaveRuntime();
 
