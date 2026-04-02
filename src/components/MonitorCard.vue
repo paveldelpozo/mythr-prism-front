@@ -42,6 +42,8 @@ const emit = defineEmits<{
   reloadExternalUrl: [monitorId: string];
   clearExternalUrl: [monitorId: string];
   navigateExternalUrl: [monitorId: string, direction: 'back' | 'forward'];
+  startExternalAppCapture: [monitorId: string];
+  stopExternalAppCapture: [monitorId: string];
 }>();
 
 const isInfoPanelOpen = ref(false);
@@ -345,6 +347,8 @@ onBeforeUnmount(() => {
       @reload-external-url="emit('reloadExternalUrl', $event)"
       @clear-external-url="emit('clearExternalUrl', $event)"
       @navigate-external-url="(id, direction) => emit('navigateExternalUrl', id, direction)"
+      @start-external-app-capture="emit('startExternalAppCapture', $event)"
+      @stop-external-app-capture="emit('stopExternalAppCapture', $event)"
       @transform="(id, action) => emit('transform', id, action)"
       @set-content-transition="(id, transition) => emit('setContentTransition', id, transition)"
     />

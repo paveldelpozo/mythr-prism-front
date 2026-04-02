@@ -39,6 +39,8 @@ export interface MonitorRuntimeState {
   lostFullscreenUnexpectedly: boolean;
   lastFullscreenExitAtMs: number | null;
   requiresFullscreenInteraction: boolean;
+  isExternalAppCapturePending: boolean;
+  isExternalAppCaptureActive: boolean;
   lastError: string | null;
 }
 
@@ -70,5 +72,7 @@ export const createDefaultMonitorState = (): MonitorRuntimeState => ({
   lostFullscreenUnexpectedly: false,
   lastFullscreenExitAtMs: null,
   requiresFullscreenInteraction: true,
+  isExternalAppCapturePending: false,
+  isExternalAppCaptureActive: false,
   lastError: null
 });

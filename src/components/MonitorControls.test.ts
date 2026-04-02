@@ -330,6 +330,26 @@ describe('MonitorControls', () => {
     ]);
   });
 
+  it('emite acciones de inicio y detencion para captura de app externa', async () => {
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state: createDefaultMonitorState()
+      }
+    });
+
+    await wrapper.get('[data-testid="monitor-external-app-capture-start"]').trigger('click');
+
+    expect(wrapper.emitted('startExternalAppCapture')).toEqual([['monitor-1']]);
+
+    const activeState = createDefaultMonitorState();
+    activeState.isExternalAppCaptureActive = true;
+    await wrapper.setProps({ state: activeState });
+
+    await wrapper.get('[data-testid="monitor-external-app-capture-stop"]').trigger('click');
+    expect(wrapper.emitted('stopExternalAppCapture')).toEqual([['monitor-1']]);
+  });
+
   it('habilita botones de navegacion URL cuando hay URL activa', async () => {
     const state = createDefaultMonitorState();
     state.activeMediaItem = {

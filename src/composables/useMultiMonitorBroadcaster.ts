@@ -52,6 +52,16 @@ interface WindowRegistryEntry {
   instanceToken: string;
 }
 
+interface ExternalAppCaptureEntry {
+  stream: MediaStream;
+  track: MediaStreamTrack;
+  onEnded: () => void;
+}
+
+type SlaveWindowWithExternalCapture = Window & {
+  __MMIB_ATTACH_EXTERNAL_APP_STREAM__?: (stream: MediaStream) => boolean;
+};
+
 interface UseMultiMonitorBroadcasterOptions {
   initialMonitorStateById?: PersistedMonitorStateMap;
   initialMirrorMode?: MirrorModeConfig;
@@ -77,6 +87,7 @@ const MIN_SCALE = 0.05;
 const LIFE_CHECK_INTERVAL_MS = 1000;
 const BLOB_URL_PREFIX = 'blob:';
 const MONITOR_ID_FLASH_DURATION_MS = 2200;
+const EXTERNAL_APP_CAPTURE_TRANSITION_DELAY_MS = 80;
 
 const toMonitorId = (screen: ScreenDetailed, index: number): string =>
   `${index}-${screen.left}-${screen.top}-${screen.width}x${screen.height}`;
@@ -153,6 +164,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
   const monitorThumbnails = reactive<MonitorThumbnailStateMap>({});
   const monitorWhiteboards = reactive<MonitorWhiteboardStateMap>({});
   const windowsRegistry = new Map<string, WindowRegistryEntry>();
+  const externalAppCaptureByMonitorId = new Map<string, ExternalAppCaptureEntry>();
   const monitorImageRenderSourceById = new Map<string, string | null>();
   const blobUrlUsageCountBySource = new Map<string, number>();
   const initialMonitorStateById = options.initialMonitorStateById ?? {};
@@ -254,6 +266,91 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
   const setMonitorError = (monitorId: string, message: string | null) => {
     const state = getMonitorState(monitorId);
     state.lastError = message;
+  };
+
+  const handleExternalAppCaptureEnded = (monitorId: string, message?: string) => {
+    const entry = externalAppCaptureByMonitorId.get(monitorId);
+    if (!entry) {
+      return;
+    }
+
+    entry.track.onended = null;
+    externalAppCaptureByMonitorId.delete(monitorId);
+
+    entry.stream.getTracks().forEach((track) => {
+      track.stop();
+    });
+
+    const state = getMonitorState(monitorId);
+    state.isExternalAppCapturePending = false;
+    state.isExternalAppCaptureActive = false;
+    state.lastError = message ?? 'La captura de aplicacion se detuvo.';
+
+    const windowEntry = windowsRegistry.get(monitorId);
+    if (windowEntry && !windowEntry.ref.closed) {
+      const stopCaptureMessage = buildMasterMessage(monitorId, 'EXTERNAL_APP_CAPTURE_STOP', {
+        reason: 'track-ended'
+      });
+      if (stopCaptureMessage) {
+        sendToSlave(monitorId, stopCaptureMessage);
+      }
+    }
+
+    replicateSourceToMirrorTargets(monitorId);
+  };
+
+  const stopExternalAppCaptureForMonitor = (
+    monitorId: string,
+    reason: string = 'operator-stop',
+    options: { preserveError?: boolean; skipSlaveMessage?: boolean } = {}
+  ) => {
+    const captureEntry = externalAppCaptureByMonitorId.get(monitorId);
+    if (captureEntry) {
+      captureEntry.track.onended = null;
+      captureEntry.stream.getTracks().forEach((track) => {
+        track.stop();
+      });
+      externalAppCaptureByMonitorId.delete(monitorId);
+    }
+
+    const state = getMonitorState(monitorId);
+    state.isExternalAppCapturePending = false;
+    state.isExternalAppCaptureActive = false;
+    if (!options.preserveError) {
+      state.lastError = null;
+    }
+
+    if (!options.skipSlaveMessage) {
+      const windowEntry = windowsRegistry.get(monitorId);
+      if (windowEntry && !windowEntry.ref.closed) {
+        const stopMessage = buildMasterMessage(monitorId, 'EXTERNAL_APP_CAPTURE_STOP', {
+          reason
+        });
+        if (stopMessage) {
+          sendToSlave(monitorId, stopMessage);
+        }
+      }
+    }
+
+    replicateSourceToMirrorTargets(monitorId);
+  };
+
+  const attachExternalAppCaptureToSlave = (monitorId: string, stream: MediaStream): boolean => {
+    const entry = windowsRegistry.get(monitorId);
+    if (!entry || entry.ref.closed) {
+      return false;
+    }
+
+    const targetWindow = entry.ref as SlaveWindowWithExternalCapture;
+    if (typeof targetWindow.__MMIB_ATTACH_EXTERNAL_APP_STREAM__ !== 'function') {
+      return false;
+    }
+
+    try {
+      return targetWindow.__MMIB_ATTACH_EXTERNAL_APP_STREAM__(stream);
+    } catch {
+      return false;
+    }
   };
 
   const knownMonitorIdSet = (): Set<string> =>
@@ -359,6 +456,11 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
   };
 
   const cleanupMonitorWindow = (monitorId: string) => {
+    stopExternalAppCaptureForMonitor(monitorId, 'window-cleanup', {
+      preserveError: true,
+      skipSlaveMessage: true
+    });
+
     const entry = windowsRegistry.get(monitorId);
     if (!entry) {
       return;
@@ -374,6 +476,8 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     state.lostFullscreenUnexpectedly = false;
     state.lastFullscreenExitAtMs = null;
     state.requiresFullscreenInteraction = true;
+    state.isExternalAppCapturePending = false;
+    state.isExternalAppCaptureActive = false;
     setMonitorThumbnail(monitorId, null, null);
   };
 
@@ -649,6 +753,25 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       state.isSlaveReady = true;
       state.lastError = null;
       pushCurrentStateToSlave(monitorId);
+
+      const captureEntry = externalAppCaptureByMonitorId.get(monitorId);
+      if (captureEntry) {
+        const startMessage = buildMasterMessage(monitorId, 'EXTERNAL_APP_CAPTURE_START', {
+          reason: 'slave-ready-sync'
+        });
+        if (startMessage) {
+          sendToSlave(monitorId, startMessage);
+        }
+
+        const attached = attachExternalAppCaptureToSlave(monitorId, captureEntry.stream);
+        if (!attached) {
+          handleExternalAppCaptureEnded(
+            monitorId,
+            'La ventana esclava no pudo restablecer la captura externa despues de reconectar.'
+          );
+        }
+      }
+
       replicateSourceToMirrorTargets(monitorId);
       return;
     }
@@ -693,6 +816,25 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
 
     if (message.type === 'SLAVE_ERROR') {
       state.lastError = message.payload.message;
+      return;
+    }
+
+    if (message.type === 'EXTERNAL_APP_CAPTURE_STATUS') {
+      state.isExternalAppCaptureActive = Boolean(message.payload.active);
+      state.isExternalAppCapturePending = false;
+
+      if (typeof message.payload.message === 'string' && message.payload.message.length > 0) {
+        state.lastError = message.payload.message;
+      }
+
+      if (!message.payload.active) {
+        const captureEntry = externalAppCaptureByMonitorId.get(monitorId);
+        if (captureEntry) {
+          captureEntry.track.onended = null;
+          captureEntry.stream.getTracks().forEach((track) => track.stop());
+          externalAppCaptureByMonitorId.delete(monitorId);
+        }
+      }
     }
   };
 
@@ -963,6 +1105,10 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     imageDataUrl: string | null,
     options: SetImageForMonitorOptions = {}
   ) => {
+    stopExternalAppCaptureForMonitor(monitorId, 'content-replaced', {
+      preserveError: true
+    });
+
     const state = getMonitorState(monitorId);
     state.imageDataUrl = imageDataUrl;
     state.activeMediaItem = null;
@@ -999,6 +1145,10 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     item: MultimediaItem | null,
     transitionOverride?: ContentTransition
   ): boolean => {
+    stopExternalAppCaptureForMonitor(monitorId, 'content-replaced', {
+      preserveError: true
+    });
+
     const state = getMonitorState(monitorId);
     const transition = sanitizeContentTransition(transitionOverride ?? state.contentTransition);
 
@@ -1062,6 +1212,118 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       renderSource: null,
       transition: state.contentTransition
     });
+  };
+
+  const startExternalAppCaptureForMonitor = async (monitorId: string): Promise<boolean> => {
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices || typeof mediaDevices.getDisplayMedia !== 'function') {
+      setMonitorError(
+        monitorId,
+        'Tu navegador no soporta getDisplayMedia para capturar aplicaciones externas.'
+      );
+      return false;
+    }
+
+    const entry = windowsRegistry.get(monitorId);
+    const state = getMonitorState(monitorId);
+    if (!entry || entry.ref.closed || !state.isWindowOpen) {
+      setMonitorError(monitorId, 'Abre la ventana del monitor antes de iniciar captura de app.');
+      return false;
+    }
+
+    stopExternalAppCaptureForMonitor(monitorId, 'replace-capture', {
+      preserveError: true
+    });
+
+    state.isExternalAppCapturePending = true;
+    state.isExternalAppCaptureActive = false;
+    state.lastError = 'Selecciona una ventana o pestana de aplicacion en el selector nativo.';
+
+    const startMessage = buildMasterMessage(monitorId, 'EXTERNAL_APP_CAPTURE_START', {
+      reason: 'operator-start'
+    });
+    if (startMessage) {
+      sendToSlave(monitorId, startMessage);
+    }
+
+    let stream: MediaStream | null = null;
+    try {
+      stream = await mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false
+      });
+
+      const track = stream.getVideoTracks()[0] ?? null;
+      if (!track) {
+        stream.getTracks().forEach((currentTrack) => currentTrack.stop());
+        state.isExternalAppCapturePending = false;
+        state.isExternalAppCaptureActive = false;
+        state.lastError = 'No se recibio pista de video en la captura seleccionada.';
+        return false;
+      }
+
+      const onEnded = () => {
+        handleExternalAppCaptureEnded(
+          monitorId,
+          'La captura finalizo desde el sistema o el selector nativo.'
+        );
+      };
+      track.onended = onEnded;
+
+      externalAppCaptureByMonitorId.set(monitorId, {
+        stream,
+        track,
+        onEnded
+      });
+
+      const attached = attachExternalAppCaptureToSlave(monitorId, stream);
+      if (!attached) {
+        stopExternalAppCaptureForMonitor(monitorId, 'attach-failed', {
+          preserveError: true
+        });
+        state.lastError =
+          'La ventana esclava no esta lista para recibir captura. Reabre la ventana y reintenta.';
+        return false;
+      }
+
+      state.isExternalAppCapturePending = false;
+      state.isExternalAppCaptureActive = true;
+      state.activeMediaItem = null;
+      state.imageDataUrl = null;
+      state.lastError = null;
+      setMonitorImageRenderSource(monitorId, null);
+      setMonitorThumbnail(monitorId, null, null);
+
+      window.setTimeout(() => {
+        replicateSourceToMirrorTargets(monitorId);
+      }, EXTERNAL_APP_CAPTURE_TRANSITION_DELAY_MS);
+
+      return true;
+    } catch (error) {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+
+      state.isExternalAppCapturePending = false;
+      state.isExternalAppCaptureActive = false;
+
+      if (error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
+        state.lastError = 'Captura cancelada o denegada. Vuelve a pulsar "Capturar App" para reintentar.';
+      } else {
+        state.lastError = error instanceof Error
+          ? `No se pudo iniciar la captura de app: ${error.message}`
+          : 'No se pudo iniciar la captura de app.';
+      }
+
+      const cancelMessage = buildMasterMessage(monitorId, 'EXTERNAL_APP_CAPTURE_STOP', {
+        reason: 'start-cancelled'
+      });
+      if (cancelMessage) {
+        sendToSlave(monitorId, cancelMessage);
+      }
+
+      return false;
+    }
   };
 
   const reloadExternalUrlForMonitor = (monitorId: string): boolean => {
@@ -1262,6 +1524,8 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     setContentTransitionForMonitor,
     setImageForMonitor,
     setExternalUrlForMonitor,
+    startExternalAppCaptureForMonitor,
+    stopExternalAppCaptureForMonitor,
     clearExternalUrlForMonitor,
     reloadExternalUrlForMonitor,
     navigateExternalUrlForMonitor,

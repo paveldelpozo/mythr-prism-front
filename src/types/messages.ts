@@ -13,6 +13,8 @@ export type MasterMessageType =
   | 'EXTERNAL_URL_RELOAD'
   | 'EXTERNAL_URL_BACK'
   | 'EXTERNAL_URL_FORWARD'
+  | 'EXTERNAL_APP_CAPTURE_START'
+  | 'EXTERNAL_APP_CAPTURE_STOP'
   | 'VIDEO_SYNC_PLAY'
   | 'VIDEO_SYNC_PAUSE'
   | 'VIDEO_SYNC_SEEK'
@@ -29,6 +31,7 @@ export type SlaveMessageType =
   | 'SLAVE_READY'
   | 'FULLSCREEN_STATUS'
   | 'THUMBNAIL_SNAPSHOT'
+  | 'EXTERNAL_APP_CAPTURE_STATUS'
   | 'PONG'
   | 'SLAVE_CLOSING'
   | 'SLAVE_ERROR';
@@ -63,6 +66,12 @@ export interface ThumbnailSnapshotPayload {
   capturedAtMs: number;
 }
 
+export interface ExternalAppCaptureStatusPayload {
+  active: boolean;
+  reason: string;
+  message?: string;
+}
+
 export interface VideoSyncPlayPayload {
   scheduledAtMs: number;
   mediaTimeMs: number;
@@ -91,6 +100,8 @@ export type MasterToSlaveMessage =
   | MessageEnvelope<'EXTERNAL_URL_RELOAD', { reason: string }>
   | MessageEnvelope<'EXTERNAL_URL_BACK', { reason: string }>
   | MessageEnvelope<'EXTERNAL_URL_FORWARD', { reason: string }>
+  | MessageEnvelope<'EXTERNAL_APP_CAPTURE_START', { reason: string }>
+  | MessageEnvelope<'EXTERNAL_APP_CAPTURE_STOP', { reason: string }>
   | MessageEnvelope<'VIDEO_SYNC_PLAY', VideoSyncPlayPayload>
   | MessageEnvelope<'VIDEO_SYNC_PAUSE', VideoSyncPausePayload>
   | MessageEnvelope<'VIDEO_SYNC_SEEK', VideoSyncSeekPayload>
@@ -107,6 +118,7 @@ export type SlaveToMasterMessage =
   | MessageEnvelope<'SLAVE_READY', { timestamp: number }>
   | MessageEnvelope<'FULLSCREEN_STATUS', FullscreenStatusPayload>
   | MessageEnvelope<'THUMBNAIL_SNAPSHOT', ThumbnailSnapshotPayload>
+  | MessageEnvelope<'EXTERNAL_APP_CAPTURE_STATUS', ExternalAppCaptureStatusPayload>
   | MessageEnvelope<'PONG', { timestamp: number }>
   | MessageEnvelope<'SLAVE_CLOSING', { timestamp: number }>
   | MessageEnvelope<'SLAVE_ERROR', { message: string }>;

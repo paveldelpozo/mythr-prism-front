@@ -97,6 +97,8 @@ const dispatchSlaveMessage = (
     | 'EXTERNAL_URL_RELOAD'
     | 'EXTERNAL_URL_BACK'
     | 'EXTERNAL_URL_FORWARD'
+    | 'EXTERNAL_APP_CAPTURE_START'
+    | 'EXTERNAL_APP_CAPTURE_STOP'
     | 'PING',
   payload: Record<string, unknown>
 ) => {
@@ -270,6 +272,60 @@ describe('services/slaveWindowHtml mirror rendering', () => {
       .map(([message]) => message)
       .filter((message) => message.type === 'SLAVE_ERROR');
     expect(errors).toHaveLength(0);
+  });
+
+  it('muestra estado de espera y controla inicio/fin de captura externa', () => {
+    const { openerPostMessage } = mountSlaveRuntime();
+
+    dispatchSlaveMessage('EXTERNAL_APP_CAPTURE_START', { reason: 'operator-start' });
+
+    const empty = document.getElementById('empty') as HTMLElement;
+    expect(empty.textContent).toContain('selector nativo');
+
+    const fakeTrack = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    };
+    const streamLikeFromAnotherContext = {
+      getVideoTracks: () => [fakeTrack],
+      getTracks: () => [fakeTrack]
+    };
+
+    const attachCapture = (window as Window & {
+      __MMIB_ATTACH_EXTERNAL_APP_STREAM__?: (stream: unknown) => boolean;
+    }).__MMIB_ATTACH_EXTERNAL_APP_STREAM__;
+
+    expect(typeof attachCapture).toBe('function');
+    const attached = attachCapture?.(streamLikeFromAnotherContext);
+    expect(attached).toBe(true);
+
+    const video = document.getElementById('video') as HTMLVideoElement;
+    expect(video.style.display).toBe('block');
+
+    dispatchSlaveMessage('EXTERNAL_APP_CAPTURE_STOP', { reason: 'operator-stop' });
+
+    const statusMessages = openerPostMessage.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'EXTERNAL_APP_CAPTURE_STATUS');
+
+    expect(statusMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          payload: expect.objectContaining({ active: true, reason: 'stream-attached' })
+        }),
+        expect.objectContaining({
+          payload: expect.objectContaining({ active: false, reason: 'operator-stop' })
+        })
+      ])
+    );
+
+    expect(statusMessages).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          payload: expect.objectContaining({ reason: 'invalid-stream' })
+        })
+      ])
+    );
   });
 
   it('muestra flash temporal para identificar monitor y lo oculta al vencer timeout', () => {

@@ -102,6 +102,8 @@ const {
   setContentTransitionForMonitor,
   setImageForMonitor,
   setExternalUrlForMonitor,
+  startExternalAppCaptureForMonitor,
+  stopExternalAppCaptureForMonitor,
   clearExternalUrlForMonitor,
   reloadExternalUrlForMonitor,
   navigateExternalUrlForMonitor,
@@ -515,6 +517,15 @@ const navigateExternalUrlOnMonitor = (
   navigateExternalUrlForMonitor(monitorId, direction);
 };
 
+const startExternalAppCaptureOnMonitor = async (monitorId: string) => {
+  globalError.value = null;
+  await startExternalAppCaptureForMonitor(monitorId);
+};
+
+const stopExternalAppCaptureOnMonitor = (monitorId: string) => {
+  stopExternalAppCaptureForMonitor(monitorId, 'operator-stop');
+};
+
 const onMonitorTransitionChange = (monitorId: string, transition: ContentTransition) => {
   setContentTransitionForMonitor(monitorId, transition);
 };
@@ -894,6 +905,8 @@ onBeforeUnmount(() => {
           @reload-external-url="reloadExternalUrlOnMonitor"
           @clear-external-url="clearExternalUrlOnMonitor"
           @navigate-external-url="navigateExternalUrlOnMonitor"
+          @start-external-app-capture="startExternalAppCaptureOnMonitor"
+          @stop-external-app-capture="stopExternalAppCaptureOnMonitor"
           @open-whiteboard="openWhiteboardEditor"
           @rename-monitor="setMonitorCustomName"
           @set-content-transition="onMonitorTransitionChange"
