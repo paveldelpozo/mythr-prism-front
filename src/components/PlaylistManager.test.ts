@@ -79,6 +79,8 @@ const createMonitorStates = (): MonitorStateMap => ({
     lostFullscreenUnexpectedly: false,
     lastFullscreenExitAtMs: null,
     requiresFullscreenInteraction: false,
+    isExternalAppCapturePending: false,
+    isExternalAppCaptureActive: false,
     lastError: null
   },
   m2: {
@@ -93,6 +95,8 @@ const createMonitorStates = (): MonitorStateMap => ({
     lostFullscreenUnexpectedly: false,
     lastFullscreenExitAtMs: null,
     requiresFullscreenInteraction: true,
+    isExternalAppCapturePending: false,
+    isExternalAppCaptureActive: false,
     lastError: null
   }
 });

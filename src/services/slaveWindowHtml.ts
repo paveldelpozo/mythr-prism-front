@@ -262,6 +262,8 @@ export const createSlaveWindowHtml = ({
         let imageRenderRequestId = 0;
         let externalUrlRenderRequestId = 0;
         let externalUrlLoadTimeoutId = null;
+        let externalAppCaptureTrack = null;
+        let externalAppCaptureOnEndedHandler = null;
         let monitorIdentifyFlashTimeoutId = null;
         let transitionTimeoutId = null;
         let transitionSequenceId = 0;
@@ -825,7 +827,14 @@ export const createSlaveWindowHtml = ({
         const stopVideoPlayback = (resetSource) => {
           clearScheduledSyncAction();
 
+          if (externalAppCaptureTrack && externalAppCaptureOnEndedHandler) {
+            externalAppCaptureTrack.removeEventListener('ended', externalAppCaptureOnEndedHandler);
+          }
+          externalAppCaptureTrack = null;
+          externalAppCaptureOnEndedHandler = null;
+
           video.pause();
+          video.srcObject = null;
           if (resetSource) {
             video.removeAttribute('src');
           }
@@ -974,6 +983,69 @@ export const createSlaveWindowHtml = ({
             empty.textContent = 'No se pudo reproducir el video en esta ventana.';
           });
         };
+
+        const isMediaStreamLike = (stream) => {
+          if (!stream || typeof stream !== 'object') {
+            return false;
+          }
+
+          return typeof stream.getVideoTracks === 'function' && typeof stream.getTracks === 'function';
+        };
+
+        const showExternalAppCaptureStream = (stream) => {
+          if (!isMediaStreamLike(stream)) {
+            postToMaster('EXTERNAL_APP_CAPTURE_STATUS', {
+              active: false,
+              reason: 'invalid-stream',
+              message: 'La captura recibida no es valida para esta ventana esclava.'
+            });
+            return false;
+          }
+
+          const track = stream.getVideoTracks()[0] ?? null;
+          if (!track) {
+            postToMaster('EXTERNAL_APP_CAPTURE_STATUS', {
+              active: false,
+              reason: 'missing-track',
+              message: 'No se detecto pista de video en la captura seleccionada.'
+            });
+            return false;
+          }
+
+          clearViewportMedia();
+
+          video.muted = true;
+          video.srcObject = stream;
+          video.style.display = 'block';
+          empty.style.display = 'none';
+
+          externalAppCaptureTrack = track;
+          externalAppCaptureOnEndedHandler = () => {
+            clearViewportMedia();
+            postToMaster('EXTERNAL_APP_CAPTURE_STATUS', {
+              active: false,
+              reason: 'track-ended',
+              message: 'La captura externa finalizo en la ventana proyectada.'
+            });
+          };
+          track.addEventListener('ended', externalAppCaptureOnEndedHandler, { once: true });
+
+          requestThumbnailRefresh(0);
+
+          void video.play().catch(() => {
+            empty.style.display = 'block';
+            empty.textContent = 'No se pudo reproducir la captura externa en esta ventana.';
+          });
+
+          postToMaster('EXTERNAL_APP_CAPTURE_STATUS', {
+            active: true,
+            reason: 'stream-attached'
+          });
+
+          return true;
+        };
+
+        window.__MMIB_ATTACH_EXTERNAL_APP_STREAM__ = (stream) => showExternalAppCaptureStream(stream);
 
         const showExternalUrl = (source) => {
           let parsed;
@@ -1516,6 +1588,24 @@ export const createSlaveWindowHtml = ({
             return;
           }
 
+          if (message.type === 'EXTERNAL_APP_CAPTURE_START') {
+            clearViewportMedia();
+            empty.style.display = 'block';
+            empty.textContent = 'Selecciona una ventana o pestana de app en el selector nativo para iniciar captura.';
+            return;
+          }
+
+          if (message.type === 'EXTERNAL_APP_CAPTURE_STOP') {
+            clearViewportMedia();
+            postToMaster('EXTERNAL_APP_CAPTURE_STATUS', {
+              active: false,
+              reason: typeof message.payload?.reason === 'string'
+                ? message.payload.reason
+                : 'operator-stop'
+            });
+            return;
+          }
+
           if (message.type === 'PING') {
             postToMaster('PONG', { timestamp: Date.now() });
           }
@@ -1539,6 +1629,8 @@ export const createSlaveWindowHtml = ({
           clearMonitorIdFlash();
           clearTransitionTimeout();
           clearScheduledThumbnailCapture();
+          stopVideoPlayback(true);
+          window.__MMIB_ATTACH_EXTERNAL_APP_STREAM__ = undefined;
           if (externalUrlLoadTimeoutId !== null) {
             window.clearTimeout(externalUrlLoadTimeoutId);
             externalUrlLoadTimeoutId = null;

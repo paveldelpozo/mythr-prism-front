@@ -50,6 +50,8 @@ const mockMonitorStates = reactive({
     lostFullscreenUnexpectedly: false,
     lastFullscreenExitAtMs: null,
     requiresFullscreenInteraction: false,
+    isExternalAppCapturePending: false,
+    isExternalAppCaptureActive: false,
     lastError: null
   },
   projector: {
@@ -64,6 +66,8 @@ const mockMonitorStates = reactive({
     lostFullscreenUnexpectedly: false,
     lastFullscreenExitAtMs: null,
     requiresFullscreenInteraction: false,
+    isExternalAppCapturePending: false,
+    isExternalAppCaptureActive: false,
     lastError: null
   }
 });
@@ -76,6 +80,8 @@ const setMirrorTargetMonitorIdsSpy = vi.fn();
 const setMonitorCustomNameSpy = vi.fn();
 const setContentTransitionForMonitorSpy = vi.fn();
 const setExternalUrlForMonitorSpy = vi.fn(() => true);
+const startExternalAppCaptureForMonitorSpy = vi.fn(async () => true);
+const stopExternalAppCaptureForMonitorSpy = vi.fn();
 const clearExternalUrlForMonitorSpy = vi.fn();
 const reloadExternalUrlForMonitorSpy = vi.fn(() => true);
 const navigateExternalUrlForMonitorSpy = vi.fn(() => true);
@@ -165,6 +171,8 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
     setMonitorCustomName: setMonitorCustomNameSpy,
     setContentTransitionForMonitor: setContentTransitionForMonitorSpy,
     setExternalUrlForMonitor: setExternalUrlForMonitorSpy,
+    startExternalAppCaptureForMonitor: startExternalAppCaptureForMonitorSpy,
+    stopExternalAppCaptureForMonitor: stopExternalAppCaptureForMonitorSpy,
     clearExternalUrlForMonitor: clearExternalUrlForMonitorSpy,
     reloadExternalUrlForMonitor: reloadExternalUrlForMonitorSpy,
     navigateExternalUrlForMonitor: navigateExternalUrlForMonitorSpy,
@@ -302,6 +310,8 @@ describe('App integration base', () => {
     setMonitorCustomNameSpy.mockReset();
     setContentTransitionForMonitorSpy.mockReset();
     setExternalUrlForMonitorSpy.mockReset();
+    startExternalAppCaptureForMonitorSpy.mockReset();
+    stopExternalAppCaptureForMonitorSpy.mockReset();
     clearExternalUrlForMonitorSpy.mockReset();
     reloadExternalUrlForMonitorSpy.mockReset();
     navigateExternalUrlForMonitorSpy.mockReset();

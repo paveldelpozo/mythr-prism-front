@@ -130,6 +130,23 @@ const setupWindowManagementMocks = () => {
   };
 };
 
+const createMockCaptureStream = () => {
+  const track: Partial<MediaStreamTrack> & { stop: ReturnType<typeof vi.fn> } = {
+    stop: vi.fn(),
+    onended: null
+  };
+
+  const stream: Partial<MediaStream> = {
+    getTracks: () => [track as MediaStreamTrack],
+    getVideoTracks: () => [track as MediaStreamTrack]
+  };
+
+  return {
+    stream: stream as MediaStream,
+    track: track as MediaStreamTrack
+  };
+};
+
 const dispatchFullscreenStatusFromPopup = ({
   popup,
   monitorId,
@@ -537,6 +554,108 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
         expect.objectContaining({ type: 'EXTERNAL_URL_FORWARD' })
       ])
     );
+  });
+
+  it('inicia captura externa desde operador y permite detenerla', async () => {
+    const { popups, mirrorTargetId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(mirrorTargetId);
+
+    const popup = popups[0] as PopupWindowMock & {
+      __MMIB_ATTACH_EXTERNAL_APP_STREAM__?: (stream: MediaStream) => boolean;
+    };
+    const { stream } = createMockCaptureStream();
+
+    popup.__MMIB_ATTACH_EXTERNAL_APP_STREAM__ = vi.fn(() => true);
+    const getDisplayMediaMock = vi.fn(async () => stream);
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getDisplayMedia: getDisplayMediaMock
+      }
+    });
+
+    popup.postMessage.mockClear();
+    const started = await api.startExternalAppCaptureForMonitor(mirrorTargetId);
+
+    expect(started).toBe(true);
+    expect(getDisplayMediaMock).toHaveBeenCalledWith({ video: true, audio: false });
+    expect(popup.__MMIB_ATTACH_EXTERNAL_APP_STREAM__).toHaveBeenCalledWith(stream);
+    expect(api.monitorStates[mirrorTargetId]?.isExternalAppCaptureActive).toBe(true);
+    expect(api.monitorStates[mirrorTargetId]?.isExternalAppCapturePending).toBe(false);
+    expect(api.monitorStates[mirrorTargetId]?.lastError).toBeNull();
+
+    api.stopExternalAppCaptureForMonitor(mirrorTargetId, 'operator-stop');
+
+    const sentTypes = popup.postMessage.mock.calls.map(([message]) => message.type);
+    expect(sentTypes).toContain('EXTERNAL_APP_CAPTURE_START');
+    expect(sentTypes).toContain('EXTERNAL_APP_CAPTURE_STOP');
+    expect(api.monitorStates[mirrorTargetId]?.isExternalAppCaptureActive).toBe(false);
+  });
+
+  it('reporta error accionable al cancelar selector nativo de captura', async () => {
+    const { mirrorTargetId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(mirrorTargetId);
+
+    const getDisplayMediaMock = vi.fn(async () => {
+      throw new DOMException('denied', 'NotAllowedError');
+    });
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getDisplayMedia: getDisplayMediaMock
+      }
+    });
+
+    const started = await api.startExternalAppCaptureForMonitor(mirrorTargetId);
+
+    expect(started).toBe(false);
+    expect(api.monitorStates[mirrorTargetId]?.isExternalAppCaptureActive).toBe(false);
+    expect(api.monitorStates[mirrorTargetId]?.isExternalAppCapturePending).toBe(false);
+    expect(api.monitorStates[mirrorTargetId]?.lastError).toContain('cancelada o denegada');
+  });
+
+  it('sincroniza fin de captura cuando la pista termina por onended', async () => {
+    const { popups, mirrorTargetId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(mirrorTargetId);
+
+    const popup = popups[0] as PopupWindowMock & {
+      __MMIB_ATTACH_EXTERNAL_APP_STREAM__?: (stream: MediaStream) => boolean;
+    };
+    const { stream, track } = createMockCaptureStream();
+
+    popup.__MMIB_ATTACH_EXTERNAL_APP_STREAM__ = vi.fn(() => true);
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getDisplayMedia: vi.fn(async () => stream)
+      }
+    });
+
+    await api.startExternalAppCaptureForMonitor(mirrorTargetId);
+    popup.postMessage.mockClear();
+
+    track.onended?.(new Event('ended'));
+
+    const sentMessages = popup.postMessage.mock.calls.map(([message]) => message);
+    expect(sentMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'EXTERNAL_APP_CAPTURE_STOP',
+          payload: expect.objectContaining({ reason: 'track-ended' })
+        })
+      ])
+    );
+    expect(api.monitorStates[mirrorTargetId]?.isExternalAppCaptureActive).toBe(false);
+    expect(api.monitorStates[mirrorTargetId]?.lastError).toContain('finalizo');
   });
 
   it('abre ventana esclava en ruta same-origin y completa handshake basico', async () => {

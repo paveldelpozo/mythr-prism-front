@@ -224,39 +224,39 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
     - [x] Carga y recarga controlada.
     - [x] Estado de error y recovery visual.
 
-- [ ] **Captura y retransmision de aplicaciones externas**
+- [x] **Captura y retransmision de aplicaciones externas**
   - Titulo: Compartir ventana de aplicacion externa en monitor secundario.
   - Prioridad: `V1` por alto impacto operativo para presentaciones y riesgo tecnico moderado (permisos/ciclo de vida de captura) que conviene abordar despues de estabilizar el flujo base del MVP.
   - Historia de usuario: como operador, quiero capturar una ventana de aplicacion externa y enviarla a un monitor secundario para mostrar contenido de terceros sin salir de Mythr Prism.
   - Dependencias: ventana secundaria activa y controlable, pipeline de render por monitor, estado de sesion en UI principal.
   - Descripcion tecnica:
-    - [ ] Boton `Capturar App` en UI principal que dispare selector nativo con `navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })`.
-    - [ ] Envio del stream a la ventana secundaria activa sin recargar su contexto.
-    - [ ] Render en modo `contain` preservando aspect ratio del origen.
-    - [ ] Control de parada desde UI principal y sincronizacion con parada nativa del navegador (`track.onended`).
-    - [ ] Manejo de cancelacion y errores sin romper reproduccion ni controles existentes.
+    - [x] Boton `Capturar App` en UI principal que dispare selector nativo con `navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })`.
+    - [x] Envio del stream a la ventana secundaria activa sin recargar su contexto.
+    - [x] Render en modo `contain` preservando aspect ratio del origen.
+    - [x] Control de parada desde UI principal y sincronizacion con parada nativa del navegador (`track.onended`).
+    - [x] Manejo de cancelacion y errores sin romper reproduccion ni controles existentes.
   - Notas de implementacion:
     - `MediaStream` no es serializable por `postMessage`; evitar diseno que dependa de pasarlo entre ventanas de forma directa.
     - Enfoque A (preferido): iniciar `getDisplayMedia` desde ventana secundaria cuando sea viable, coordinando por mensajes de control.
     - Enfoque B (avanzado): relay por `canvas`/`WebRTC` local si A no cumple restricciones de permisos o UX.
   - Criterios de aceptacion:
-    - [ ] Al pulsar `Capturar App`, el navegador abre el selector nativo y permite elegir ventana.
-    - [ ] Al confirmar seleccion, la ventana secundaria activa muestra el stream sin recarga.
-    - [ ] El contenido se visualiza en `contain` sin distorsion y sin recorte no intencional.
-    - [ ] Al detener desde UI principal o al terminar nativamente, la salida vuelve a estado seguro/fallback.
-    - [ ] Si el usuario cancela o hay error de permisos/dispositivo, la app mantiene estado estable y comunica error accionable.
+    - [x] Al pulsar `Capturar App`, el navegador abre el selector nativo y permite elegir ventana.
+    - [x] Al confirmar seleccion, la ventana secundaria activa muestra el stream sin recarga.
+    - [x] El contenido se visualiza en `contain` sin distorsion y sin recorte no intencional.
+    - [x] Al detener desde UI principal o al terminar nativamente, la salida vuelve a estado seguro/fallback.
+    - [x] Si el usuario cancela o hay error de permisos/dispositivo, la app mantiene estado estable y comunica error accionable.
   - Subtareas:
-    - [ ] Definir arquitectura de control entre ventana principal y secundaria (comandos, estados, retries).
-    - [ ] Implementar accion `Capturar App` y capa de manejo de permisos/errores.
-    - [ ] Implementar reproduccion del stream en ventana secundaria sin recarga.
-    - [ ] Implementar modo de visualizacion `contain` y validacion de aspect ratio.
-    - [ ] Implementar parada manual + escucha de `track.onended` + limpieza de recursos.
-    - [ ] Añadir pruebas manuales guiadas para exito, cancelacion y error de permisos.
+    - [x] Definir arquitectura de control entre ventana principal y secundaria (comandos, estados, retries).
+    - [x] Implementar accion `Capturar App` y capa de manejo de permisos/errores.
+    - [x] Implementar reproduccion del stream en ventana secundaria sin recarga.
+    - [x] Implementar modo de visualizacion `contain` y validacion de aspect ratio.
+    - [x] Implementar parada manual + escucha de `track.onended` + limpieza de recursos.
+    - [x] Añadir pruebas manuales guiadas para exito, cancelacion y error de permisos.
   - DoD:
-    - [ ] Flujo completo validado en al menos 2 navegadores objetivo del proyecto.
-    - [ ] No quedan tracks ni listeners activos al detener o cerrar captura.
-    - [ ] Errores y cancelaciones muestran mensaje util y no bloquean otras funciones del monitor.
-    - [ ] Documentacion minima del flujo y limitaciones agregada en `docs/`.
+    - [x] Flujo completo validado en al menos 2 navegadores objetivo del proyecto.
+    - [x] No quedan tracks ni listeners activos al detener o cerrar captura.
+    - [x] Errores y cancelaciones muestran mensaje util y no bloquean otras funciones del monitor.
+    - [x] Documentacion minima del flujo y limitaciones agregada en `docs/`.
   - Riesgos:
     - Restricciones de permisos por contexto/gesto de usuario pueden limitar inicio remoto de captura.
     - Diferencias de comportamiento entre navegadores pueden requerir fallback por estrategia B.

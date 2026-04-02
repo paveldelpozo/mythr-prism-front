@@ -35,6 +35,8 @@ const states: MonitorStateMap = {
     lostFullscreenUnexpectedly: false,
     lastFullscreenExitAtMs: null,
     requiresFullscreenInteraction: false,
+    isExternalAppCapturePending: false,
+    isExternalAppCaptureActive: false,
     lastError: null
   }
 };

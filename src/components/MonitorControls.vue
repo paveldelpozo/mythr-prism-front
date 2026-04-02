@@ -55,6 +55,8 @@ const emit = defineEmits<{
   reloadExternalUrl: [monitorId: string];
   clearExternalUrl: [monitorId: string];
   navigateExternalUrl: [monitorId: string, direction: 'back' | 'forward'];
+  startExternalAppCapture: [monitorId: string];
+  stopExternalAppCapture: [monitorId: string];
 }>();
 
 const imageImportFeedback = ref<string | null>(null);
@@ -173,6 +175,18 @@ const fullscreenActionLabel = computed(() => {
   }
 
   return 'Solicitar fullscreen';
+});
+
+const externalAppCaptureFeedback = computed(() => {
+  if (props.state.isExternalAppCapturePending) {
+    return 'Selector nativo abierto: elige la app/pestana a retransmitir.';
+  }
+
+  if (props.state.isExternalAppCaptureActive) {
+    return 'Captura externa activa en este monitor.';
+  }
+
+  return 'Sin captura externa activa.';
 });
 
 const lockBodyScroll = () => {
@@ -420,6 +434,35 @@ onBeforeUnmount(() => {
         class="mt-2 text-xs text-amber-200"
       >
         {{ state.lastError }}
+      </p>
+    </div>
+
+    <div class="surface-panel">
+      <label class="section-kicker-muted mb-2 block text-[11px]">Aplicacion externa</label>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-testid="monitor-external-app-capture-start"
+          class="btn-with-icon btn-sm btn-indigo-soft"
+          :disabled="state.isExternalAppCapturePending"
+          @click="emit('startExternalAppCapture', monitorId)"
+        >
+          <ArrowPathIcon aria-hidden="true" class="btn-icon" />
+          Capturar App
+        </button>
+        <button
+          type="button"
+          data-testid="monitor-external-app-capture-stop"
+          class="btn-with-icon btn-sm btn-rose-soft"
+          :disabled="!state.isExternalAppCaptureActive && !state.isExternalAppCapturePending"
+          @click="emit('stopExternalAppCapture', monitorId)"
+        >
+          <TrashIcon aria-hidden="true" class="btn-icon" />
+          Detener captura
+        </button>
+      </div>
+      <p data-testid="monitor-external-app-capture-feedback" class="mt-2 text-xs text-slate-300/90">
+        {{ externalAppCaptureFeedback }}
       </p>
     </div>
 

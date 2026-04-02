@@ -35,6 +35,8 @@ const emit = defineEmits<{
   reloadExternalUrl: [monitorId: string];
   clearExternalUrl: [monitorId: string];
   navigateExternalUrl: [monitorId: string, direction: 'back' | 'forward'];
+  startExternalAppCapture: [monitorId: string];
+  stopExternalAppCapture: [monitorId: string];
   openWhiteboard: [monitorId: string];
   renameMonitor: [monitorId: string, nextName: string];
   transform: [
@@ -178,6 +180,8 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
         @reload-external-url="emit('reloadExternalUrl', $event)"
         @clear-external-url="emit('clearExternalUrl', $event)"
         @navigate-external-url="(id, direction) => emit('navigateExternalUrl', id, direction)"
+        @start-external-app-capture="emit('startExternalAppCapture', $event)"
+        @stop-external-app-capture="emit('stopExternalAppCapture', $event)"
         @open-whiteboard="emit('openWhiteboard', $event)"
         @rename-monitor="(id, name) => emit('renameMonitor', id, name)"
         @transform="(id, action) => emit('transform', id, action)"
