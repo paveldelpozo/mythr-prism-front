@@ -193,6 +193,8 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 
 ## V1
 
+**Progreso V1 (features): 67% (4/6 completadas)**
+
 ### Arranque V1 (checklist corto)
 
 - [ ] Tomar la primera feature V1 desde rama `feature/<nombre>` creada desde `development`.
