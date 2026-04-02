@@ -49,9 +49,15 @@ const emit = defineEmits<{
   requestFullscreen: [monitorId: string];
   closeWindow: [monitorId: string];
   setContentTransition: [monitorId: string, transition: ContentTransition];
+  assignExternalUrl: [monitorId: string, url: string];
+  reloadExternalUrl: [monitorId: string];
+  clearExternalUrl: [monitorId: string];
+  navigateExternalUrl: [monitorId: string, direction: 'back' | 'forward'];
 }>();
 
 const imageImportFeedback = ref<string | null>(null);
+const externalUrlFeedback = ref<string | null>(null);
+const externalUrlDraft = ref('');
 const isImageDropZoneActive = ref(false);
 const imageDropZoneDragDepth = ref(0);
 const isContentEditorModalOpen = ref(false);
@@ -88,6 +94,39 @@ const onTransitionDurationInput = (event: Event) => {
     type: props.state.contentTransition.type,
     durationMs: safeValue
   });
+};
+
+const activeExternalUrl = computed(() =>
+  props.state.activeMediaItem?.kind === 'external-url'
+    ? props.state.activeMediaItem.source
+    : null
+);
+
+watch(activeExternalUrl, (nextUrl) => {
+  externalUrlDraft.value = nextUrl ?? '';
+}, {
+  immediate: true
+});
+
+const assignExternalUrl = () => {
+  const nextUrl = externalUrlDraft.value.trim();
+  emit('assignExternalUrl', props.monitorId, nextUrl);
+  externalUrlFeedback.value = nextUrl.length > 0
+    ? 'Solicitud enviada para cargar URL externa.'
+    : 'Ingresa una URL valida para continuar.';
+};
+
+const reloadExternalUrl = () => {
+  emit('reloadExternalUrl', props.monitorId);
+};
+
+const clearExternalUrl = () => {
+  externalUrlDraft.value = '';
+  emit('clearExternalUrl', props.monitorId);
+};
+
+const navigateExternalUrl = (direction: 'back' | 'forward') => {
+  emit('navigateExternalUrl', props.monitorId, direction);
 };
 
 const feedbackForFailureReason = (reason: ImageImportFailureReason): string =>
@@ -295,6 +334,85 @@ onBeforeUnmount(() => {
       </div>
       <p v-if="imageImportFeedback" data-testid="monitor-image-import-feedback" class="mt-2 text-xs text-amber-200">
         {{ imageImportFeedback }}
+      </p>
+    </div>
+
+    <div class="surface-panel">
+      <label class="section-kicker-muted mb-2 block text-[11px]">URL externa segura</label>
+      <div class="flex flex-wrap items-center gap-2">
+        <input
+          v-model="externalUrlDraft"
+          data-testid="monitor-external-url-input"
+          type="text"
+          class="form-control flex-1"
+          placeholder="https://example.com"
+        />
+        <button
+          type="button"
+          data-testid="monitor-external-url-apply"
+          class="btn-with-icon btn-sm btn-indigo-soft"
+          @click="assignExternalUrl"
+        >
+          Cargar URL
+        </button>
+      </div>
+
+      <div class="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-testid="monitor-external-url-back"
+          class="btn-with-icon btn-sm btn-slate-soft"
+          :disabled="!activeExternalUrl"
+          @click="navigateExternalUrl('back')"
+        >
+          <ArrowLeftIcon aria-hidden="true" class="btn-icon" />
+          Atras
+        </button>
+        <button
+          type="button"
+          data-testid="monitor-external-url-forward"
+          class="btn-with-icon btn-sm btn-slate-soft"
+          :disabled="!activeExternalUrl"
+          @click="navigateExternalUrl('forward')"
+        >
+          <ArrowRightIcon aria-hidden="true" class="btn-icon" />
+          Adelante
+        </button>
+        <button
+          type="button"
+          data-testid="monitor-external-url-reload"
+          class="btn-with-icon btn-sm btn-emerald-soft"
+          :disabled="!activeExternalUrl"
+          @click="reloadExternalUrl"
+        >
+          <ArrowPathIcon aria-hidden="true" class="btn-icon" />
+          Recargar
+        </button>
+        <button
+          type="button"
+          data-testid="monitor-external-url-clear"
+          class="btn-with-icon btn-sm btn-rose-soft"
+          :disabled="!activeExternalUrl"
+          @click="clearExternalUrl"
+        >
+          <TrashIcon aria-hidden="true" class="btn-icon" />
+          Detener
+        </button>
+      </div>
+
+      <p
+        v-if="externalUrlFeedback"
+        data-testid="monitor-external-url-feedback"
+        class="mt-2 text-xs text-slate-300/90"
+      >
+        {{ externalUrlFeedback }}
+      </p>
+      <p
+        v-if="state.lastError"
+        data-testid="monitor-external-url-error"
+        class="mt-2 text-xs text-amber-200"
+      >
+        {{ state.lastError }}
       </p>
     </div>
 

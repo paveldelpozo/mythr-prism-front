@@ -269,4 +269,59 @@ describe('MonitorControls', () => {
       ['monitor-1', { type: 'cut', durationMs: 5000 }]
     ]);
   });
+
+  it('emite asignacion y controles de URL externa', async () => {
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state: createDefaultMonitorState()
+      }
+    });
+
+    await wrapper.get('[data-testid="monitor-external-url-input"]').setValue('https://example.com/news');
+    await wrapper.get('[data-testid="monitor-external-url-apply"]').trigger('click');
+
+    expect(wrapper.emitted('assignExternalUrl')).toEqual([
+      ['monitor-1', 'https://example.com/news']
+    ]);
+  });
+
+  it('habilita botones de navegacion URL cuando hay URL activa', async () => {
+    const state = createDefaultMonitorState();
+    state.activeMediaItem = {
+      id: 'url-1',
+      kind: 'external-url',
+      name: 'URL',
+      source: 'https://example.com/path'
+    };
+
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state
+      }
+    });
+
+    const back = wrapper.get('[data-testid="monitor-external-url-back"]');
+    const forward = wrapper.get('[data-testid="monitor-external-url-forward"]');
+    const reload = wrapper.get('[data-testid="monitor-external-url-reload"]');
+    const clear = wrapper.get('[data-testid="monitor-external-url-clear"]');
+
+    expect(back.attributes('disabled')).toBeUndefined();
+    expect(forward.attributes('disabled')).toBeUndefined();
+    expect(reload.attributes('disabled')).toBeUndefined();
+    expect(clear.attributes('disabled')).toBeUndefined();
+
+    await back.trigger('click');
+    await forward.trigger('click');
+    await reload.trigger('click');
+    await clear.trigger('click');
+
+    expect(wrapper.emitted('navigateExternalUrl')).toEqual([
+      ['monitor-1', 'back'],
+      ['monitor-1', 'forward']
+    ]);
+    expect(wrapper.emitted('reloadExternalUrl')).toEqual([['monitor-1']]);
+    expect(wrapper.emitted('clearExternalUrl')).toEqual([['monitor-1']]);
+  });
 });

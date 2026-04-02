@@ -101,6 +101,10 @@ const {
   setMonitorCustomName,
   setContentTransitionForMonitor,
   setImageForMonitor,
+  setExternalUrlForMonitor,
+  clearExternalUrlForMonitor,
+  reloadExternalUrlForMonitor,
+  navigateExternalUrlForMonitor,
   setWhiteboardStateForMonitor,
   undoWhiteboardForMonitor,
   setPlaylistItemForMonitor
@@ -173,6 +177,7 @@ const buildPersistableMonitorStateMap = (): PersistedMonitorStateMap => {
       },
       contentTransition: sanitizeContentTransition(state.contentTransition),
       imageDataUrl: typeof state.imageDataUrl === 'string' ? state.imageDataUrl : null,
+      externalUrl: typeof state.externalUrl === 'string' ? state.externalUrl : null,
       customName: typeof state.customName === 'string' ? state.customName : null
     };
   });
@@ -202,6 +207,15 @@ const buildPersistablePlaylist = (): MultimediaItem[] =>
           name: item.name,
           source: item.source,
           durationMs: item.durationMs
+        };
+      }
+
+      if (item.kind === 'external-url') {
+        return {
+          id: item.id,
+          kind: 'external-url',
+          name: item.name,
+          source: item.source
         };
       }
 
@@ -253,6 +267,8 @@ const buildPersistableLayouts = (): PersistedLayout[] =>
             contentTransition: sanitizeContentTransition(monitorState.contentTransition),
             imageDataUrl:
               typeof monitorState.imageDataUrl === 'string' ? monitorState.imageDataUrl : null,
+            externalUrl:
+              typeof monitorState.externalUrl === 'string' ? monitorState.externalUrl : null,
             customName: typeof monitorState.customName === 'string' ? monitorState.customName : null
           };
 
@@ -451,8 +467,36 @@ const applyPersistedMonitorState = (monitorId: string, state: PersistedMonitorSt
   }
 
   setContentTransitionForMonitor(monitorId, sanitizeContentTransition(state.contentTransition));
-  setImageForMonitor(monitorId, state.imageDataUrl);
+  if (state.externalUrl) {
+    setExternalUrlForMonitor(monitorId, state.externalUrl);
+  } else {
+    setImageForMonitor(monitorId, state.imageDataUrl);
+  }
   setMonitorCustomName(monitorId, state.customName ?? '');
+};
+
+const assignExternalUrlToMonitor = (monitorId: string, url: string) => {
+  const applied = setExternalUrlForMonitor(monitorId, url);
+  if (!applied) {
+    return;
+  }
+
+  globalError.value = null;
+};
+
+const reloadExternalUrlOnMonitor = (monitorId: string) => {
+  reloadExternalUrlForMonitor(monitorId);
+};
+
+const clearExternalUrlOnMonitor = (monitorId: string) => {
+  clearExternalUrlForMonitor(monitorId);
+};
+
+const navigateExternalUrlOnMonitor = (
+  monitorId: string,
+  direction: 'back' | 'forward'
+) => {
+  navigateExternalUrlForMonitor(monitorId, direction);
 };
 
 const onMonitorTransitionChange = (monitorId: string, transition: ContentTransition) => {
@@ -553,6 +597,7 @@ const loadSelectedLayout = () => {
       transform: { ...DEFAULT_TRANSFORM },
       contentTransition: { ...DEFAULT_CONTENT_TRANSITION },
       imageDataUrl: null,
+      externalUrl: null,
       customName: null
     };
 
@@ -829,6 +874,10 @@ onBeforeUnmount(() => {
           @flash-monitor-id="flashMonitorId"
           @upload-image="uploadImage"
           @clear-image="(id) => setImageForMonitor(id, null)"
+          @assign-external-url="assignExternalUrlToMonitor"
+          @reload-external-url="reloadExternalUrlOnMonitor"
+          @clear-external-url="clearExternalUrlOnMonitor"
+          @navigate-external-url="navigateExternalUrlOnMonitor"
           @open-whiteboard="openWhiteboardEditor"
           @rename-monitor="setMonitorCustomName"
           @set-content-transition="onMonitorTransitionChange"

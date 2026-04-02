@@ -31,6 +31,10 @@ const emit = defineEmits<{
   closeWindow: [monitorId: string];
   uploadImage: [monitorId: string, file: File, source: 'file-picker' | 'drag-drop' | 'paste'];
   clearImage: [monitorId: string];
+  assignExternalUrl: [monitorId: string, url: string];
+  reloadExternalUrl: [monitorId: string];
+  clearExternalUrl: [monitorId: string];
+  navigateExternalUrl: [monitorId: string, direction: 'back' | 'forward'];
   openWhiteboard: [monitorId: string];
   renameMonitor: [monitorId: string, nextName: string];
   transform: [
@@ -170,6 +174,10 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
         @close-window="emit('closeWindow', $event)"
         @upload-image="(id, file, source) => emit('uploadImage', id, file, source)"
         @clear-image="emit('clearImage', $event)"
+        @assign-external-url="(id, url) => emit('assignExternalUrl', id, url)"
+        @reload-external-url="emit('reloadExternalUrl', $event)"
+        @clear-external-url="emit('clearExternalUrl', $event)"
+        @navigate-external-url="(id, direction) => emit('navigateExternalUrl', id, direction)"
         @open-whiteboard="emit('openWhiteboard', $event)"
         @rename-monitor="(id, name) => emit('renameMonitor', id, name)"
         @transform="(id, action) => emit('transform', id, action)"

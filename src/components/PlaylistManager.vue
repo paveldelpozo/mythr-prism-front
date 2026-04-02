@@ -111,7 +111,15 @@ const previewLabel = computed<string>(() => {
     return '';
   }
 
-  return previewItem.value.kind === 'image' ? 'Imagen' : 'Video';
+  if (previewItem.value.kind === 'image') {
+    return 'Imagen';
+  }
+
+  if (previewItem.value.kind === 'video') {
+    return 'Video';
+  }
+
+  return 'URL externa';
 });
 
 const previewThumbnail = computed(() => {
@@ -143,14 +151,21 @@ const cloneMediaItem = (item: MultimediaItem): MultimediaItem =>
         source: item.source,
         durationMs: item.durationMs
       }
-    : {
+    : item.kind === 'video'
+      ? {
+          id: item.id,
+          kind: 'video',
+          name: item.name,
+          source: item.source,
+          startAtMs: item.startAtMs,
+          endAtMs: item.endAtMs,
+          muted: item.muted
+        }
+      : {
         id: item.id,
-        kind: 'video',
+        kind: 'external-url',
         name: item.name,
-        source: item.source,
-        startAtMs: item.startAtMs,
-        endAtMs: item.endAtMs,
-        muted: item.muted
+        source: item.source
       };
 
 const toPositiveNumber = (value: number, fallback: number): number => {
@@ -527,15 +542,20 @@ const addItem = () => {
           kind: 'image',
           durationMs: toPositiveNumber(newImageDurationMs.value, DEFAULT_IMAGE_DURATION_MS)
         }
-      : {
+      : kind === 'video'
+        ? {
+            ...base,
+            kind: 'video',
+            startAtMs: toNonNegativeNumber(newVideoStartAtMs.value, 0),
+            endAtMs: toVideoEnd(
+              newVideoEndAtMs.value,
+              toNonNegativeNumber(newVideoStartAtMs.value, 0)
+            ),
+            muted: newVideoMuted.value
+          }
+        : {
           ...base,
-          kind: 'video',
-          startAtMs: toNonNegativeNumber(newVideoStartAtMs.value, 0),
-          endAtMs: toVideoEnd(
-            newVideoEndAtMs.value,
-            toNonNegativeNumber(newVideoStartAtMs.value, 0)
-          ),
-          muted: newVideoMuted.value
+          kind: 'external-url'
         };
 
   emitItems([...props.items, item]);
@@ -687,14 +707,23 @@ const updateItemKind = (itemId: string, kind: MediaItemKind) => {
       };
     }
 
+    if (kind === 'video') {
+      return {
+        id: item.id,
+        kind: 'video',
+        name: item.name,
+        source: item.source,
+        startAtMs: 0,
+        endAtMs: null,
+        muted: true
+      };
+    }
+
     return {
       id: item.id,
-      kind: 'video',
+      kind: 'external-url',
       name: item.name,
-      source: item.source,
-      startAtMs: 0,
-      endAtMs: null,
-      muted: true
+      source: item.source
     };
   });
 };
@@ -906,7 +935,7 @@ const updateVideoMuted = (itemId: string, value: boolean) => {
 };
 
 const isMediaItemKind = (value: string): value is MediaItemKind =>
-  value === 'image' || value === 'video';
+  value === 'image' || value === 'video' || value === 'external-url';
 
 const onItemKindChange = (itemId: string, event: Event) => {
   const value = (event.target as HTMLSelectElement).value;
@@ -1251,7 +1280,7 @@ onBeforeUnmount(() => {
               <Bars3Icon class="h-4 w-4" />
             </span>
             <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300/80">
-              #{{ index + 1 }} · {{ item.kind === 'image' ? 'Imagen' : 'Video' }}
+              #{{ index + 1 }} · {{ item.kind === 'image' ? 'Imagen' : item.kind === 'video' ? 'Video' : 'URL externa' }}
             </p>
           </div>
 
@@ -1342,9 +1371,10 @@ onBeforeUnmount(() => {
               {{ toSourcePreview(item.source) }}
             </p>
             <p v-if="item.kind === 'image'" class="mt-2 text-xs text-slate-300/85">Duracion: {{ item.durationMs }} ms</p>
-            <p v-else class="mt-2 text-xs text-slate-300/85">
+            <p v-else-if="item.kind === 'video'" class="mt-2 text-xs text-slate-300/85">
               Inicio: {{ item.startAtMs }} ms | Fin: {{ item.endAtMs ?? 'hasta final' }} | Mute: {{ item.muted ? 'si' : 'no' }}
             </p>
+            <p v-else class="mt-2 text-xs text-slate-300/85">Navegacion web externa en vivo.</p>
           </div>
         </div>
       </li>
@@ -1474,6 +1504,7 @@ onBeforeUnmount(() => {
             >
               <option value="image">Imagen</option>
               <option value="video">Video</option>
+              <option value="external-url">URL externa</option>
             </select>
           </label>
           </div>
@@ -1668,6 +1699,7 @@ onBeforeUnmount(() => {
             >
               <option value="image">Imagen</option>
               <option value="video">Video</option>
+              <option value="external-url">URL externa</option>
             </select>
           </label>
           </div>

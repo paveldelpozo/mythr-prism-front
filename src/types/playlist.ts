@@ -1,4 +1,4 @@
-export const MEDIA_ITEM_KINDS = ['image', 'video'] as const;
+export const MEDIA_ITEM_KINDS = ['image', 'video', 'external-url'] as const;
 
 export type MediaItemKind = (typeof MEDIA_ITEM_KINDS)[number];
 
@@ -21,7 +21,14 @@ export interface VideoMultimediaItem extends MultimediaItemBase {
   muted: boolean;
 }
 
-export type MultimediaItem = ImageMultimediaItem | VideoMultimediaItem;
+export interface ExternalUrlMultimediaItem extends MultimediaItemBase {
+  kind: 'external-url';
+}
+
+export type MultimediaItem =
+  | ImageMultimediaItem
+  | VideoMultimediaItem
+  | ExternalUrlMultimediaItem;
 
 export interface PlaylistPlaybackState {
   targetMonitorIds: string[];
@@ -65,6 +72,10 @@ export const isMultimediaItem = (value: unknown): value is MultimediaItem => {
       Number.isFinite(raw.durationMs) &&
       raw.durationMs > 0
     );
+  }
+
+  if (value.kind === 'external-url') {
+    return true;
   }
 
   return (

@@ -21,8 +21,16 @@ describe('types/playlist guards', () => {
       muted: false
     };
 
+    const externalUrl = {
+      id: 'url-1',
+      kind: 'external-url',
+      name: 'Web oficial',
+      source: 'https://example.com/page'
+    };
+
     expect(isMultimediaItem(image)).toBe(true);
     expect(isMultimediaItem(video)).toBe(true);
+    expect(isMultimediaItem(externalUrl)).toBe(true);
   });
 
   it('rechaza shape invalido o datos inconsistentes', () => {

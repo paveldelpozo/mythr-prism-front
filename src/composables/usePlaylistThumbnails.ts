@@ -21,6 +21,7 @@ const VIDEO_THUMBNAIL_CONCURRENCY = 2;
 const VIDEO_THUMBNAIL_TIMEOUT_MS = 5000;
 const VIDEO_LOADING_MESSAGE = 'Generando preview...';
 const VIDEO_FALLBACK_MESSAGE = 'Preview no disponible';
+const URL_FALLBACK_MESSAGE = 'La URL externa no genera thumbnail automatico.';
 
 const buildVideoThumbnailCacheKey = (item: VideoMultimediaItem): string =>
   `${item.source}::${item.startAtMs}`;
@@ -213,6 +214,16 @@ export const usePlaylistThumbnails = (items: Ref<MultimediaItem[]>) => {
         continue;
       }
 
+      if (item.kind === 'external-url') {
+        abortForItem(item.id);
+        setThumbnail(item.id, {
+          status: 'error',
+          source: null,
+          message: URL_FALLBACK_MESSAGE
+        });
+        continue;
+      }
+
       const currentInProgressKey = inProgressCacheKeyByItemId.get(item.id);
       const currentCacheKey = buildVideoThumbnailCacheKey(item);
       if (currentInProgressKey && currentInProgressKey !== currentCacheKey) {
@@ -245,6 +256,14 @@ export const usePlaylistThumbnails = (items: Ref<MultimediaItem[]>) => {
         status: 'ready',
         source: item.source,
         message: ''
+      };
+    }
+
+    if (item.kind === 'external-url') {
+      return {
+        status: 'error',
+        source: null,
+        message: URL_FALLBACK_MESSAGE
       };
     }
 

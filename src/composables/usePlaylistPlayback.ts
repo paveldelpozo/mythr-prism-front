@@ -56,7 +56,7 @@ const resolveAdvanceDelayMs = (item: MultimediaItem, fallbackIntervalSeconds: nu
     return Math.max(1000, Math.round(item.durationMs));
   }
 
-  if (item.endAtMs !== null && item.endAtMs > item.startAtMs) {
+  if (item.kind === 'video' && item.endAtMs !== null && item.endAtMs > item.startAtMs) {
     return Math.max(1000, Math.round(item.endAtMs - item.startAtMs));
   }
 

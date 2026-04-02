@@ -94,6 +94,9 @@ const dispatchSlaveMessage = (
     | 'WHITEBOARD_UNDO'
     | 'REQUEST_CLOSE'
     | 'REQUEST_FULLSCREEN'
+    | 'EXTERNAL_URL_RELOAD'
+    | 'EXTERNAL_URL_BACK'
+    | 'EXTERNAL_URL_FORWARD'
     | 'PING',
   payload: Record<string, unknown>
 ) => {
@@ -202,6 +205,71 @@ describe('services/slaveWindowHtml mirror rendering', () => {
 
     expect(exitFullscreenMock).not.toHaveBeenCalled();
     expect(loadSpy).not.toHaveBeenCalled();
+  });
+
+  it('renderiza URL externa via iframe al recibir SET_MEDIA external-url', async () => {
+    mountSlaveRuntime();
+
+    dispatchSlaveMessage('SET_MEDIA', {
+      item: {
+        kind: 'external-url',
+        source: 'https://example.com/dashboard'
+      }
+    });
+
+    await Promise.resolve();
+
+    const frame = document.getElementById('externalUrlFrame') as HTMLIFrameElement;
+    const empty = document.getElementById('empty') as HTMLElement;
+
+    expect(frame.getAttribute('src')).toBe('https://example.com/dashboard');
+    expect(empty.textContent).toContain('Cargando URL externa');
+
+    frame.onload?.(new Event('load'));
+    expect(frame.style.display).toBe('block');
+  });
+
+  it('ejecuta controles de URL externa (reload/back/forward)', async () => {
+    const { openerPostMessage } = mountSlaveRuntime();
+
+    dispatchSlaveMessage('SET_MEDIA', {
+      item: {
+        kind: 'external-url',
+        source: 'https://example.com/dashboard'
+      }
+    });
+
+    const frame = document.getElementById('externalUrlFrame') as HTMLIFrameElement;
+    frame.onload?.(new Event('load'));
+
+    const reloadSpy = vi.fn();
+    const backSpy = vi.fn();
+    const forwardSpy = vi.fn();
+    Object.defineProperty(frame, 'contentWindow', {
+      configurable: true,
+      value: {
+        location: {
+          reload: reloadSpy
+        },
+        history: {
+          back: backSpy,
+          forward: forwardSpy
+        }
+      }
+    });
+
+    dispatchSlaveMessage('EXTERNAL_URL_RELOAD', { reason: 'test' });
+    dispatchSlaveMessage('EXTERNAL_URL_BACK', { reason: 'test' });
+    dispatchSlaveMessage('EXTERNAL_URL_FORWARD', { reason: 'test' });
+
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    expect(backSpy).toHaveBeenCalledTimes(1);
+    expect(forwardSpy).toHaveBeenCalledTimes(1);
+
+    const errors = openerPostMessage.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'SLAVE_ERROR');
+    expect(errors).toHaveLength(0);
   });
 
   it('muestra flash temporal para identificar monitor y lo oculta al vencer timeout', () => {

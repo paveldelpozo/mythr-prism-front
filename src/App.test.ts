@@ -75,6 +75,10 @@ const setMirrorSourceMonitorIdSpy = vi.fn();
 const setMirrorTargetMonitorIdsSpy = vi.fn();
 const setMonitorCustomNameSpy = vi.fn();
 const setContentTransitionForMonitorSpy = vi.fn();
+const setExternalUrlForMonitorSpy = vi.fn(() => true);
+const clearExternalUrlForMonitorSpy = vi.fn();
+const reloadExternalUrlForMonitorSpy = vi.fn(() => true);
+const navigateExternalUrlForMonitorSpy = vi.fn(() => true);
 const setWhiteboardStateForMonitorSpy = vi.fn();
 const clearWhiteboardForMonitorSpy = vi.fn();
 const undoWhiteboardForMonitorSpy = vi.fn();
@@ -139,12 +143,14 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
         transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
         contentTransition: { type: 'cut', durationMs: 450 },
         imageDataUrl: null,
+        externalUrl: null,
         customName: null
       },
       projector: {
         transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
         contentTransition: { type: 'cut', durationMs: 450 },
         imageDataUrl: null,
+        externalUrl: null,
         customName: null
       }
     })),
@@ -158,6 +164,10 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
     setMirrorTargetMonitorIds: setMirrorTargetMonitorIdsSpy,
     setMonitorCustomName: setMonitorCustomNameSpy,
     setContentTransitionForMonitor: setContentTransitionForMonitorSpy,
+    setExternalUrlForMonitor: setExternalUrlForMonitorSpy,
+    clearExternalUrlForMonitor: clearExternalUrlForMonitorSpy,
+    reloadExternalUrlForMonitor: reloadExternalUrlForMonitorSpy,
+    navigateExternalUrlForMonitor: navigateExternalUrlForMonitorSpy,
     setImageForMonitor: setImageForMonitorSpy,
     setWhiteboardStateForMonitor: setWhiteboardStateForMonitorSpy,
     undoWhiteboardForMonitor: undoWhiteboardForMonitorSpy,
@@ -291,6 +301,10 @@ describe('App integration base', () => {
     setMirrorTargetMonitorIdsSpy.mockReset();
     setMonitorCustomNameSpy.mockReset();
     setContentTransitionForMonitorSpy.mockReset();
+    setExternalUrlForMonitorSpy.mockReset();
+    clearExternalUrlForMonitorSpy.mockReset();
+    reloadExternalUrlForMonitorSpy.mockReset();
+    navigateExternalUrlForMonitorSpy.mockReset();
     setWhiteboardStateForMonitorSpy.mockReset();
     clearWhiteboardForMonitorSpy.mockReset();
     undoWhiteboardForMonitorSpy.mockReset();
@@ -388,6 +402,7 @@ describe('App integration base', () => {
                 transform: { rotate: 15, scale: 1.25, translateX: 30, translateY: -12 },
                 contentTransition: { type: 'wipe', durationMs: 800 },
                 imageDataUrl: 'data:image/png;base64,abc',
+                externalUrl: null,
                 customName: null
               }
             },
