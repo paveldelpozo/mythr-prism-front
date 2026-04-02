@@ -1,6 +1,6 @@
 # Backlog y seguimiento del proyecto Mythr Prism
 
-Ultima actualizacion: 2026-03-31
+Ultima actualizacion: 2026-04-03
 
 ## Resumen
 
@@ -193,7 +193,7 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
 
 ## V1
 
-**Progreso V1 (features): 67% (4/6 completadas)**
+**Progreso V1 (features): 57% (4/7 completadas)**
 
 ### Arranque V1 (checklist corto)
 
@@ -262,6 +262,29 @@ Nota UX (2026-03-30): la lista de Playlist adopta jerarquia visual tipo tarjetas
   - Riesgos:
     - Restricciones de permisos por contexto/gesto de usuario pueden limitar inicio remoto de captura.
     - Diferencias de comportamiento entre navegadores pueden requerir fallback por estrategia B.
+
+- [ ] **Fuentes de monitor en modal con pestanas**
+  - Prioridad: `V1` por mejora de usabilidad operativa; reduce ruido visual en tarjetas de monitor y mantiene un flujo focalizado por tipo de fuente.
+  - Historia de usuario: como operador, quiero abrir un unico dialogo para elegir y operar la fuente del monitor (imagen local, URL o app externa) sin ver tres bloques simultaneos.
+  - Dependencias: barra de acciones del monitor, patron global de modales (`overlay fijo + header/body/footer + escape`), eventos actuales de carga/URL/captura externa.
+  - Descripcion tecnica:
+    - [ ] Agregar boton `Fuentes` en la fila de acciones del monitor (a la izquierda de `Pizarra`).
+    - [ ] Migrar controles de `Imagen local`, `URL externa` y `Aplicacion externa` a un modal con tabs accesibles (`tablist/tab/tabpanel`).
+    - [ ] Conservar handlers y feedback actuales (upload/drop/paste/clear, set/reload/back/forward/clear URL, start/stop captura app).
+    - [ ] Retirar bloques inline legacy para mantener la tarjeta compacta.
+  - Subtareas:
+    - [ ] Implementar estado/UX del modal de fuentes con bloqueo de scroll y cierre por Escape/boton.
+    - [ ] Implementar tabs con estado activo y contenido exclusivo por fuente.
+    - [ ] Reubicar acciones de limpiar/detener como acciones contextuales del footer.
+    - [ ] Ajustar estilos semanticos y tests de regresion de UI/eventos.
+  - Criterios de aceptacion:
+    - [ ] Existe un boton `Fuentes` visible en controles de monitor externo, ubicado antes de `Pizarra`.
+    - [ ] El modal abre/cierra correctamente por boton, cierre de cabecera y Escape, sin scroll de fondo.
+    - [ ] Solo se visualiza una fuente activa por vez en interfaz (sin triple bloque simultaneo).
+    - [ ] No hay regresiones en emisiones de eventos para import de imagen, URL externa y captura de app.
+  - DoD:
+    - [ ] Cobertura de tests para apertura/cierre modal, tabs y eventos criticos de cada fuente.
+    - [ ] Validacion minima ejecutada (`typecheck`, `test`, `build`) sin regresiones.
 
 - [ ] **Monitor virtual remoto (Cloud Sync)**
   - Titulo: Vincular dispositivos externos (tablets/moviles) como monitores virtuales via WebSockets.
