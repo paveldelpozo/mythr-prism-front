@@ -811,9 +811,18 @@ export const createSlaveWindowHtml = ({
         };
 
         const scheduleThumbnailCapture = (delayMs) => {
+          if (typeof window === 'undefined') {
+            return;
+          }
+
           clearScheduledThumbnailCapture();
 
           thumbnailCaptureTimeoutId = window.setTimeout(() => {
+            if (typeof window === 'undefined') {
+              thumbnailCaptureTimeoutId = null;
+              return;
+            }
+
             thumbnailCaptureTimeoutId = null;
             captureThumbnailSnapshot();
             scheduleThumbnailCapture(THUMBNAIL_CAPTURE_INTERVAL_MS);

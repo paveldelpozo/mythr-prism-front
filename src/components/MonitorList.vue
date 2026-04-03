@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  ComputerDesktopIcon,
   ArrowDownTrayIcon,
   EyeIcon,
   EyeSlashIcon,
@@ -44,6 +45,7 @@ const emit = defineEmits<{
     action: { type: 'rotate'; value: number } | { type: 'scale'; value: number } | { type: 'move'; value: { x?: number; y?: number } } | { type: 'reset' }
   ];
   setContentTransition: [monitorId: string, transition: ContentTransition];
+  openRemotePairing: [];
 }>();
 
 const props = defineProps<{
@@ -125,6 +127,16 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
       </div>
 
       <div class="monitor-toolbar-actions">
+        <button
+          type="button"
+          class="btn-with-icon btn-sm btn-indigo-soft"
+          data-testid="monitor-open-remote-pairing"
+          @click="emit('openRemotePairing')"
+        >
+          <ComputerDesktopIcon aria-hidden="true" class="btn-icon" />
+          Vincular monitor remoto
+        </button>
+
         <button
           type="button"
           class="btn-with-icon btn-sm rounded-xl border px-4"
