@@ -341,6 +341,96 @@ export const createSlaveWindowHtml = ({
           };
         };
 
+        const FILTER_STAGE_CONFIG = {
+          brightness: { min: 0, max: 3, defaultValue: 1 },
+          contrast: { min: 0, max: 3, defaultValue: 1 },
+          saturate: { min: 0, max: 3, defaultValue: 1 },
+          grayscale: { min: 0, max: 1, defaultValue: 0 },
+          blur: { min: 0, max: 20, defaultValue: 0 }
+        };
+        const FILTER_STAGE_ORDER = ['brightness', 'contrast', 'saturate', 'grayscale', 'blur'];
+
+        const sanitizeFilterStage = (stage, fallbackId) => {
+          const config = FILTER_STAGE_CONFIG[fallbackId];
+          if (!stage || typeof stage !== 'object') {
+            return {
+              id: fallbackId,
+              enabled: true,
+              value: config.defaultValue
+            };
+          }
+
+          const stageId = typeof stage.id === 'string' && FILTER_STAGE_CONFIG[stage.id]
+            ? stage.id
+            : fallbackId;
+          const stageConfig = FILTER_STAGE_CONFIG[stageId];
+          const rawValue = Number(stage.value);
+          const value = Number.isFinite(rawValue)
+            ? Math.min(stageConfig.max, Math.max(stageConfig.min, rawValue))
+            : stageConfig.defaultValue;
+
+          return {
+            id: stageId,
+            enabled: typeof stage.enabled === 'boolean' ? stage.enabled : true,
+            value
+          };
+        };
+
+        const sanitizeFilterPipelinePayload = (value) => {
+          const fallback = {
+            enabled: false,
+            stages: FILTER_STAGE_ORDER.map((id) => sanitizeFilterStage(null, id))
+          };
+
+          if (!value || typeof value !== 'object') {
+            return fallback;
+          }
+
+          const stageById = new Map();
+          if (Array.isArray(value.stages)) {
+            value.stages.forEach((stageValue) => {
+              const stageId = typeof stageValue?.id === 'string' ? stageValue.id : null;
+              if (!stageId || !FILTER_STAGE_CONFIG[stageId] || stageById.has(stageId)) {
+                return;
+              }
+
+              stageById.set(stageId, sanitizeFilterStage(stageValue, stageId));
+            });
+          }
+
+          return {
+            enabled: typeof value.enabled === 'boolean' ? value.enabled : fallback.enabled,
+            stages: FILTER_STAGE_ORDER.map((id) => stageById.get(id) ?? sanitizeFilterStage(null, id))
+          };
+        };
+
+        const buildCssFilterFromPipeline = (pipeline) => {
+          if (!pipeline.enabled) {
+            return 'none';
+          }
+
+          const parts = pipeline.stages
+            .map((stage) => {
+              if (!stage.enabled) {
+                return null;
+              }
+
+              if (stage.id === 'blur') {
+                return 'blur(' + stage.value + 'px)';
+              }
+
+              return stage.id + '(' + stage.value + ')';
+            })
+            .filter((value) => typeof value === 'string' && value.length > 0);
+
+          return parts.length > 0 ? parts.join(' ') : 'none';
+        };
+
+        const applyFilterPipeline = (pipelinePayload) => {
+          const sanitizedPipeline = sanitizeFilterPipelinePayload(pipelinePayload);
+          wrapper.style.filter = buildCssFilterFromPipeline(sanitizedPipeline);
+        };
+
         const runContentTransition = (transitionPayload, applyChange) => {
           const transition = sanitizeTransitionPayload(transitionPayload);
           transitionSequenceId += 1;
@@ -1184,7 +1274,7 @@ export const createSlaveWindowHtml = ({
         };
 
         const postToMaster = (type, payload) => {
-          if (!window.opener) {
+          if (typeof window === 'undefined' || !window.opener) {
             return;
           }
 
@@ -1565,6 +1655,10 @@ export const createSlaveWindowHtml = ({
           if (message.type === 'SET_TRANSFORM') {
             const transform = message.payload.transform;
             wrapper.style.transform = 'translate(' + transform.translateX + 'px, ' + transform.translateY + 'px) rotate(' + transform.rotate + 'deg) scale(' + transform.scale + ')';
+          }
+
+          if (message.type === 'SET_FILTER_PIPELINE') {
+            applyFilterPipeline(message.payload?.pipeline);
           }
 
           if (message.type === 'REQUEST_FULLSCREEN') {

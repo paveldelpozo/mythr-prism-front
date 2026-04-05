@@ -89,6 +89,7 @@ const dispatchSlaveMessage = (
     | 'SET_MEDIA'
     | 'FLASH_MONITOR_ID'
     | 'SET_TRANSFORM'
+    | 'SET_FILTER_PIPELINE'
     | 'WHITEBOARD_SET_STATE'
     | 'WHITEBOARD_CLEAR'
     | 'WHITEBOARD_UNDO'
@@ -207,6 +208,62 @@ describe('services/slaveWindowHtml mirror rendering', () => {
 
     expect(exitFullscreenMock).not.toHaveBeenCalled();
     expect(loadSpy).not.toHaveBeenCalled();
+  });
+
+  it('aplica filtros en caliente sin reiniciar salida ni perder render actual', async () => {
+    const { loadSpy, exitFullscreenMock } = mountSlaveRuntime();
+
+    dispatchSlaveMessage('SET_MEDIA', {
+      item: {
+        kind: 'image',
+        source: 'data:image/png;base64,FILTER_BASE_IMAGE'
+      }
+    });
+    await flushImageRender();
+
+    dispatchSlaveMessage('SET_FILTER_PIPELINE', {
+      pipeline: {
+        enabled: true,
+        stages: [
+          { id: 'brightness', enabled: true, value: 1.2 },
+          { id: 'contrast', enabled: true, value: 1.1 },
+          { id: 'saturate', enabled: true, value: 0.9 },
+          { id: 'grayscale', enabled: true, value: 0.15 },
+          { id: 'blur', enabled: true, value: 2 }
+        ]
+      }
+    });
+
+    const wrapper = document.getElementById('wrapper') as HTMLElement;
+    const image = document.getElementById('image') as HTMLImageElement;
+
+    expect(wrapper.style.filter).toBe('brightness(1.2) contrast(1.1) saturate(0.9) grayscale(0.15) blur(2px)');
+    expect(image.style.display).toBe('block');
+    expect(exitFullscreenMock).not.toHaveBeenCalled();
+    expect(loadSpy).not.toHaveBeenCalled();
+  });
+
+  it('desactiva filtro en wrapper cuando pipeline llega deshabilitado', () => {
+    mountSlaveRuntime();
+
+    dispatchSlaveMessage('SET_FILTER_PIPELINE', {
+      pipeline: {
+        enabled: true,
+        stages: [{ id: 'blur', enabled: true, value: 3 }]
+      }
+    });
+
+    const wrapper = document.getElementById('wrapper') as HTMLElement;
+    expect(wrapper.style.filter).toContain('blur(3px)');
+
+    dispatchSlaveMessage('SET_FILTER_PIPELINE', {
+      pipeline: {
+        enabled: false,
+        stages: []
+      }
+    });
+
+    expect(wrapper.style.filter).toBe('none');
   });
 
   it('renderiza URL externa via iframe al recibir SET_MEDIA external-url', async () => {

@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils';
 import { computed, defineComponent, nextTick, reactive, ref, type PropType } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MonitorDescriptor } from './types/broadcaster';
+import { createDefaultFilterPipeline } from './types/filters';
 import type { PersistedSessionV1 } from './services/persistence';
 import type { PairingRoomInfo, RemoteMonitorDescriptor } from './types/remoteSync';
 
@@ -44,6 +45,8 @@ const mockMonitorStates = reactive({
   master: {
     transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
     contentTransition: { type: 'cut', durationMs: 450 },
+    filterPipeline: createDefaultFilterPipeline(),
+    filterPresets: [],
     imageDataUrl: null,
     activeMediaItem: null,
     isWindowOpen: true,
@@ -60,6 +63,8 @@ const mockMonitorStates = reactive({
   projector: {
     transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
     contentTransition: { type: 'cut', durationMs: 450 },
+    filterPipeline: createDefaultFilterPipeline(),
+    filterPresets: [],
     imageDataUrl: null,
     activeMediaItem: null,
     isWindowOpen: true,
@@ -82,6 +87,10 @@ const setMirrorSourceMonitorIdSpy = vi.fn();
 const setMirrorTargetMonitorIdsSpy = vi.fn();
 const setMonitorCustomNameSpy = vi.fn();
 const setContentTransitionForMonitorSpy = vi.fn();
+const setFilterPipelineForMonitorSpy = vi.fn();
+const saveFilterPresetForMonitorSpy = vi.fn();
+const applyFilterPresetForMonitorSpy = vi.fn(() => true);
+const deleteFilterPresetForMonitorSpy = vi.fn(() => true);
 const setExternalUrlForMonitorSpy = vi.fn(() => true);
 const startExternalAppCaptureForMonitorSpy = vi.fn(async () => true);
 const stopExternalAppCaptureForMonitorSpy = vi.fn();
@@ -169,6 +178,8 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
       master: {
         transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
         contentTransition: { type: 'cut', durationMs: 450 },
+        filterPipeline: createDefaultFilterPipeline(),
+        filterPresets: [],
         imageDataUrl: null,
         externalUrl: null,
         customName: null
@@ -176,6 +187,8 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
       projector: {
         transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
         contentTransition: { type: 'cut', durationMs: 450 },
+        filterPipeline: createDefaultFilterPipeline(),
+        filterPresets: [],
         imageDataUrl: null,
         externalUrl: null,
         customName: null
@@ -194,6 +207,10 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
     setMirrorTargetMonitorIds: setMirrorTargetMonitorIdsSpy,
     setMonitorCustomName: setMonitorCustomNameSpy,
     setContentTransitionForMonitor: setContentTransitionForMonitorSpy,
+    setFilterPipelineForMonitor: setFilterPipelineForMonitorSpy,
+    saveFilterPresetForMonitor: saveFilterPresetForMonitorSpy,
+    applyFilterPresetForMonitor: applyFilterPresetForMonitorSpy,
+    deleteFilterPresetForMonitor: deleteFilterPresetForMonitorSpy,
     setExternalUrlForMonitor: setExternalUrlForMonitorSpy,
     startExternalAppCaptureForMonitor: startExternalAppCaptureForMonitorSpy,
     stopExternalAppCaptureForMonitor: stopExternalAppCaptureForMonitorSpy,
@@ -501,6 +518,8 @@ describe('App integration base', () => {
               projector: {
                 transform: { rotate: 15, scale: 1.25, translateX: 30, translateY: -12 },
                 contentTransition: { type: 'wipe', durationMs: 800 },
+                filterPipeline: createDefaultFilterPipeline(),
+                filterPresets: [],
                 imageDataUrl: 'data:image/png;base64,abc',
                 externalUrl: null,
                 customName: null

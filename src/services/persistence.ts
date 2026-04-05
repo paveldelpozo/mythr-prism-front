@@ -15,6 +15,13 @@ import {
   sanitizeContentTransition,
   type ContentTransition
 } from '../types/transitions';
+import {
+  createDefaultFilterPipeline,
+  sanitizeFilterPipeline,
+  sanitizeFilterPresetList,
+  type MonitorFilterPipeline,
+  type MonitorFilterPreset
+} from '../types/filters';
 import { validateExternalUrl } from './externalUrlPolicy';
 import { cloneSerializable } from '../utils/cloneSerializable';
 
@@ -26,6 +33,8 @@ const MIN_SCALE = 0.05;
 export interface PersistedMonitorState {
   transform: MonitorTransform;
   contentTransition: ContentTransition;
+  filterPipeline: MonitorFilterPipeline;
+  filterPresets: MonitorFilterPreset[];
   imageDataUrl: string | null;
   externalUrl: string | null;
   customName: string | null;
@@ -169,6 +178,8 @@ const sanitizeMonitorState = (value: unknown): PersistedMonitorState => {
     return {
       transform: { ...DEFAULT_TRANSFORM },
       contentTransition: { ...DEFAULT_CONTENT_TRANSITION },
+      filterPipeline: createDefaultFilterPipeline(),
+      filterPresets: [],
       imageDataUrl: null,
       externalUrl: null,
       customName: null
@@ -178,6 +189,8 @@ const sanitizeMonitorState = (value: unknown): PersistedMonitorState => {
   return {
     transform: sanitizeTransform(value.transform),
     contentTransition: sanitizeContentTransition(value.contentTransition),
+    filterPipeline: sanitizeFilterPipeline(value.filterPipeline),
+    filterPresets: sanitizeFilterPresetList(value.filterPresets),
     imageDataUrl: sanitizeImageDataUrl(value.imageDataUrl),
     externalUrl: sanitizeExternalUrl(value.externalUrl),
     customName: sanitizeMonitorCustomName(value.customName)

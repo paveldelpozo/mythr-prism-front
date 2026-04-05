@@ -34,6 +34,12 @@ import {
   type ContentTransition
 } from '../types/transitions';
 import {
+  sanitizeFilterPipeline,
+  sanitizeFilterPresetList,
+  type MonitorFilterPipeline,
+  type MonitorFilterPreset
+} from '../types/filters';
+import {
   createEmptyWhiteboardState,
   sanitizeWhiteboardState,
   type MonitorWhiteboardStateMap,
@@ -89,6 +95,7 @@ const LIFE_CHECK_INTERVAL_MS = 1000;
 const BLOB_URL_PREFIX = 'blob:';
 const MONITOR_ID_FLASH_DURATION_MS = 2200;
 const EXTERNAL_APP_CAPTURE_TRANSITION_DELAY_MS = 80;
+const FILTER_PRESET_NAME_MAX_LENGTH = 60;
 
 const toMonitorId = (screen: ScreenDetailed, index: number): string =>
   `${index}-${screen.left}-${screen.top}-${screen.width}x${screen.height}`;
@@ -116,6 +123,14 @@ const createDescriptor = (
 
 const createInstanceToken = (monitorId: string): string =>
   `${monitorId}-${crypto.randomUUID()}`;
+
+const createPresetId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `preset-${Date.now()}-${Math.round(Math.random() * 1000)}`;
+};
 
 const createExternalUrlItem = (url: string): MultimediaItem => ({
   id: `external-url-${Date.now()}`,
@@ -205,6 +220,8 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
 
     state.transform = { ...persistedState.transform };
     state.contentTransition = sanitizeContentTransition(persistedState.contentTransition);
+    state.filterPipeline = sanitizeFilterPipeline(persistedState.filterPipeline);
+    state.filterPresets = sanitizeFilterPresetList(persistedState.filterPresets);
     state.imageDataUrl = persistedState.imageDataUrl;
     state.activeMediaItem = persistedState.externalUrl
       ? createExternalUrlItem(persistedState.externalUrl)
@@ -255,6 +272,8 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       serializableStates[monitorId] = {
         transform: { ...state.transform },
         contentTransition: sanitizeContentTransition(state.contentTransition),
+        filterPipeline: sanitizeFilterPipeline(state.filterPipeline),
+        filterPresets: sanitizeFilterPresetList(state.filterPresets),
         imageDataUrl: state.imageDataUrl,
         externalUrl:
           state.activeMediaItem?.kind === 'external-url'
@@ -639,6 +658,14 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       state: sanitizeWhiteboardState(state)
     });
 
+  const buildFilterPipelineMessage = (
+    monitorId: string,
+    pipeline: MonitorFilterPipeline
+  ): Extract<MasterToSlaveMessage, { type: 'SET_FILTER_PIPELINE' }> | null =>
+    buildMasterMessage(monitorId, 'SET_FILTER_PIPELINE', {
+      pipeline: sanitizeFilterPipeline(pipeline)
+    });
+
   const shouldReplicateFromSource = (sourceMonitorId: string): boolean => {
     if (!mirrorConfig.value.enabled) {
       return false;
@@ -673,6 +700,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       const targetState = getMonitorState(targetMonitorId);
       targetState.transform = { ...sourceState.transform };
       targetState.contentTransition = sanitizeContentTransition(sourceState.contentTransition);
+      targetState.filterPipeline = sanitizeFilterPipeline(sourceState.filterPipeline);
       targetState.imageDataUrl = sourceState.imageDataUrl;
       targetState.activeMediaItem = sourceState.activeMediaItem;
       monitorWhiteboards[targetMonitorId] = sanitizeWhiteboardState(getMonitorWhiteboard(sourceMonitorId));
@@ -689,11 +717,16 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
         targetMonitorId,
         monitorWhiteboards[targetMonitorId]
       );
+      const filterMessage = buildFilterPipelineMessage(
+        targetMonitorId,
+        targetState.filterPipeline
+      );
 
       const hasReadyWindow =
         transformMessage !== null
         && contentMessage !== null
-        && whiteboardMessage !== null;
+        && whiteboardMessage !== null
+        && filterMessage !== null;
 
       if (!hasReadyWindow) {
         unavailableTargetIds.push(targetMonitorId);
@@ -704,8 +737,9 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       const sentTransform = sendToSlave(targetMonitorId, transformMessage);
       const sentContent = sendToSlave(targetMonitorId, contentMessage);
       const sentWhiteboard = sendToSlave(targetMonitorId, whiteboardMessage);
+      const sentFilter = sendToSlave(targetMonitorId, filterMessage);
 
-      if (!sentTransform || !sentContent || !sentWhiteboard) {
+      if (!sentTransform || !sentContent || !sentWhiteboard || !sentFilter) {
         unavailableTargetIds.push(targetMonitorId);
         return;
       }
@@ -746,6 +780,11 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     );
     if (whiteboardMessage) {
       sendToSlave(monitorId, whiteboardMessage);
+    }
+
+    const filterMessage = buildFilterPipelineMessage(monitorId, state.filterPipeline);
+    if (filterMessage) {
+      sendToSlave(monitorId, filterMessage);
     }
   };
 
@@ -1464,6 +1503,77 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     replicateSourceToMirrorTargets(monitorId);
   };
 
+  const setFilterPipelineForMonitor = (
+    monitorId: string,
+    nextPipeline: MonitorFilterPipeline
+  ): boolean => {
+    const state = getMonitorState(monitorId);
+    const sanitizedPipeline = sanitizeFilterPipeline(nextPipeline);
+    state.filterPipeline = sanitizedPipeline;
+
+    const message = buildFilterPipelineMessage(monitorId, sanitizedPipeline);
+    const sent = message ? sendToSlave(monitorId, message) : false;
+
+    replicateSourceToMirrorTargets(monitorId);
+    return sent;
+  };
+
+  const saveFilterPresetForMonitor = (
+    monitorId: string,
+    presetName: string
+  ): MonitorFilterPreset | null => {
+    const name = presetName.trim().slice(0, FILTER_PRESET_NAME_MAX_LENGTH);
+    if (name.length === 0) {
+      setMonitorError(monitorId, 'Ingresa un nombre para guardar el preset de filtros.');
+      return null;
+    }
+
+    const state = getMonitorState(monitorId);
+    const nowIso = new Date().toISOString();
+    const existingPreset = state.filterPresets.find(
+      (preset) => preset.name.toLocaleLowerCase() === name.toLocaleLowerCase()
+    );
+
+    const nextPreset: MonitorFilterPreset = {
+      id: existingPreset?.id ?? createPresetId(),
+      name,
+      pipeline: sanitizeFilterPipeline(state.filterPipeline),
+      createdAt: existingPreset?.createdAt ?? nowIso,
+      updatedAt: nowIso
+    };
+
+    if (existingPreset) {
+      state.filterPresets = state.filterPresets.map((preset) =>
+        preset.id === existingPreset.id ? nextPreset : preset
+      );
+    } else {
+      state.filterPresets = [nextPreset, ...state.filterPresets];
+    }
+
+    setMonitorError(monitorId, null);
+    return nextPreset;
+  };
+
+  const applyFilterPresetForMonitor = (monitorId: string, presetId: string): boolean => {
+    const state = getMonitorState(monitorId);
+    const preset = state.filterPresets.find((item) => item.id === presetId);
+    if (!preset) {
+      setMonitorError(monitorId, 'El preset seleccionado ya no existe.');
+      return false;
+    }
+
+    setFilterPipelineForMonitor(monitorId, preset.pipeline);
+    setMonitorError(monitorId, null);
+    return true;
+  };
+
+  const deleteFilterPresetForMonitor = (monitorId: string, presetId: string): boolean => {
+    const state = getMonitorState(monitorId);
+    const previousLength = state.filterPresets.length;
+    state.filterPresets = state.filterPresets.filter((item) => item.id !== presetId);
+    return state.filterPresets.length < previousLength;
+  };
+
   const clearWhiteboardForMonitor = (monitorId: string) => {
     monitorWhiteboards[monitorId] = createEmptyWhiteboardState();
 
@@ -1551,6 +1661,10 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     setMirrorTargetMonitorIds,
     setMonitorCustomName,
     setContentTransitionForMonitor,
+    setFilterPipelineForMonitor,
+    saveFilterPresetForMonitor,
+    applyFilterPresetForMonitor,
+    deleteFilterPresetForMonitor,
     setImageForMonitor,
     setExternalUrlForMonitor,
     startExternalAppCaptureForMonitor,

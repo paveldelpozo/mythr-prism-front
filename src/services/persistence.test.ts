@@ -45,6 +45,25 @@ describe('services/persistence', () => {
             type: 'fade',
             durationMs: 99999
           },
+          filterPipeline: {
+            enabled: true,
+            stages: [
+              { id: 'brightness', enabled: true, value: 5 },
+              { id: 'blur', enabled: true, value: -3 }
+            ]
+          },
+          filterPresets: [
+            {
+              id: 'preset-1',
+              name: '  Escena principal  ',
+              pipeline: {
+                enabled: true,
+                stages: [{ id: 'contrast', enabled: true, value: 1.6 }]
+              },
+              createdAt: '2026-04-05T10:00:00.000Z',
+              updatedAt: 'invalid-date'
+            }
+          ],
           imageDataUrl: 42,
           externalUrl: 'http://localhost/internal'
         }
@@ -132,6 +151,12 @@ describe('services/persistence', () => {
       type: 'fade',
       durationMs: 5000
     });
+    expect(loaded.monitors.m1.filterPipeline.enabled).toBe(true);
+    expect(loaded.monitors.m1.filterPipeline.stages.find((stage) => stage.id === 'brightness')?.value).toBe(3);
+    expect(loaded.monitors.m1.filterPipeline.stages.find((stage) => stage.id === 'blur')?.value).toBe(0);
+    expect(loaded.monitors.m1.filterPresets).toHaveLength(1);
+    expect(loaded.monitors.m1.filterPresets[0]?.name).toBe('Escena principal');
+    expect(loaded.monitors.m1.filterPresets[0]?.updatedAt).toBe('1970-01-01T00:00:00.000Z');
     expect(loaded.monitors.m1.imageDataUrl).toBeNull();
     expect(loaded.monitors.m1.externalUrl).toBeNull();
     expect(loaded.monitors.m1.customName).toBeNull();
@@ -209,6 +234,8 @@ describe('services/persistence', () => {
 
     expect(loaded.ui.showOnlyProjectable).toBe(false);
     expect(loaded.monitors.m2.imageDataUrl).toBe('data:image/png;base64,BBB');
+    expect(loaded.monitors.m2.filterPipeline.enabled).toBe(false);
+    expect(loaded.monitors.m2.filterPresets).toEqual([]);
     expect(loaded.monitors.m2.externalUrl).toBeNull();
     expect(loaded.monitors.m2.customName).toBeNull();
     expect(loaded.playback.targetMonitorIds).toEqual(['m2']);
@@ -329,6 +356,77 @@ describe('services/persistence', () => {
     expect(stored.layouts[0]?.createdAt).toBe('1970-01-01T00:00:00.000Z');
     expect(stored.layouts[0]?.snapshot.playback.currentIndex).toBe(2);
     expect(stored.layouts[0]?.snapshot.playback.intervalSeconds).toBe(1);
+  });
+
+  it('persiste pipeline y presets de filtros en session snapshot', () => {
+    const saver = createDebouncedSessionSaver(0);
+
+    saver.schedule({
+      version: SESSION_SCHEMA_VERSION,
+      ui: {
+        showOnlyProjectable: true,
+        panelPreferences: {}
+      },
+      monitors: {
+        m1: {
+          transform: {
+            rotate: 0,
+            scale: 1,
+            translateX: 0,
+            translateY: 0
+          },
+          contentTransition: {
+            type: 'cut',
+            durationMs: 120
+          },
+          filterPipeline: {
+            enabled: true,
+            stages: [
+              { id: 'brightness', enabled: true, value: 1.25 },
+              { id: 'contrast', enabled: true, value: 1.15 },
+              { id: 'saturate', enabled: true, value: 0.9 },
+              { id: 'grayscale', enabled: false, value: 0 },
+              { id: 'blur', enabled: false, value: 0 }
+            ]
+          },
+          filterPresets: [
+            {
+              id: 'preset-1',
+              name: 'Warm',
+              pipeline: {
+                enabled: true,
+                stages: [{ id: 'brightness', enabled: true, value: 1.4 }]
+              },
+              createdAt: '2026-04-05T10:00:00.000Z',
+              updatedAt: '2026-04-05T10:05:00.000Z'
+            }
+          ],
+          imageDataUrl: null,
+          externalUrl: null,
+          customName: null
+        }
+      },
+      playlist: [],
+      playback: {
+        targetMonitorIds: [],
+        currentIndex: 0,
+        autoplay: false,
+        intervalSeconds: 5
+      },
+      mirror: {
+        enabled: false,
+        sourceMonitorId: null,
+        targetMonitorIds: []
+      },
+      layouts: []
+    } as PersistedSessionV1);
+
+    saver.flush();
+
+    const stored = readStoredSession();
+    expect(stored.monitors.m1.filterPipeline.enabled).toBe(true);
+    expect(stored.monitors.m1.filterPresets).toHaveLength(1);
+    expect(stored.monitors.m1.filterPresets[0]?.name).toBe('Warm');
   });
 
   it('descarta layouts invalidos y duplicados por id', () => {
