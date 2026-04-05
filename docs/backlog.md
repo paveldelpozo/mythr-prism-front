@@ -348,6 +348,49 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 
 ## V2
 
+- [ ] **API de control total (REST + Realtime)**
+  - Prioridad: `V2 #1`.
+  - Objetivo: habilitar una API publica como fuente de verdad unica para controlar backend y frontend desde el dia 1, con primer entregable usable por terceros.
+  - Decisiones confirmadas:
+    - API expone REST + WebSocket realtime desde base versionada `/api/v1/`.
+    - Autenticacion inicial por API Key simple (sin roles), con OAuth/login de usuarios planificado para etapa posterior.
+    - Seguridad base con rate limit por IP y formato estandar de error `{ code, message, details }`.
+    - Contratos y errores en ingles tecnico para payloads request/response.
+    - Documentacion obligatoria OpenAPI 3.1 + Swagger UI en `/docs` con export JSON/YAML.
+    - Frontend migra progresivamente para consumir API como unica fuente de verdad.
+    - Stack backend objetivo: Express + Zod/OpenAPI.
+  - Alcance de subtareas (todas `pending`):
+    - [ ] Foundation API (Express + Zod/OpenAPI): bootstrap, middlewares base, versionado `/api/v1/`, envelope de error `{ code, message, details }`, auth API Key y rate-limit por IP.
+    - [ ] Recursos `Monitores/Salas remotas`: endpoints CRUD + acciones operativas de control remoto con contratos OpenAPI y validacion Zod.
+    - [ ] Recursos `Contenido y transformaciones`: endpoints para fuentes (imagen/URL/captura), transformaciones y estado activo por destino.
+    - [ ] Recursos `Playlist/Playback`: endpoints para colecciones, asignaciones y comandos de reproduccion (play/pause/seek/next/prev/stop).
+    - [ ] Recursos `Mirror/Pizarra/Layouts`: endpoints para espejo, overlays de pizarra y guardado/restauracion de layouts.
+    - [ ] Canal realtime WebSocket: eventos tipados de estado/comando/ack para sincronizacion host-client y notificaciones operativas.
+    - [ ] Documentacion API: Swagger UI en `/docs`, OpenAPI 3.1 exportable (`openapi.json` y `openapi.yaml`), ejemplos request/response y codigos de error por endpoint.
+    - [ ] SDK cliente TypeScript oficial generado/curado desde OpenAPI para consumidores externos.
+    - [ ] Colecciones de integracion: export Postman e Insomnia alineadas a contratos vigentes.
+    - [ ] Tests de contrato API: suite automatizada REST + realtime que valide schema, errores y backward-compat basica de `/api/v1/`.
+  - Secuencia V2 aprobada (orden de entrega):
+    - [ ] 1) Foundation API + auth + docs.
+    - [ ] 2) Monitores/salas remotas.
+    - [ ] 3) Contenido y transformaciones.
+    - [ ] 4) Playlist/playback.
+    - [ ] 5) Mirror/pizarra/layouts.
+    - [ ] 6) Eventos realtime + observabilidad API.
+  - Criterios de aceptacion:
+    - [ ] Existe API versionada en `/api/v1/` con autenticacion API Key operativa y rate-limit por IP activo.
+    - [ ] Swagger UI publica en `/docs` y export OpenAPI 3.1 disponible en JSON/YAML.
+    - [ ] Cada endpoint documenta request/response de ejemplo y codigos de error consistentes.
+    - [ ] Errores cumplen formato `{ code, message, details }` y payloads quedan en ingles tecnico.
+    - [ ] Frontend integra consumo progresivo de API sin romper flujo operativo actual.
+    - [ ] Terceros pueden ejecutar flujo base via SDK TS o colecciones Postman/Insomnia.
+  - DoD:
+    - [ ] Contratos REST + realtime versionados y validados por tests de contrato automatizados.
+    - [ ] SDK TS publicado en workspace con ejemplos minimos de uso.
+    - [ ] Colecciones Postman/Insomnia exportadas y verificadas contra entorno de desarrollo.
+    - [ ] Validacion minima del proyecto ejecutada (`pnpm run typecheck`, `pnpm run build`, `pnpm run test`).
+    - [ ] Backlog front/back alineados en prioridades y alcance de la iniciativa V2.
+
 - [ ] **Keystone**
   - Dependencias: transformaciones geometricas por salida.
   - Hecho: correccion trapezoidal ajustable por esquinas con preview fiable.
