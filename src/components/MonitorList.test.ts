@@ -50,12 +50,13 @@ const thumbnails: MonitorThumbnailStateMap = {
 
 const MonitorCardStub = defineComponent({
   name: 'MonitorCard',
-  emits: ['renameMonitor', 'openWhiteboard', 'flashMonitorId'],
+  emits: ['renameMonitor', 'openWhiteboard', 'flashMonitorId', 'disconnectRemote'],
   template: `
     <div>
       <button data-testid="monitor-card-rename" @click="$emit('renameMonitor', 'monitor-1', 'Escenario')">rename</button>
       <button data-testid="monitor-card-whiteboard" @click="$emit('openWhiteboard', 'monitor-1')">whiteboard</button>
       <button data-testid="monitor-card-flash-id" @click="$emit('flashMonitorId', 'monitor-1')">flash</button>
+      <button data-testid="monitor-card-disconnect" @click="$emit('disconnectRemote', 'monitor-1')">disconnect</button>
     </div>
   `
 });
@@ -171,6 +172,14 @@ describe('MonitorList', () => {
     await wrapper.get('[data-testid="monitor-card-flash-id"]').trigger('click');
 
     expect(wrapper.emitted('flashMonitorId')?.[0]).toEqual(['monitor-1']);
+  });
+
+  it('propaga evento para desconectar monitor remoto desde la tarjeta', async () => {
+    const wrapper = mountMonitorList(true);
+
+    await wrapper.get('[data-testid="monitor-card-disconnect"]').trigger('click');
+
+    expect(wrapper.emitted('disconnectRemote')?.[0]).toEqual(['monitor-1']);
   });
 
   it('mantiene el orden de secciones requerido en el tab Monitores', () => {

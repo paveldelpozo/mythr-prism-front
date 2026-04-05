@@ -35,6 +35,18 @@ pnpm install
 - `pnpm run typecheck`: ejecuta la verificación de tipos.
 - `pnpm run test`: ejecuta tests con Vitest.
 
+## Variables de entorno
+
+- `VITE_REMOTE_BACKEND_URL`: URL base del backend Socket.io/WebRTC para la feature de sincronizacion remota.
+  - Local por defecto (si no se define): `http://localhost:3000`.
+  - Produccion por defecto (si no se define): mismo origen del frontend (`window.location.origin`).
+
+Ejemplo rapido:
+
+```bash
+cp .env.example .env
+```
+
 ## Uso básico
 
 1. Instala dependencias con `pnpm install` en la raiz del monorepo.

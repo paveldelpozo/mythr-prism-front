@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  ComputerDesktopIcon,
   ArrowDownTrayIcon,
   EyeIcon,
   EyeSlashIcon,
@@ -44,6 +45,8 @@ const emit = defineEmits<{
     action: { type: 'rotate'; value: number } | { type: 'scale'; value: number } | { type: 'move'; value: { x?: number; y?: number } } | { type: 'reset' }
   ];
   setContentTransition: [monitorId: string, transition: ContentTransition];
+  openRemotePairing: [];
+  disconnectRemote: [monitorId: string];
 }>();
 
 const props = defineProps<{
@@ -67,6 +70,11 @@ const props = defineProps<{
   mirrorActiveTargetCount: number;
   mirrorUnavailableTargetIds: string[];
   mirrorLastError: string | null;
+  remoteMonitorMetaById?: Record<string, {
+    isConnected: boolean;
+    isFullscreenSupported: boolean;
+    isFullscreenAvailable: boolean;
+  }>;
   isFileImportBlocked?: boolean;
   fileImportBlockedMessage?: string;
 }>();
@@ -127,6 +135,16 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
       <div class="monitor-toolbar-actions">
         <button
           type="button"
+          class="btn-with-icon btn-sm btn-indigo-soft"
+          data-testid="monitor-open-remote-pairing"
+          @click="emit('openRemotePairing')"
+        >
+          <ComputerDesktopIcon aria-hidden="true" class="btn-icon" />
+          Vincular monitor remoto
+        </button>
+
+        <button
+          type="button"
           class="btn-with-icon btn-sm rounded-xl border px-4"
           :class="props.showOnlyProjectable
             ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'
@@ -168,6 +186,9 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
         :monitor="monitor"
         :state="props.states[monitor.id]"
         :thumbnail="props.thumbnails[monitor.id] ?? { imageDataUrl: null, capturedAtMs: null }"
+        :is-remote-connected="props.remoteMonitorMetaById?.[monitor.id]?.isConnected ?? false"
+        :is-remote-fullscreen-supported="props.remoteMonitorMetaById?.[monitor.id]?.isFullscreenSupported ?? false"
+        :is-remote-fullscreen-available="props.remoteMonitorMetaById?.[monitor.id]?.isFullscreenAvailable ?? false"
         :is-file-import-blocked="props.isFileImportBlocked"
         :file-import-blocked-message="props.fileImportBlockedMessage"
         @open-window="emit('openWindow', $event)"
@@ -186,6 +207,7 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
         @rename-monitor="(id, name) => emit('renameMonitor', id, name)"
         @transform="(id, action) => emit('transform', id, action)"
         @set-content-transition="(id, transition) => emit('setContentTransition', id, transition)"
+        @disconnect-remote="emit('disconnectRemote', $event)"
       />
     </div>
 

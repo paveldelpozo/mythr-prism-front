@@ -39,13 +39,16 @@ const SOURCE_TABS: Array<{ id: SourceTabId; label: string }> = [
   { id: 'external-app', label: 'Aplicacion externa' }
 ];
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   monitorId: string;
   state: MonitorRuntimeState;
   showMonitorUtilities?: boolean;
+  showFullscreenAction?: boolean;
   isFileImportBlocked?: boolean;
   fileImportBlockedMessage?: string;
-}>();
+}>(), {
+  showFullscreenAction: true
+});
 
 type ImageImportSource = 'file-picker' | 'drag-drop' | 'paste';
 
@@ -365,6 +368,7 @@ onBeforeUnmount(() => {
         </button>
 
         <button
+          v-if="showFullscreenAction !== false"
           type="button"
           data-testid="monitor-request-fullscreen"
           class="monitor-action-btn btn-indigo-soft"

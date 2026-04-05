@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ComputerDesktopIcon, QueueListIcon } from '@heroicons/vue/24/outline';
+import mythrPrismLogo from '../assets/img/MythrPrism.png';
 
 defineProps<{
   activeMainViewTab: 'monitors' | 'playlist';
@@ -12,9 +13,16 @@ const emit = defineEmits<{
 
 <template>
   <header class="glass-panel flex flex-wrap items-center justify-between gap-4 p-5">
-    <div>
-      <p class="text-xs uppercase tracking-[0.24em] text-indigo-300/80">Mythr Prism</p>
-      <h1 class="mt-1 text-2xl font-black text-slate-100 md:text-3xl">Panel de Control Multi-Monitor</h1>
+    <div class="app-header-brand">
+      <img
+        :src="mythrPrismLogo"
+        alt="Logo de Mythr Prism"
+        class="app-header-brand-logo"
+      >
+      <div>
+        <p class="text-xs uppercase tracking-[0.24em] text-indigo-300/80">Mythr Prism</p>
+        <h1 class="mt-1 text-2xl font-black text-slate-100 md:text-3xl">Panel de Control Multi-Monitor</h1>
+      </div>
     </div>
 
     <div class="app-header-actions">

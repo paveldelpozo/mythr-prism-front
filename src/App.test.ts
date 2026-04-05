@@ -3,8 +3,9 @@ import { computed, defineComponent, nextTick, reactive, ref, type PropType } fro
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MonitorDescriptor } from './types/broadcaster';
 import type { PersistedSessionV1 } from './services/persistence';
+import type { PairingRoomInfo, RemoteMonitorDescriptor } from './types/remoteSync';
 
-const mockMonitors = ref<MonitorDescriptor[]>([
+const buildBaseMonitors = (): MonitorDescriptor[] => ([
   {
     id: 'master',
     label: 'Master',
@@ -36,6 +37,8 @@ const mockMonitors = ref<MonitorDescriptor[]>([
     raw: {} as ScreenDetailed
   }
 ]);
+
+const mockMonitors = ref<MonitorDescriptor[]>(buildBaseMonitors());
 
 const mockMonitorStates = reactive({
   master: {
@@ -89,6 +92,24 @@ const setWhiteboardStateForMonitorSpy = vi.fn();
 const clearWhiteboardForMonitorSpy = vi.fn();
 const undoWhiteboardForMonitorSpy = vi.fn();
 const sessionSaverScheduleSpy = vi.fn();
+const createPairingRoomSpy = vi.fn(async () => undefined);
+const approveClientSpy = vi.fn(async () => undefined);
+const sendControlMessageSpy = vi.fn();
+const disconnectRemoteMonitorSpy = vi.fn();
+
+const mockRemotePairingRoom = ref<PairingRoomInfo | null>(null);
+const mockRemotePendingApprovals = ref<Array<{ clientSocketId: string; requestedAtMs: number }>>([]);
+const mockRemoteMonitors = ref<RemoteMonitorDescriptor[]>([]);
+const mockRemoteRoomExpiresInMs = ref(0);
+const mockRemoteIsConnecting = ref(false);
+const mockRemotePairingError = ref<string | null>(null);
+
+const closeRemotePairingRoomSpy = vi.fn(() => {
+  mockRemotePairingRoom.value = null;
+  mockRemotePendingApprovals.value = [];
+  mockRemoteMonitors.value = [];
+  mockRemoteRoomExpiresInMs.value = 0;
+});
 
 const buildPersistedSession = (
   overrides: Partial<PersistedSessionV1> = {}
@@ -161,6 +182,9 @@ vi.mock('./composables/useMultiMonitorBroadcaster', () => ({
       }
     })),
     loadMonitors: vi.fn(async () => undefined),
+    setVirtualMonitors: (virtualMonitors: MonitorDescriptor[]) => {
+      mockMonitors.value = [...buildBaseMonitors(), ...virtualMonitors];
+    },
     openWindowForMonitor: vi.fn(),
     requestFullscreen: vi.fn(),
     flashMonitorId: vi.fn(() => true),
@@ -189,6 +213,22 @@ vi.mock('./services/persistence', () => ({
   createDebouncedSessionSaver: () => ({
     schedule: sessionSaverScheduleSpy,
     flush: vi.fn()
+  })
+}));
+
+vi.mock('./composables/useRemoteHostSync', () => ({
+  useRemoteHostSync: () => ({
+    room: mockRemotePairingRoom,
+    roomExpiresInMs: mockRemoteRoomExpiresInMs,
+    isConnecting: mockRemoteIsConnecting,
+    pairingError: mockRemotePairingError,
+    pendingApprovals: mockRemotePendingApprovals,
+    remoteMonitors: mockRemoteMonitors,
+    createPairingRoom: createPairingRoomSpy,
+    approveClient: approveClientSpy,
+    sendControlMessage: sendControlMessageSpy,
+    disconnectRemoteMonitor: disconnectRemoteMonitorSpy,
+    closeRoom: closeRemotePairingRoomSpy
   })
 }));
 
@@ -261,6 +301,8 @@ const MonitorListStub = defineComponent({
     'update:mirrorTargetMonitorIds',
     'openWhiteboard',
     'renameMonitor',
+    'openRemotePairing',
+    'disconnectRemote',
     'saveLayout',
     'loadLayout',
     'deleteLayout'
@@ -295,6 +337,38 @@ const MonitorListStub = defineComponent({
       <button data-testid="mirror-source-trigger" @click="$emit('update:mirrorSourceMonitorId', 'master')">source-mirror</button>
       <button data-testid="mirror-targets-trigger" @click="$emit('update:mirrorTargetMonitorIds', ['projector'])">targets-mirror</button>
       <button data-testid="monitor-rename-trigger" @click="$emit('renameMonitor', 'projector', 'Pantalla escenario')">rename-monitor</button>
+      <button data-testid="monitor-open-remote-pairing" @click="$emit('openRemotePairing')">open-remote-pairing</button>
+    </div>
+  `
+});
+
+const RemotePairingModalStub = defineComponent({
+  name: 'RemotePairingModalStub',
+  props: {
+    open: { type: Boolean, required: true },
+    room: {
+      type: Object as PropType<PairingRoomInfo | null>,
+      default: null
+    },
+    pendingApprovals: {
+      type: Array as PropType<Array<{ clientSocketId: string; requestedAtMs: number }>>,
+      required: true
+    },
+    isConnecting: { type: Boolean, required: true },
+    expiresInMs: { type: Number, required: true },
+    error: {
+      type: String,
+      default: null
+    }
+  },
+  emits: ['close', 'createRoom', 'approveClient'],
+  template: `
+    <div>
+      <div v-if="open" data-testid="remote-modal-visible">
+        <p data-testid="remote-modal-room-id">{{ room ? room.roomId : 'none' }}</p>
+        <button data-testid="remote-modal-close" @click="$emit('close')">close</button>
+        <button v-if="!room" data-testid="remote-modal-create-room" @click="$emit('createRoom')">create-room</button>
+      </div>
     </div>
   `
 });
@@ -302,6 +376,7 @@ const MonitorListStub = defineComponent({
 describe('App integration base', () => {
   beforeEach(() => {
     mockPersistedSession = buildPersistedSession();
+    mockMonitors.value = buildBaseMonitors();
     applyTransformSpy.mockReset();
     setImageForMonitorSpy.mockReset();
     setMirrorEnabledSpy.mockReset();
@@ -319,6 +394,17 @@ describe('App integration base', () => {
     clearWhiteboardForMonitorSpy.mockReset();
     undoWhiteboardForMonitorSpy.mockReset();
     sessionSaverScheduleSpy.mockReset();
+    createPairingRoomSpy.mockClear();
+    approveClientSpy.mockClear();
+    sendControlMessageSpy.mockClear();
+    disconnectRemoteMonitorSpy.mockClear();
+    closeRemotePairingRoomSpy.mockClear();
+    mockRemotePairingRoom.value = null;
+    mockRemotePendingApprovals.value = [];
+    mockRemoteMonitors.value = [];
+    mockRemoteRoomExpiresInMs.value = 0;
+    mockRemoteIsConnecting.value = false;
+    mockRemotePairingError.value = null;
     vi.restoreAllMocks();
   });
 
@@ -327,7 +413,8 @@ describe('App integration base', () => {
       global: {
         stubs: {
           MonitorList: MonitorListStub,
-          PlaylistManager: PlaylistManagerStub
+          PlaylistManager: PlaylistManagerStub,
+          RemotePairingModal: RemotePairingModalStub
         }
       }
     });
@@ -347,7 +434,8 @@ describe('App integration base', () => {
       global: {
         stubs: {
           MonitorList: MonitorListStub,
-          PlaylistManager: PlaylistManagerStub
+          PlaylistManager: PlaylistManagerStub,
+          RemotePairingModal: RemotePairingModalStub
         }
       }
     });
@@ -366,7 +454,8 @@ describe('App integration base', () => {
       global: {
         stubs: {
           MonitorList: MonitorListStub,
-          PlaylistManager: PlaylistManagerStub
+          PlaylistManager: PlaylistManagerStub,
+          RemotePairingModal: RemotePairingModalStub
         }
       }
     });
@@ -384,7 +473,8 @@ describe('App integration base', () => {
       global: {
         stubs: {
           MonitorList: MonitorListStub,
-          PlaylistManager: PlaylistManagerStub
+          PlaylistManager: PlaylistManagerStub,
+          RemotePairingModal: RemotePairingModalStub
         }
       }
     });
@@ -431,7 +521,8 @@ describe('App integration base', () => {
       global: {
         stubs: {
           MonitorList: MonitorListStub,
-          PlaylistManager: PlaylistManagerStub
+          PlaylistManager: PlaylistManagerStub,
+          RemotePairingModal: RemotePairingModalStub
         }
       }
     });
@@ -456,7 +547,8 @@ describe('App integration base', () => {
       global: {
         stubs: {
           MonitorList: MonitorListStub,
-          PlaylistManager: PlaylistManagerStub
+          PlaylistManager: PlaylistManagerStub,
+          RemotePairingModal: RemotePairingModalStub
         }
       }
     });
@@ -495,7 +587,8 @@ describe('App integration base', () => {
       global: {
         stubs: {
           MonitorList: MonitorListStub,
-          PlaylistManager: PlaylistManagerStub
+          PlaylistManager: PlaylistManagerStub,
+          RemotePairingModal: RemotePairingModalStub
         }
       }
     });
@@ -513,7 +606,8 @@ describe('App integration base', () => {
       global: {
         stubs: {
           MonitorList: MonitorListStub,
-          PlaylistManager: PlaylistManagerStub
+          PlaylistManager: PlaylistManagerStub,
+          RemotePairingModal: RemotePairingModalStub
         }
       }
     });
@@ -523,12 +617,82 @@ describe('App integration base', () => {
     expect(setMonitorCustomNameSpy).toHaveBeenCalledWith('projector', 'Pantalla escenario');
   });
 
+  it('cerrar el modal de pairing no limpia monitores remotos activos', async () => {
+    mockRemotePairingRoom.value = {
+      roomId: 'room-existing',
+      pairCode: 'ABCD-1234-EFGH',
+      joinUrl: 'https://mythr.app/remote?roomId=room-existing&pairingCode=ABCD-1234-EFGH',
+      expiresAtMs: Date.now() + 300000
+    };
+    const wrapper = mount(App, {
+      global: {
+        stubs: {
+          MonitorList: MonitorListStub,
+          PlaylistManager: PlaylistManagerStub,
+          RemotePairingModal: RemotePairingModalStub
+        }
+      }
+    });
+
+    mockRemoteMonitors.value = [
+      {
+        id: 'remote-1',
+        label: 'Remoto 1',
+        state: 'paired',
+        socketId: 'socket-1',
+        isFullscreenSupported: true,
+        isFullscreenAvailable: true
+      }
+    ];
+    await nextTick();
+
+    expect(wrapper.get('[data-testid="monitorlist-visible-monitors"]').text()).toBe('2');
+    await wrapper.get('[data-testid="monitor-open-remote-pairing"]').trigger('click');
+    await wrapper.get('[data-testid="remote-modal-close"]').trigger('click');
+    await nextTick();
+
+    expect(closeRemotePairingRoomSpy).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="monitorlist-visible-monitors"]').text()).toBe('2');
+  });
+
+  it('reabrir modal conserva sala vigente y no exige crear una nueva', async () => {
+    mockRemotePairingRoom.value = {
+      roomId: 'room-existing',
+      pairCode: 'ABCD-1234-EFGH',
+      joinUrl: 'https://mythr.app/remote?roomId=room-existing&pairingCode=ABCD-1234-EFGH',
+      expiresAtMs: Date.now() + 300000
+    };
+
+    const wrapper = mount(App, {
+      global: {
+        stubs: {
+          MonitorList: MonitorListStub,
+          PlaylistManager: PlaylistManagerStub,
+          RemotePairingModal: RemotePairingModalStub
+        }
+      }
+    });
+
+    await wrapper.get('[data-testid="monitor-open-remote-pairing"]').trigger('click');
+    expect(wrapper.get('[data-testid="remote-modal-room-id"]').text()).toBe('room-existing');
+    expect(wrapper.find('[data-testid="remote-modal-create-room"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="remote-modal-close"]').trigger('click');
+    await nextTick();
+    await wrapper.get('[data-testid="monitor-open-remote-pairing"]').trigger('click');
+    await nextTick();
+
+    expect(wrapper.get('[data-testid="remote-modal-room-id"]').text()).toBe('room-existing');
+    expect(wrapper.find('[data-testid="remote-modal-create-room"]').exists()).toBe(false);
+  });
+
   it('permite activar/desactivar modo espejo y configurar origen/destinos', async () => {
     const wrapper = mount(App, {
       global: {
         stubs: {
           MonitorList: MonitorListStub,
-          PlaylistManager: PlaylistManagerStub
+          PlaylistManager: PlaylistManagerStub,
+          RemotePairingModal: RemotePairingModalStub
         }
       }
     });

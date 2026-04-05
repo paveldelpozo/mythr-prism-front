@@ -1,12 +1,13 @@
 # Backlog y seguimiento del proyecto Mythr Prism
 
-Ultima actualizacion: 2026-04-03
+Ultima actualizacion: 2026-04-05
 
 ## Resumen
 
 Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para proyeccion/control de contenido multi-monitor.
 
 - Nota Mantenimiento (2026-03-31): se completo la reestructuracion a monorepo PNPM; el frontend se movio a `mythr-prism-front/`, se agrego scaffold `mythr-prism-back/` y la orquestacion global queda en la raiz (`README.md`, `package.json`, `pnpm-workspace.yaml`). Este backlog continua en `mythr-prism-front/docs/backlog.md`.
+- Nota Entrega (2026-04-05): `Monitor Virtual Remoto (Cloud Sync)` implementado en front+back con pairing por QR/codigo, WebRTC para transporte remoto, estados de conexion y soporte operativo para multiples monitores remotos por sesion.
 - Nota Roadmap (2026-03-31): cierre formal de MVP completado al 100%; a partir de este punto el foco operativo pasa a V1.
 - Nota UX (2026-03-30): en Playlist se reforzo comportamiento operativo de modales con overlay fijo + bloqueo de scroll de fondo, y se aplico truncado visual de `source` largos (incluye data URI) manteniendo valor completo por `title`.
 - Nota Bugfix/UX (2026-03-30): se robustecio el manejo de fullscreen en ventanas esclavas frente a salidas forzadas por navegador/SO (ej. al abrir file picker en la ventana principal): ahora se detecta perdida externa via `fullscreenchange`, se conserva la intencion de fullscreen por monitor, se habilita CTA de reactivacion rapida en la esclava (`Reactivar Fullscreen`) y el master muestra feedback explicito con los monitores afectados.
@@ -53,7 +54,7 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 | Fase | Progreso |
 | --- | --- |
 | MVP | 100% |
-| V1 | 71% |
+| V1 | 86% |
 | V2 | 0% |
 
 > Referencia de calculo sugerida: `tareas completadas / tareas totales de la fase * 100`.
@@ -192,7 +193,7 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 
 ## V1
 
-**Progreso V1 (features): 71% (5/7 completadas)**
+**Progreso V1 (features): 86% (6/7 completadas)**
 
 ### Arranque V1 (checklist corto)
 
@@ -286,40 +287,87 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
     - [x] Cobertura de tests para apertura/cierre modal, tabs y eventos criticos de cada fuente.
     - [x] Validacion minima ejecutada (`typecheck`, `test`, `build`) sin regresiones.
 
-- [ ] **Monitor virtual remoto (Cloud Sync)**
-  - Titulo: Vincular dispositivos externos (tablets/moviles) como monitores virtuales via WebSockets.
-  - Prioridad: `V1` por impacto alto en cobertura de uso real (extender salidas sin hardware dedicado) y dependencia de infraestructura cloud/latencia que conviene abordar despues de cerrar flujo base del MVP.
-  - Historia de usuario: como operador, quiero vincular un tablet o movil externo como monitor virtual para sumar una salida adicional remota y controlarla en tiempo real desde Mythr Prism.
-  - Dependencias: pipeline de render por salida, canal de comandos por monitor, definicion de identificador de sesion/sala, entorno cloud con endpoint publico seguro.
-  - Descripcion tecnica:
-    - [ ] Levantar servidor Node.js + Socket.io como puente de senalizacion y transporte bidireccional.
-    - [ ] Generar `RoomID` por sesion/salida y publicar metadatos minimos de estado del monitor virtual.
-    - [ ] Implementar emparejamiento por URL corta + QR y validacion con codigo de 6 digitos.
-    - [ ] Implementar relay de imagenes (frames/comandos de render) desde host hacia cliente remoto.
-    - [ ] Implementar relay de comandos de control/estado desde cliente remoto hacia host (full-duplex).
-  - Subtareas:
-    - [ ] Definir contrato de eventos Socket.io (`join`, `pair`, `frame`, `command`, `heartbeat`, `reconnect`).
-    - [ ] Implementar modulo de creacion/expiracion de `RoomID` y politica de TTL.
-    - [ ] Implementar UI de emparejamiento (URL, QR, ingreso de codigo) en host y cliente remoto.
-    - [ ] Implementar pipeline de envio de imagen con estrategia de compresion y limitacion de fps configurable.
-    - [ ] Implementar canal de comandos remoto (play/pause/next/estado) con confirmacion de entrega.
-    - [ ] Implementar reconexion automatica al mismo `RoomID` con re-sincronizacion de estado.
-    - [ ] Implementar pruebas manuales en red local y red publica con medicion de latencia.
-  - Criterios de aceptacion:
-    - [ ] El flujo de emparejamiento expone QR + codigo de 6 digitos y evita alta sin validacion.
-    - [ ] Tras handshake exitoso, el dispositivo remoto queda dado de alta como monitor virtual utilizable desde la UI principal.
-    - [ ] La latencia extremo a extremo se mantiene por debajo de 200 ms en condicion objetivo definida.
-    - [ ] Ante cortes breves de red, el cliente reconecta automaticamente al mismo `RoomID` y recupera estado operativo.
-    - [ ] El aislamiento por sala evita fuga de frames/comandos entre `RoomID` diferentes.
-  - DoD:
-    - [ ] Flujo completo validado en al menos 1 tablet y 1 movil con navegadores objetivo.
-    - [ ] Telemetria minima registrada para conexion, desconexion, reconexion y latencia.
-    - [ ] Pruebas de aislamiento verifican que no hay cruce de eventos entre salas.
-    - [ ] Documentacion minima de arquitectura, limites y operativa agregada en `docs/`.
+- [x] **Monitor virtual remoto (Cloud Sync)**
+  - Titulo: Integrar clientes remotos (`/remote`) como monitores virtuales de sesion usando senalizacion Socket.io y transporte WebRTC.
+  - Estado: `completed`.
+  - Prioridad: `V1` critica por impacto operativo directo (sumar salidas remotas sin hardware dedicado).
+  - Historia de usuario: como operador, quiero emparejar tablets/moviles por URL/QR para que aparezcan como monitores disponibles y reciban el mismo pipeline de contenido que un monitor local.
+  - Alcance confirmado:
+    - Multiples monitores remotos por sesion.
+    - Flujo de pairing host-driven con codigo ingresado solo por cliente (`XXXX-XXXX-XXXX`) y validacion en host.
+    - Cierre automatico de sala si no conecta ningun cliente en 5 minutos.
+    - Cliente remoto con capacidades acotadas: mostrar contenido, cerrar sesion remota, intentar fullscreen/kiosko.
+    - Estados UI minimos: `conectando`, `emparejado`, `reconectando`, `caido`.
+    - Compatibilidad obligatoria con fuentes actuales (imagen, URL externa, captura app, playlist, pizarra, transiciones) y `mirror mode`.
+  - Decisiones de arquitectura (alineadas con backend):
+    - Senalizacion: `Socket.io` (Node) para lifecycle de salas, pairing, heartbeat, reconexion y observabilidad.
+    - Transporte de contenido: `WebRTC` preferido para stream host->remote (video/canvas con target ideal `25fps`), dejando Socket.io para control + fallback degradado.
+    - Modelo de sala: `roomId` efimero + `pairCode` de alta entropia `XXXX-XXXX-XXXX`, con estado en Redis y TTL de 5 min sin clientes.
+    - Seguridad base: CORS abierto temporalmente, rate limit de intentos no aprobados por IP+room y baneo temporal escalonado.
+    - Observabilidad desde fase 0: logs estructurados y metricas de pairing, sesiones, reconexion, latencia y fps efectivo.
+  - Plan por fases (front):
+      - [x] **Fase F0 - Contratos UI/estado y shell remoto**
+        - Entregables:
+          - [x] Especificar tipos compartidos para estado remoto y eventos de lifecycle UI.
+          - [x] Crear ruta `/remote` con layout minimo operativo y estados `conectando/emparejado/reconectando/caido`.
+          - [x] Definir contrato de presentacion para modo solo-visualizacion + acciones `Cerrar sesion` y `Intentar fullscreen`.
+        - Criterios de aceptacion:
+          - [x] El cliente remoto muestra estados consistentes sin backend real (mocks/fixtures locales).
+          - [x] El host incorpora boton en bloque `Monitores disponibles` para abrir modal de pairing.
+        - DoD fase:
+          - [x] Tipado estricto sin `any` en contratos remotos front.
+          - [x] Pruebas de UI para estados y accesibilidad basica del modal/ruta remota.
+      - [x] **Fase F1 - Pairing UX host/cliente**
+        - Entregables:
+          - [x] Modal host con creacion de sala, URL/QR y estado de espera.
+          - [x] Pantalla cliente con ingreso de `pairCode` `XXXX-XXXX-XXXX`.
+          - [x] Alta del remoto como monitor disponible en listado principal al emparejar.
+        - Criterios de aceptacion:
+          - [x] Host crea sala y, si no entra cliente, UI refleja expiracion a los 5 minutos.
+          - [x] Solo el cliente ingresa codigo; host valida y confirma emparejamiento.
+        - DoD fase:
+          - [x] E2E de pairing feliz + expiracion + codigo invalido.
+          - [x] Telemetria de eventos de pairing visible en frontend (sin instrumentacion productiva final).
+      - [x] **Fase F2 - Integracion de monitor remoto en pipeline de contenido**
+        - Entregables:
+          - [x] Adaptar selector/asignacion de destinos para incluir remotos junto a locales.
+          - [x] Garantizar compatibilidad funcional con imagen, URL, captura app, playlist, pizarra, transiciones y mirror.
+          - [x] Feedback por monitor remoto para estado de sincronizacion y errores parciales.
+        - Criterios de aceptacion:
+          - [x] Un remoto emparejado puede operar como cualquier destino actual en los flujos existentes.
+          - [x] Mirror mode replica hacia remotos sin romper destinos locales.
+        - DoD fase:
+          - [x] Suite de regresion actualizada para fuentes y mirror con al menos un destino remoto mockeado.
+          - [x] Sin regresiones visibles en flujo de monitor local.
+      - [x] **Fase F3 - Resiliencia UX y calidad percibida**
+        - Entregables:
+          - [x] Manejo de reconexion automatica y resincronizacion de estado visible.
+          - [x] Superficies de error accionables para caidas de red, timeouts y rechazo por anti abuso.
+          - [x] Ajustes de feedback de rendimiento (fps objetivo vs real en modo diagnostico).
+        - Criterios de aceptacion:
+          - [x] Ante corte breve, UI transiciona a `reconectando` y vuelve a `emparejado` al recuperar enlace.
+          - [x] Ante corte sostenido, UI pasa a `caido` sin congelar controles globales.
+        - DoD fase:
+          - [x] Pruebas manuales guiadas en tablet + movil + desktop responsive.
+          - [x] Checklist de validacion minimo completo (`typecheck`, `test`, `build`).
   - Riesgos/dependencias tecnicas:
-    - Estrategia de compresion/envio de imagenes: requiere tuning de codec/calidad/fps para no saturar WebSocket.
-    - Despliegue cloud del puente publico: impacto en costo, seguridad (TLS/origen) y proximidad regional para latencia.
-    - Diferencias de aspect ratio/orientacion en tablet pueden exigir politicas `contain/cover` por salida.
+    - Rendimiento en red variable: riesgo de no sostener 25fps, mitigado con degradacion adaptativa de calidad/fps.
+    - Complejidad de compatibilidad de fuentes existentes: mitigar con rollout por feature flag y matriz de pruebas por fuente.
+    - Fullscreen/kiosko en navegadores moviles: mitigar con UX explicita de limitaciones y reintento guiado.
+
+### Plan de implementacion ejecutado (V1 - Cloud Sync)
+
+- Estado del plan: `ejecutado en ramas feature y validado en development`.
+- Ramas propuestas (incremental):
+  - `feature/remote-monitor-f0-contracts-ui`
+  - `feature/remote-monitor-f1-pairing-flow`
+  - `feature/remote-monitor-f2-content-compat`
+  - `feature/remote-monitor-f3-resilience-observability`
+- Regla de integracion:
+  - Cada fase mergea a `development` solo con DoD de fase cumplido.
+  - `development` -> `main` unicamente tras cerrar F3 + checklist front/back de despliegue.
+- Gate de inicio:
+  - [x] OK explicito del usuario para iniciar implementacion funcional.
 
 - [ ] **Filtros en caliente**
   - Dependencias: pipeline grafico con parametros runtime.
@@ -403,3 +451,4 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 - 2026-03-31: Pizarra en vivo completado para MVP: cada tarjeta de monitor secundario permite abrir pizarra, la edicion en master usa referencia de miniatura y sincroniza overlay de trazos (set/undo/clear) en runtime esclavo sin romper fullscreen/thumbnail/handshake.
 - 2026-03-31: Mejora UX post-MVP de pizarra en vivo: toolbar visual con botones iconograficos accesibles (herramientas, color, grosor, undo, limpiar) y nuevas formas basicas (flecha/circulo/rectangulo/linea) con preview click+drag sincronizado al overlay slave.
 - 2026-04-03: V1 `Fuentes de monitor en modal con pestanas` completada e integrada en `development`; se actualizan checklist/subtareas/DoD y el avance V1 pasa a 71% (5/7).
+- 2026-04-05: V1 `Monitor virtual remoto (Cloud Sync)` completada con backend Socket.io + Redis, flujo de pairing por QR/codigo (`XXXX-XXXX-XXXX`), ruta `/remote`, desconexion remota desde host, countdown de expiracion de sala, bloqueo de zoom gestual en remoto y autocompletado de codigo desde QR; avance V1 actualizado a 86% (6/7).

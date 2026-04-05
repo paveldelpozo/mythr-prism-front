@@ -6,9 +6,11 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppHeader from './components/AppHeader.vue';
 import MonitorList from './components/MonitorList.vue';
 import PlaylistManager from './components/PlaylistManager.vue';
+import RemotePairingModal from './components/RemotePairingModal.vue';
 import WhiteboardEditorModal from './components/WhiteboardEditorModal.vue';
 import { useMultiMonitorBroadcaster } from './composables/useMultiMonitorBroadcaster';
 import { usePlaylistPlayback } from './composables/usePlaylistPlayback';
+import { useRemoteHostSync } from './composables/useRemoteHostSync';
 import {
   createDebouncedSessionSaver,
   loadPersistedSession,
@@ -18,7 +20,7 @@ import {
   type PersistedMonitorStateMap,
   type PersistedSessionV1
 } from './services/persistence';
-import { DEFAULT_TRANSFORM } from './types/broadcaster';
+import { DEFAULT_TRANSFORM, type MonitorDescriptor } from './types/broadcaster';
 import { sanitizeMirrorModeConfig, type MirrorModeConfig } from './types/mirrorMode';
 import type { MultimediaItem, PlaylistPlaybackState } from './types/playlist';
 import {
@@ -28,10 +30,26 @@ import {
 } from './types/transitions';
 import { buildVideoSyncPlan } from './types/videoSync';
 import type { WhiteboardState } from './types/whiteboard';
+import type { RemoteMonitorDescriptor } from './types/remoteSync';
 
 const FILE_IMPORT_BLOCK_MESSAGE = 'Para importar archivo, sal del fullscreen o usa Drag & Drop / pegar imagen.';
 
 const persistedSession = loadPersistedSession();
+const isRemotePairingModalOpen = ref(false);
+
+const {
+  room: remotePairingRoom,
+  roomExpiresInMs,
+  isConnecting: isRemoteRoomConnecting,
+  pairingError: remotePairingError,
+  pendingApprovals: remotePendingApprovals,
+  remoteMonitors,
+  createPairingRoom,
+  approveClient,
+  sendControlMessage,
+  disconnectRemoteMonitor,
+  closeRoom: closeRemotePairingRoom
+} = useRemoteHostSync();
 
 const clampPlaylistIndex = (index: number, total: number): number => {
   if (total <= 0) {
@@ -74,6 +92,40 @@ const normalizePlaybackByPlaylist = (
   autoplay: playlistLength > 0 ? playback.autoplay : false
 });
 
+const toVirtualRemoteMonitorDescriptor = (
+  remoteMonitor: RemoteMonitorDescriptor,
+  index: number
+): MonitorDescriptor => {
+  const pseudoScreen = {
+    width: 1920,
+    height: 1080,
+    left: 0,
+    top: 0,
+    availLeft: 0,
+    availTop: 0,
+    availWidth: 1920,
+    availHeight: 1080,
+    isPrimary: false,
+    label: remoteMonitor.label
+  } as unknown as ScreenDetailed;
+
+  return {
+    id: remoteMonitor.id,
+    label: remoteMonitor.label,
+    width: 1920,
+    height: 1080,
+    left: 0,
+    top: 0,
+    availLeft: 0,
+    availTop: 0,
+    availWidth: 1920,
+    availHeight: 1080,
+    isPrimary: false,
+    isMasterAppScreen: false,
+    raw: pseudoScreen
+  };
+};
+
 const {
   applyTransform,
   closeAllWindows,
@@ -91,6 +143,7 @@ const {
   monitors,
   persistableMonitorStates,
   loadMonitors,
+  setVirtualMonitors: setVirtualMonitorsFromBroadcaster = () => {},
   openWindowForMonitor,
   requestFullscreen,
   flashMonitorId,
@@ -112,7 +165,16 @@ const {
   setPlaylistItemForMonitor
 } = useMultiMonitorBroadcaster({
   initialMonitorStateById: persistedSession.monitors,
-  initialMirrorMode: persistedSession.mirror
+  initialMirrorMode: persistedSession.mirror,
+  remoteMessageDispatcher: (monitorId, message) => {
+    const isRemoteMonitor = remoteMonitors.value.some((remoteMonitor) => remoteMonitor.id === monitorId);
+    if (!isRemoteMonitor) {
+      return false;
+    }
+
+    sendControlMessage({ remoteMonitorId: monitorId, message });
+    return true;
+  }
 });
 
 const showOnlyProjectable = ref(persistedSession.ui.showOnlyProjectable);
@@ -330,6 +392,21 @@ const visibleMonitors = computed(() => {
 });
 
 const knownMonitorIds = computed(() => new Set(monitors.value.map((monitor) => monitor.id)));
+const remoteMonitorIdSet = computed(() => new Set(remoteMonitors.value.map((monitor) => monitor.id)));
+const remoteMonitorMetaById = computed(() =>
+  remoteMonitors.value.reduce<Record<string, {
+    isConnected: boolean;
+    isFullscreenSupported: boolean;
+    isFullscreenAvailable: boolean;
+  }>>((next, monitor) => {
+    next[monitor.id] = {
+      isConnected: monitor.state !== 'down',
+      isFullscreenSupported: monitor.isFullscreenSupported,
+      isFullscreenAvailable: monitor.isFullscreenAvailable
+    };
+    return next;
+  }, {})
+);
 
 const selectedTargetMonitorIds = computed(() =>
   sanitizeTargetMonitorIds(playlistPlaybackState.value.targetMonitorIds)
@@ -406,6 +483,72 @@ const closeWhiteboardEditor = () => {
 
 const onWhiteboardStateChange = (monitorId: string, state: WhiteboardState) => {
   setWhiteboardStateForMonitor(monitorId, state);
+};
+
+const openRemotePairingModal = () => {
+  isRemotePairingModalOpen.value = true;
+};
+
+const closeRemotePairingModal = () => {
+  isRemotePairingModalOpen.value = false;
+};
+
+const createRemotePairingSession = async () => {
+  await createPairingRoom();
+};
+
+const approveRemoteClientRequest = async (clientSocketId: string) => {
+  await approveClient(clientSocketId);
+};
+
+const openWindowOnMonitor = (monitorId: string) => {
+  if (remoteMonitorIdSet.value.has(monitorId)) {
+    return;
+  }
+
+  openWindowForMonitor(monitorId);
+};
+
+const closeWindowOnMonitor = (monitorId: string) => {
+  if (remoteMonitorIdSet.value.has(monitorId)) {
+    return;
+  }
+
+  closeWindow(monitorId);
+};
+
+const disconnectRemoteMonitorFromHost = (monitorId: string) => {
+  if (!remoteMonitorIdSet.value.has(monitorId)) {
+    return;
+  }
+
+  disconnectRemoteMonitor(monitorId);
+};
+
+const requestFullscreenOnMonitor = (monitorId: string) => {
+  const remoteMonitor = remoteMonitors.value.find((monitor) => monitor.id === monitorId) ?? null;
+  if (!remoteMonitor) {
+    requestFullscreen(monitorId);
+    return;
+  }
+
+  if (!remoteMonitor.isFullscreenSupported) {
+    if (monitorStates[monitorId]) {
+      monitorStates[monitorId].lastError = null;
+      monitorStates[monitorId].requiresFullscreenInteraction = false;
+    }
+    return;
+  }
+
+  if (!remoteMonitor.isFullscreenAvailable) {
+    if (monitorStates[monitorId]) {
+      monitorStates[monitorId].lastError = null;
+      monitorStates[monitorId].requiresFullscreenInteraction = false;
+    }
+    return;
+  }
+
+  requestFullscreen(monitorId);
 };
 
 const uploadImage = (
@@ -772,6 +915,32 @@ watch(
   }
 );
 
+watch(remoteMonitors, (nextRemoteMonitors) => {
+  setVirtualMonitorsFromBroadcaster(nextRemoteMonitors.map((remoteMonitor, index) =>
+    toVirtualRemoteMonitorDescriptor(remoteMonitor, index)
+  ));
+
+  nextRemoteMonitors.forEach((remoteMonitor) => {
+    if (!monitorStates[remoteMonitor.id]) {
+      return;
+    }
+
+    monitorStates[remoteMonitor.id].isWindowOpen = remoteMonitor.state !== 'down';
+    monitorStates[remoteMonitor.id].isSlaveReady = remoteMonitor.state === 'paired';
+    if (!remoteMonitor.isFullscreenSupported || !remoteMonitor.isFullscreenAvailable) {
+      monitorStates[remoteMonitor.id].requiresFullscreenInteraction = false;
+      monitorStates[remoteMonitor.id].isFullscreen = false;
+    }
+    monitorStates[remoteMonitor.id].lastError =
+      remoteMonitor.state === 'down'
+        ? 'El monitor remoto perdio conexion.'
+        : null;
+  });
+}, {
+  deep: true,
+  immediate: true
+});
+
 watch(layouts, (nextLayouts) => {
   if (nextLayouts.length === 0) {
     selectedLayoutId.value = null;
@@ -811,6 +980,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  closeRemotePairingRoom();
   window.removeEventListener('beforeunload', flushSessionSaver);
   flushSessionSaver();
 });
@@ -883,6 +1053,7 @@ onBeforeUnmount(() => {
           :mirror-active-target-count="mirrorStatus.activeTargetCount"
           :mirror-unavailable-target-ids="mirrorStatus.unavailableTargetIds"
           :mirror-last-error="mirrorStatus.lastError"
+          :remote-monitor-meta-by-id="remoteMonitorMetaById"
           :is-file-import-blocked="hasActiveFullscreenSlave"
           :file-import-blocked-message="FILE_IMPORT_BLOCK_MESSAGE"
           @update:show-only-projectable="showOnlyProjectable = $event"
@@ -895,9 +1066,11 @@ onBeforeUnmount(() => {
           @load-layout="loadSelectedLayout"
           @delete-layout="deleteSelectedLayout"
           @close-all="closeAllWindows"
-          @open-window="openWindowForMonitor"
-          @close-window="closeWindow"
-          @request-fullscreen="requestFullscreen"
+          @open-window="openWindowOnMonitor"
+          @close-window="closeWindowOnMonitor"
+          @disconnect-remote="disconnectRemoteMonitorFromHost"
+          @open-remote-pairing="openRemotePairingModal"
+          @request-fullscreen="requestFullscreenOnMonitor"
           @flash-monitor-id="flashMonitorId"
           @upload-image="uploadImage"
           @clear-image="(id) => setImageForMonitor(id, null)"
@@ -957,6 +1130,18 @@ onBeforeUnmount(() => {
         @state-change="onWhiteboardStateChange"
         @clear="clearWhiteboardForMonitor"
         @undo="undoWhiteboardForMonitor"
+      />
+
+      <RemotePairingModal
+        :open="isRemotePairingModalOpen"
+        :room="remotePairingRoom"
+        :pending-approvals="remotePendingApprovals"
+        :is-connecting="isRemoteRoomConnecting"
+        :expires-in-ms="roomExpiresInMs"
+        :error="remotePairingError"
+        @close="closeRemotePairingModal"
+        @create-room="createRemotePairingSession"
+        @approve-client="approveRemoteClientRequest"
       />
     </div>
   </main>

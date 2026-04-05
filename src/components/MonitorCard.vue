@@ -3,6 +3,7 @@ import {
   ArrowTopRightOnSquareIcon,
   BoltIcon,
   InformationCircleIcon,
+  NoSymbolIcon,
   PaintBrushIcon,
   PencilSquareIcon,
   XMarkIcon
@@ -20,6 +21,9 @@ const props = defineProps<{
   monitor: MonitorDescriptor;
   state: MonitorRuntimeState;
   thumbnail: MonitorThumbnailState;
+  isRemoteConnected?: boolean;
+  isRemoteFullscreenSupported?: boolean;
+  isRemoteFullscreenAvailable?: boolean;
   isFileImportBlocked?: boolean;
   fileImportBlockedMessage?: string;
 }>();
@@ -44,6 +48,7 @@ const emit = defineEmits<{
   navigateExternalUrl: [monitorId: string, direction: 'back' | 'forward'];
   startExternalAppCapture: [monitorId: string];
   stopExternalAppCapture: [monitorId: string];
+  disconnectRemote: [monitorId: string];
 }>();
 
 const isInfoPanelOpen = ref(false);
@@ -185,6 +190,39 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onWindowKeydown);
   document.removeEventListener('mousedown', onDocumentMouseDown);
 });
+
+const monitorTypeLabel = computed(() => {
+  if (props.isRemoteConnected) {
+    return 'Remoto';
+  }
+
+  return props.monitor.isPrimary ? 'Principal' : 'Externo';
+});
+
+const fullscreenStatusLabel = computed(() => {
+  if (!props.isRemoteConnected) {
+    return props.state.isFullscreen ? 'Activo' : 'No activo';
+  }
+
+  if (!props.isRemoteFullscreenSupported) {
+    return 'No soportado por cliente remoto';
+  }
+
+  if (!props.isRemoteFullscreenAvailable) {
+    return 'No disponible en cliente remoto';
+  }
+
+  return props.state.isFullscreen ? 'Activo' : 'Disponible';
+});
+
+const showRemoteDisconnectAction = computed(() => props.isRemoteConnected === true);
+const showFullscreenAction = computed(() => {
+  if (!props.isRemoteConnected) {
+    return true;
+  }
+
+  return props.isRemoteFullscreenSupported === true && props.isRemoteFullscreenAvailable === true;
+});
 </script>
 
 <template>
@@ -207,8 +245,20 @@ onBeforeUnmount(() => {
             class="rounded-full px-3 py-1 text-[11px] font-semibold"
             :class="monitor.isPrimary ? 'bg-emerald-500/20 text-emerald-200' : 'bg-slate-700/40 text-slate-200'"
           >
-            {{ monitor.isPrimary ? 'Principal' : 'Externo' }}
+            {{ monitorTypeLabel }}
           </span>
+          <button
+            v-if="showRemoteDisconnectAction"
+            type="button"
+            class="btn-with-icon btn-sm btn-rose-soft"
+            data-testid="monitor-disconnect-remote"
+            title="Desconectar monitor remoto"
+            aria-label="Desconectar monitor remoto"
+            @click="emit('disconnectRemote', monitor.id)"
+          >
+            <NoSymbolIcon aria-hidden="true" class="btn-icon" />
+            Desconectar
+          </button>
           <button
             ref="renameTriggerButton"
             type="button"
@@ -250,7 +300,7 @@ onBeforeUnmount(() => {
             >
               <p class="text-xs text-slate-300/90">Estado ventana: {{ state.isWindowOpen ? 'Abierta' : 'Cerrada' }}</p>
               <p class="text-xs text-slate-300/90">Handshake: {{ state.isSlaveReady ? 'Conectado' : 'Pendiente' }}</p>
-              <p class="text-xs text-slate-300/90">Fullscreen: {{ state.isFullscreen ? 'Activo' : 'No activo' }}</p>
+              <p class="text-xs text-slate-300/90">Fullscreen: {{ fullscreenStatusLabel }}</p>
               <p v-if="state.lostFullscreenUnexpectedly" class="mt-1 text-xs text-amber-200/90">
                 Fullscreen se cerro por una accion externa. Usa "Reactivar fullscreen" para recuperarlo en un clic.
               </p>
@@ -335,6 +385,7 @@ onBeforeUnmount(() => {
       :monitor-id="monitor.id"
       :state="state"
       :show-monitor-utilities="!monitor.isMasterAppScreen"
+      :show-fullscreen-action="showFullscreenAction"
       :is-file-import-blocked="isFileImportBlocked"
       :file-import-blocked-message="fileImportBlockedMessage"
       @open-whiteboard="emit('openWhiteboard', $event)"

@@ -65,6 +65,7 @@ type SlaveWindowWithExternalCapture = Window & {
 interface UseMultiMonitorBroadcasterOptions {
   initialMonitorStateById?: PersistedMonitorStateMap;
   initialMirrorMode?: MirrorModeConfig;
+  remoteMessageDispatcher?: (monitorId: string, message: MasterToSlaveMessage) => boolean;
 }
 
 interface SetImageForMonitorOptions {
@@ -164,6 +165,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
   const monitorThumbnails = reactive<MonitorThumbnailStateMap>({});
   const monitorWhiteboards = reactive<MonitorWhiteboardStateMap>({});
   const windowsRegistry = new Map<string, WindowRegistryEntry>();
+  const monitorInstanceTokenById = new Map<string, string>();
   const externalAppCaptureByMonitorId = new Map<string, ExternalAppCaptureEntry>();
   const monitorImageRenderSourceById = new Map<string, string | null>();
   const blobUrlUsageCountBySource = new Map<string, number>();
@@ -184,6 +186,8 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
   const globalError = ref<string | null>(null);
   const isWindowManagementSupported = typeof window.getScreenDetails === 'function';
   const hasDetectedMonitors = computed(() => monitors.value.length > 0);
+  const localMonitors = ref<MonitorDescriptor[]>([]);
+  const virtualMonitors = ref<MonitorDescriptor[]>([]);
 
   let screenDetailsRef: ScreenDetails | null = null;
   let lifecycleIntervalId: number | null = null;
@@ -556,9 +560,20 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     });
   };
 
+  const syncCombinedMonitors = () => {
+    const nextMonitors = [...localMonitors.value, ...virtualMonitors.value];
+    monitors.value = nextMonitors;
+    syncMonitorStateShape(nextMonitors);
+  };
+
   const sendToSlave = (monitorId: string, message: MasterToSlaveMessage): boolean => {
     const entry = windowsRegistry.get(monitorId);
     if (!entry || entry.ref.closed) {
+      const dispatched = options.remoteMessageDispatcher?.(monitorId, message) ?? false;
+      if (dispatched) {
+        return true;
+      }
+
       cleanupMonitorWindow(monitorId);
       setMonitorError(monitorId, 'La ventana esclava no esta disponible');
       return false;
@@ -581,14 +596,14 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     payload: Extract<MasterToSlaveMessage, { type: T }>['payload']
   ): Extract<MasterToSlaveMessage, { type: T }> | null => {
     const entry = windowsRegistry.get(monitorId);
-    if (!entry) {
-      return null;
-    }
+    const existingToken = monitorInstanceTokenById.get(monitorId);
+    const instanceToken = entry?.instanceToken ?? existingToken ?? createInstanceToken(monitorId);
+    monitorInstanceTokenById.set(monitorId, instanceToken);
 
     return {
       channel: MESSAGE_CHANNEL,
       type,
-      instanceToken: entry.instanceToken,
+      instanceToken,
       monitorId,
       payload
     } as Extract<MasterToSlaveMessage, { type: T }>;
@@ -866,8 +881,8 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
 
       return createDescriptor(screen, index, index === masterScreenIndex, customName);
     });
-    monitors.value = nextMonitors;
-    syncMonitorStateShape(nextMonitors);
+    localMonitors.value = nextMonitors;
+    syncCombinedMonitors();
   };
 
   const setMonitorCustomName = (monitorId: string, nextName: string) => {
@@ -978,6 +993,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
       ref: win,
       instanceToken
     });
+    monitorInstanceTokenById.set(monitorId, instanceToken);
 
     const state = getMonitorState(monitorId);
     state.isWindowOpen = true;
@@ -1483,6 +1499,18 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     replicateSourceToMirrorTargets(monitorId);
   };
 
+  const setVirtualMonitors = (nextVirtualMonitors: MonitorDescriptor[]) => {
+    virtualMonitors.value = nextVirtualMonitors;
+
+    nextVirtualMonitors.forEach((monitor) => {
+      if (!monitorInstanceTokenById.has(monitor.id)) {
+        monitorInstanceTokenById.set(monitor.id, createInstanceToken(monitor.id));
+      }
+    });
+
+    syncCombinedMonitors();
+  };
+
   window.addEventListener('message', onMessageFromSlave);
   window.addEventListener('beforeunload', onBeforeUnload);
 
@@ -1512,6 +1540,7 @@ export const useMultiMonitorBroadcaster = (options: UseMultiMonitorBroadcasterOp
     closeAllWindows,
     closeWindow,
     loadMonitors,
+    setVirtualMonitors,
     openWindowForMonitor,
     requestFullscreen,
     flashMonitorId,

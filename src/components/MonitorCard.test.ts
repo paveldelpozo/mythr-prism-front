@@ -47,7 +47,10 @@ const mountCard = (overrides?: Partial<{ state: MonitorRuntimeState; thumbnail: 
     props: {
       monitor,
       state: overrides?.state ?? state,
-      thumbnail: overrides?.thumbnail ?? thumbnail
+      thumbnail: overrides?.thumbnail ?? thumbnail,
+      isRemoteConnected: false,
+      isRemoteFullscreenSupported: false,
+      isRemoteFullscreenAvailable: false
     },
     global: {
       stubs: {
@@ -287,5 +290,20 @@ describe('MonitorCard', () => {
     await openButton.trigger('click');
 
     expect(wrapper.emitted('openWindow')?.[0]).toEqual(['monitor-1']);
+  });
+
+  it('renderiza accion de desconectar solo para monitor remoto conectado', async () => {
+    const wrapper = mountCard();
+    expect(wrapper.find('[data-testid="monitor-disconnect-remote"]').exists()).toBe(false);
+
+    await wrapper.setProps({
+      isRemoteConnected: true
+    });
+
+    const disconnectButton = wrapper.get('[data-testid="monitor-disconnect-remote"]');
+    expect(disconnectButton.text()).toContain('Desconectar');
+
+    await disconnectButton.trigger('click');
+    expect(wrapper.emitted('disconnectRemote')?.[0]).toEqual(['monitor-1']);
   });
 });
