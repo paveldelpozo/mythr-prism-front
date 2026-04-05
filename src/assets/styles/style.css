@@ -259,6 +259,22 @@
     @apply grid grid-cols-1 gap-2 sm:grid-cols-3;
   }
 
+  .monitor-content-tabs {
+    @apply grid grid-cols-1 gap-2 sm:grid-cols-3;
+  }
+
+  .monitor-position-grid {
+    @apply mx-auto grid w-full max-w-sm grid-cols-3 gap-2;
+  }
+
+  .monitor-position-grid-cell {
+    @apply min-h-0;
+  }
+
+  .monitor-position-control {
+    @apply justify-center border-transparent hover:border-indigo-300/40;
+  }
+
   .monitor-action-btn {
     @apply btn-icon-only h-8 w-8 shrink-0;
   }

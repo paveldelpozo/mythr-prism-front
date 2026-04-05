@@ -28,6 +28,13 @@ import {
   sanitizeContentTransition,
   type ContentTransition
 } from './types/transitions';
+import {
+  createDefaultFilterPipeline,
+  sanitizeFilterPipeline,
+  sanitizeFilterPresetList,
+  type MonitorFilterPipeline,
+  type MonitorFilterPreset
+} from './types/filters';
 import { buildVideoSyncPlan } from './types/videoSync';
 import type { WhiteboardState } from './types/whiteboard';
 import type { RemoteMonitorDescriptor } from './types/remoteSync';
@@ -153,6 +160,10 @@ const {
   setMirrorTargetMonitorIds,
   setMonitorCustomName,
   setContentTransitionForMonitor,
+  setFilterPipelineForMonitor,
+  saveFilterPresetForMonitor,
+  applyFilterPresetForMonitor,
+  deleteFilterPresetForMonitor,
   setImageForMonitor,
   setExternalUrlForMonitor,
   startExternalAppCaptureForMonitor,
@@ -240,6 +251,8 @@ const buildPersistableMonitorStateMap = (): PersistedMonitorStateMap => {
         translateY: state.transform.translateY
       },
       contentTransition: sanitizeContentTransition(state.contentTransition),
+      filterPipeline: sanitizeFilterPipeline(state.filterPipeline),
+      filterPresets: sanitizeFilterPresetList(state.filterPresets),
       imageDataUrl: typeof state.imageDataUrl === 'string' ? state.imageDataUrl : null,
       externalUrl: typeof state.externalUrl === 'string' ? state.externalUrl : null,
       customName: typeof state.customName === 'string' ? state.customName : null
@@ -345,6 +358,8 @@ const buildPersistableLayouts = (): PersistedLayout[] =>
               translateY: monitorState.transform.translateY
             },
             contentTransition: sanitizeContentTransition(monitorState.contentTransition),
+            filterPipeline: sanitizeFilterPipeline(monitorState.filterPipeline),
+            filterPresets: sanitizeFilterPresetList(monitorState.filterPresets),
             imageDataUrl:
               typeof monitorState.imageDataUrl === 'string' ? monitorState.imageDataUrl : null,
             externalUrl:
@@ -628,6 +643,10 @@ const applyPersistedMonitorState = (monitorId: string, state: PersistedMonitorSt
   }
 
   setContentTransitionForMonitor(monitorId, sanitizeContentTransition(state.contentTransition));
+  setFilterPipelineForMonitor(monitorId, sanitizeFilterPipeline(state.filterPipeline));
+  if (monitorStates[monitorId]) {
+    monitorStates[monitorId].filterPresets = sanitizeFilterPresetList(state.filterPresets);
+  }
   if (state.externalUrl) {
     setExternalUrlForMonitor(monitorId, state.externalUrl);
   } else {
@@ -671,6 +690,22 @@ const stopExternalAppCaptureOnMonitor = (monitorId: string) => {
 
 const onMonitorTransitionChange = (monitorId: string, transition: ContentTransition) => {
   setContentTransitionForMonitor(monitorId, transition);
+};
+
+const onMonitorFilterPipelineChange = (monitorId: string, pipeline: MonitorFilterPipeline) => {
+  setFilterPipelineForMonitor(monitorId, pipeline);
+};
+
+const onMonitorFilterPresetSave = (monitorId: string, presetName: string) => {
+  saveFilterPresetForMonitor(monitorId, presetName);
+};
+
+const onMonitorFilterPresetApply = (monitorId: string, presetId: string) => {
+  applyFilterPresetForMonitor(monitorId, presetId);
+};
+
+const onMonitorFilterPresetDelete = (monitorId: string, presetId: string) => {
+  deleteFilterPresetForMonitor(monitorId, presetId);
 };
 
 const saveCurrentLayout = () => {
@@ -766,6 +801,8 @@ const loadSelectedLayout = () => {
     const state = selectedLayout.snapshot.monitors[monitorId] ?? {
       transform: { ...DEFAULT_TRANSFORM },
       contentTransition: { ...DEFAULT_CONTENT_TRANSITION },
+      filterPipeline: createDefaultFilterPipeline(),
+      filterPresets: [] as MonitorFilterPreset[],
       imageDataUrl: null,
       externalUrl: null,
       customName: null
@@ -1083,6 +1120,10 @@ onBeforeUnmount(() => {
           @open-whiteboard="openWhiteboardEditor"
           @rename-monitor="setMonitorCustomName"
           @set-content-transition="onMonitorTransitionChange"
+          @set-filter-pipeline="onMonitorFilterPipelineChange"
+          @save-filter-preset="onMonitorFilterPresetSave"
+          @apply-filter-preset="onMonitorFilterPresetApply"
+          @delete-filter-preset="onMonitorFilterPresetDelete"
           @transform="applyTransform"
         />
       </section>

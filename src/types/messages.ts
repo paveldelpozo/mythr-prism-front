@@ -1,4 +1,5 @@
 import type { MonitorTransform } from './broadcaster';
+import type { MonitorFilterPipeline } from './filters';
 import type { MultimediaItem } from './playlist';
 import type { ContentTransition } from './transitions';
 import type { WhiteboardState } from './whiteboard';
@@ -20,6 +21,7 @@ export type MasterMessageType =
   | 'VIDEO_SYNC_SEEK'
   | 'VIDEO_SYNC_TIME'
   | 'SET_TRANSFORM'
+  | 'SET_FILTER_PIPELINE'
   | 'WHITEBOARD_SET_STATE'
   | 'WHITEBOARD_CLEAR'
   | 'WHITEBOARD_UNDO'
@@ -107,6 +109,7 @@ export type MasterToSlaveMessage =
   | MessageEnvelope<'VIDEO_SYNC_SEEK', VideoSyncSeekPayload>
   | MessageEnvelope<'VIDEO_SYNC_TIME', VideoSyncTimePayload>
   | MessageEnvelope<'SET_TRANSFORM', { transform: MonitorTransform }>
+  | MessageEnvelope<'SET_FILTER_PIPELINE', { pipeline: MonitorFilterPipeline }>
   | MessageEnvelope<'WHITEBOARD_SET_STATE', { state: WhiteboardState }>
   | MessageEnvelope<'WHITEBOARD_CLEAR', { reason: string }>
   | MessageEnvelope<'WHITEBOARD_UNDO', { reason: string }>

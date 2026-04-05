@@ -23,6 +23,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppFileDropzone from './ui/AppFileDropzone.vue';
 import type { MonitorRuntimeState } from '../types/broadcaster';
 import {
+  FILTER_STAGE_CONFIG,
+  FILTER_STAGE_IDS,
+  type FilterStageId,
+  type MonitorFilterPipeline
+} from '../types/filters';
+import {
   CONTENT_TRANSITION_TYPES,
   TRANSITION_DURATION_MAX_MS,
   TRANSITION_DURATION_MIN_MS,
@@ -32,12 +38,24 @@ import {
 
 type ImageImportFailureReason = 'empty' | 'not-image';
 type SourceTabId = 'local-image' | 'external-url' | 'external-app';
+type ContentEditorTabId = 'transform' | 'transitions' | 'filters';
 
 const SOURCE_TABS: Array<{ id: SourceTabId; label: string }> = [
   { id: 'local-image', label: 'Imagen local' },
   { id: 'external-url', label: 'URL externa' },
   { id: 'external-app', label: 'Aplicacion externa' }
 ];
+
+const CONTENT_EDITOR_TABS: Array<{ id: ContentEditorTabId; label: string }> = [
+  { id: 'transform', label: 'Transformacion' },
+  { id: 'transitions', label: 'Transiciones' },
+  { id: 'filters', label: 'Filtros' }
+];
+
+const CONTENT_SCALE_MIN = 0.05;
+const CONTENT_SCALE_MAX = 5;
+const POSITION_STEP_MIN = 1;
+const POSITION_STEP_MAX = 500;
 
 const props = withDefaults(defineProps<{
   monitorId: string;
@@ -70,17 +88,26 @@ const emit = defineEmits<{
   navigateExternalUrl: [monitorId: string, direction: 'back' | 'forward'];
   startExternalAppCapture: [monitorId: string];
   stopExternalAppCapture: [monitorId: string];
+  setFilterPipeline: [monitorId: string, pipeline: MonitorFilterPipeline];
+  saveFilterPreset: [monitorId: string, presetName: string];
+  applyFilterPreset: [monitorId: string, presetId: string];
+  deleteFilterPreset: [monitorId: string, presetId: string];
 }>();
 
 const imageImportFeedback = ref<string | null>(null);
 const externalUrlFeedback = ref<string | null>(null);
 const externalUrlDraft = ref('');
+const filterPresetDraftName = ref('');
+const selectedFilterPresetId = ref<string>('');
 const isSourceModalOpen = ref(false);
 const activeSourceTab = ref<SourceTabId>('local-image');
 const isContentEditorModalOpen = ref(false);
+const activeContentEditorTab = ref<ContentEditorTabId>('transform');
+const positionStepPx = ref(40);
 const sourceModalTitleId = computed(() => `monitor-source-modal-title-${props.monitorId}`);
 const sourceModalTabListId = computed(() => `monitor-source-tablist-${props.monitorId}`);
 const contentEditorModalTitleId = computed(() => `monitor-content-editor-title-${props.monitorId}`);
+const contentEditorTabListId = computed(() => `monitor-content-editor-tablist-${props.monitorId}`);
 const sourceModalTriggerButton = ref<HTMLButtonElement | null>(null);
 const contentEditorTriggerButton = ref<HTMLButtonElement | null>(null);
 const bodyScrollSnapshot = ref<{
@@ -122,10 +149,173 @@ const activeExternalUrl = computed(() =>
     : null
 );
 
+const filterStageUiModel = computed(() => {
+  const stageById = new Map(
+    props.state.filterPipeline.stages.map((stage) => [stage.id, stage])
+  );
+
+  return FILTER_STAGE_IDS.map((id) => ({
+    id,
+    config: FILTER_STAGE_CONFIG[id],
+    stage: stageById.get(id) ?? {
+      id,
+      enabled: true,
+      value: FILTER_STAGE_CONFIG[id].defaultValue
+    }
+  }));
+});
+
+const hasFilterPresets = computed(() => props.state.filterPresets.length > 0);
+
+const upsertFilterPipeline = (updater: (pipeline: MonitorFilterPipeline) => void) => {
+  const nextPipeline: MonitorFilterPipeline = {
+    enabled: props.state.filterPipeline.enabled,
+    stages: props.state.filterPipeline.stages.map((stage) => ({
+      id: stage.id,
+      enabled: stage.enabled,
+      value: stage.value
+    }))
+  };
+
+  updater(nextPipeline);
+  emit('setFilterPipeline', props.monitorId, nextPipeline);
+};
+
+const onFilterPipelineEnabledChange = (event: Event) => {
+  const checked = (event.target as HTMLInputElement).checked;
+  upsertFilterPipeline((pipeline) => {
+    pipeline.enabled = checked;
+  });
+};
+
+const onFilterStageEnabledChange = (stageId: FilterStageId, event: Event) => {
+  const checked = (event.target as HTMLInputElement).checked;
+  upsertFilterPipeline((pipeline) => {
+    const stage = pipeline.stages.find((item) => item.id === stageId);
+    if (!stage) {
+      return;
+    }
+
+    stage.enabled = checked;
+  });
+};
+
+const onFilterStageValueInput = (stageId: FilterStageId, event: Event) => {
+  const config = FILTER_STAGE_CONFIG[stageId];
+  const rawValue = Number((event.target as HTMLInputElement).value);
+  const fallback = config.defaultValue;
+  const safeValue = Number.isFinite(rawValue)
+    ? Math.max(config.min, Math.min(config.max, rawValue))
+    : fallback;
+
+  upsertFilterPipeline((pipeline) => {
+    const stage = pipeline.stages.find((item) => item.id === stageId);
+    if (!stage) {
+      return;
+    }
+
+    stage.value = safeValue;
+  });
+};
+
+const onResetFilterStage = (stageId: FilterStageId) => {
+  const config = FILTER_STAGE_CONFIG[stageId];
+  upsertFilterPipeline((pipeline) => {
+    const stage = pipeline.stages.find((item) => item.id === stageId);
+    if (!stage) {
+      return;
+    }
+
+    stage.value = config.defaultValue;
+  });
+};
+
+const onResetAllFilters = () => {
+  upsertFilterPipeline((pipeline) => {
+    pipeline.stages.forEach((stage) => {
+      stage.value = FILTER_STAGE_CONFIG[stage.id].defaultValue;
+    });
+  });
+};
+
+const onScaleFactorInput = (event: Event) => {
+  const rawValue = Number((event.target as HTMLInputElement).value);
+  const fallback = props.state.transform.scale;
+  const safeValue = Number.isFinite(rawValue)
+    ? Math.max(CONTENT_SCALE_MIN, Math.min(CONTENT_SCALE_MAX, rawValue))
+    : fallback;
+  const delta = Number((safeValue - props.state.transform.scale).toFixed(2));
+
+  if (delta === 0) {
+    return;
+  }
+
+  emit('transform', props.monitorId, { type: 'scale', value: delta });
+};
+
+const onPositionStepInput = (event: Event) => {
+  const rawValue = Number((event.target as HTMLInputElement).value);
+  positionStepPx.value = Number.isFinite(rawValue)
+    ? Math.max(POSITION_STEP_MIN, Math.min(POSITION_STEP_MAX, Math.round(rawValue)))
+    : positionStepPx.value;
+};
+
+const moveByStep = (deltaX = 0, deltaY = 0) => {
+  if (deltaX === 0 && deltaY === 0) {
+    return;
+  }
+
+  emit('transform', props.monitorId, {
+    type: 'move',
+    value: {
+      x: deltaX === 0 ? undefined : deltaX,
+      y: deltaY === 0 ? undefined : deltaY
+    }
+  });
+};
+
+const onSaveFilterPreset = () => {
+  const trimmedName = filterPresetDraftName.value.trim();
+  if (trimmedName.length === 0) {
+    return;
+  }
+
+  emit('saveFilterPreset', props.monitorId, trimmedName);
+  filterPresetDraftName.value = '';
+};
+
+const onApplyFilterPreset = () => {
+  if (selectedFilterPresetId.value.length === 0) {
+    return;
+  }
+
+  emit('applyFilterPreset', props.monitorId, selectedFilterPresetId.value);
+};
+
+const onDeleteFilterPreset = () => {
+  if (selectedFilterPresetId.value.length === 0) {
+    return;
+  }
+
+  emit('deleteFilterPreset', props.monitorId, selectedFilterPresetId.value);
+};
+
 watch(activeExternalUrl, (nextUrl) => {
   externalUrlDraft.value = nextUrl ?? '';
 }, {
   immediate: true
+});
+
+watch(() => props.state.filterPresets, (nextPresets) => {
+  const selectedExists = nextPresets.some((preset) => preset.id === selectedFilterPresetId.value);
+  if (selectedExists) {
+    return;
+  }
+
+  selectedFilterPresetId.value = nextPresets[0]?.id ?? '';
+}, {
+  immediate: true,
+  deep: true
 });
 
 const assignExternalUrl = () => {
@@ -213,6 +403,12 @@ const sourceTabButtonId = (tabId: SourceTabId): string =>
 const sourceTabPanelId = (tabId: SourceTabId): string =>
   `monitor-source-panel-${props.monitorId}-${tabId}`;
 
+const contentEditorTabButtonId = (tabId: ContentEditorTabId): string =>
+  `monitor-content-editor-tab-${props.monitorId}-${tabId}`;
+
+const contentEditorTabPanelId = (tabId: ContentEditorTabId): string =>
+  `monitor-content-editor-panel-${props.monitorId}-${tabId}`;
+
 const resolveDefaultSourceTab = (): SourceTabId => {
   if (props.state.isExternalAppCapturePending || props.state.isExternalAppCaptureActive) {
     return 'external-app';
@@ -253,6 +449,7 @@ const unlockBodyScroll = () => {
 };
 
 const openContentEditorModal = () => {
+  activeContentEditorTab.value = 'transform';
   isContentEditorModalOpen.value = true;
 };
 
@@ -658,73 +855,176 @@ onBeforeUnmount(() => {
         </header>
 
         <div class="app-modal-body space-y-4">
-          <div class="grid gap-3 md:grid-cols-2">
+          <div
+            :id="contentEditorTabListId"
+            class="monitor-content-tabs"
+            role="tablist"
+            aria-label="Editor de contenido"
+          >
+            <button
+              v-for="tab in CONTENT_EDITOR_TABS"
+              :id="contentEditorTabButtonId(tab.id)"
+              :key="tab.id"
+              type="button"
+              role="tab"
+              class="app-tab-btn btn-sm"
+              :class="activeContentEditorTab === tab.id ? 'app-tab-btn--active' : 'app-tab-btn--inactive'"
+              :aria-selected="activeContentEditorTab === tab.id"
+              :aria-controls="contentEditorTabPanelId(tab.id)"
+              :tabindex="activeContentEditorTab === tab.id ? 0 : -1"
+              :data-testid="`monitor-content-tab-${tab.id}`"
+              @click="activeContentEditorTab = tab.id"
+            >
+              {{ tab.label }}
+            </button>
+          </div>
+
+          <section
+            v-if="activeContentEditorTab === 'transform'"
+            :id="contentEditorTabPanelId('transform')"
+            role="tabpanel"
+            :aria-labelledby="contentEditorTabButtonId('transform')"
+            data-testid="monitor-content-panel-transform"
+            class="space-y-3"
+          >
+            <div class="grid gap-3 md:grid-cols-2">
+              <div class="surface-panel">
+                <p class="section-kicker-muted mb-2 text-[11px]">Rotacion</p>
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <button
+                    data-testid="monitor-content-rotate-left"
+                    class="control-btn btn-with-icon"
+                    type="button"
+                    @click="emit('transform', monitorId, { type: 'rotate', value: -90 })"
+                  >
+                    <ArrowUturnLeftIcon aria-hidden="true" class="btn-icon" />
+                    Rotar -90
+                  </button>
+                  <button
+                    data-testid="monitor-content-rotate-180"
+                    class="control-btn btn-with-icon"
+                    type="button"
+                    @click="emit('transform', monitorId, { type: 'rotate', value: 180 })"
+                  >
+                    <ArrowPathIcon aria-hidden="true" class="btn-icon" />
+                    Rotar 180
+                  </button>
+                  <button
+                    class="control-btn btn-with-icon"
+                    type="button"
+                    @click="emit('transform', monitorId, { type: 'rotate', value: 90 })"
+                  >
+                    <ArrowUturnRightIcon aria-hidden="true" class="btn-icon" />
+                    Rotar +90
+                  </button>
+                </div>
+              </div>
+
+              <div class="surface-panel">
+                <p class="section-kicker-muted mb-2 text-[11px]">Escala</p>
+                <div class="grid grid-cols-2 gap-2">
+                  <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'scale', value: -0.1 })">
+                    <MagnifyingGlassMinusIcon aria-hidden="true" class="btn-icon" />
+                    Reducir
+                  </button>
+                  <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'scale', value: 0.1 })">
+                    <MagnifyingGlassPlusIcon aria-hidden="true" class="btn-icon" />
+                    Aumentar
+                  </button>
+                </div>
+                <label class="form-field mt-2 block text-xs" for="monitor-transform-scale">
+                  Factor de escala
+                  <input
+                    id="monitor-transform-scale"
+                    data-testid="monitor-content-scale-input"
+                    type="number"
+                    class="form-control"
+                    :min="CONTENT_SCALE_MIN"
+                    :max="CONTENT_SCALE_MAX"
+                    step="0.05"
+                    :value="state.transform.scale"
+                    @input="onScaleFactorInput"
+                  />
+                </label>
+              </div>
+            </div>
+
             <div class="surface-panel">
-              <p class="section-kicker-muted mb-2 text-[11px]">Rotacion</p>
-              <div class="grid grid-cols-2 gap-2">
+              <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p class="section-kicker-muted text-[11px]">Posicion</p>
+                <label class="form-field text-xs" for="monitor-transform-position-step">
+                  Paso (px)
+                  <input
+                    id="monitor-transform-position-step"
+                    data-testid="monitor-content-position-step-input"
+                    type="number"
+                    class="form-control"
+                    :min="POSITION_STEP_MIN"
+                    :max="POSITION_STEP_MAX"
+                    step="1"
+                    :value="positionStepPx"
+                    @input="onPositionStepInput"
+                  />
+                </label>
+              </div>
+
+              <div class="monitor-position-grid" data-testid="monitor-content-position-grid">
+                <span aria-hidden="true" class="monitor-position-grid-cell"></span>
                 <button
-                  data-testid="monitor-content-rotate-left"
-                  class="control-btn btn-with-icon"
+                  data-testid="monitor-content-move-up"
+                  class="control-btn btn-with-icon monitor-position-control"
                   type="button"
-                  @click="emit('transform', monitorId, { type: 'rotate', value: -90 })"
+                  @click="moveByStep(0, -positionStepPx)"
                 >
-                  <ArrowUturnLeftIcon aria-hidden="true" class="btn-icon" />
-                  Rotar -90
+                  <ArrowUpIcon aria-hidden="true" class="btn-icon" />
+                  Arriba
                 </button>
-                <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'rotate', value: 90 })">
-                  <ArrowUturnRightIcon aria-hidden="true" class="btn-icon" />
-                  Rotar +90
+                <span aria-hidden="true" class="monitor-position-grid-cell"></span>
+
+                <button
+                  class="control-btn btn-with-icon monitor-position-control"
+                  type="button"
+                  @click="moveByStep(-positionStepPx, 0)"
+                >
+                  <ArrowLeftIcon aria-hidden="true" class="btn-icon" />
+                  Izquierda
                 </button>
+                <span aria-hidden="true" class="monitor-position-grid-cell"></span>
+                <button
+                  class="control-btn btn-with-icon monitor-position-control"
+                  type="button"
+                  @click="moveByStep(positionStepPx, 0)"
+                >
+                  <ArrowRightIcon aria-hidden="true" class="btn-icon" />
+                  Derecha
+                </button>
+
+                <span aria-hidden="true" class="monitor-position-grid-cell"></span>
+                <button
+                  class="control-btn btn-with-icon monitor-position-control"
+                  type="button"
+                  @click="moveByStep(0, positionStepPx)"
+                >
+                  <ArrowDownIcon aria-hidden="true" class="btn-icon" />
+                  Abajo
+                </button>
+                <span aria-hidden="true" class="monitor-position-grid-cell"></span>
               </div>
             </div>
 
-            <div class="surface-panel">
-              <p class="section-kicker-muted mb-2 text-[11px]">Escala</p>
-              <div class="grid grid-cols-3 gap-2">
-                <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'scale', value: -0.1 })">
-                  <MagnifyingGlassMinusIcon aria-hidden="true" class="btn-icon" />
-                  Reducir
-                </button>
-                <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'reset' })">
-                  <ArrowPathIcon aria-hidden="true" class="btn-icon" />
-                  Reset
-                </button>
-                <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'scale', value: 0.1 })">
-                  <MagnifyingGlassPlusIcon aria-hidden="true" class="btn-icon" />
-                  Aumentar
-                </button>
-              </div>
-            </div>
-          </div>
+            <p class="text-xs text-slate-300/80">
+              Transform: scale {{ state.transform.scale.toFixed(2) }} | rotate {{ state.transform.rotate }}deg | x {{ state.transform.translateX }} | y {{ state.transform.translateY }}
+            </p>
+          </section>
 
-          <div class="surface-panel">
-            <p class="section-kicker-muted mb-2 text-[11px]">Posicion</p>
-            <div class="mx-auto grid w-full max-w-sm grid-cols-2 gap-2 sm:grid-cols-4">
-              <button
-                data-testid="monitor-content-move-up"
-                class="control-btn btn-with-icon"
-                type="button"
-                @click="emit('transform', monitorId, { type: 'move', value: { y: -40 } })"
-              >
-                <ArrowUpIcon aria-hidden="true" class="btn-icon" />
-                Arriba
-              </button>
-              <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'move', value: { y: 40 } })">
-                <ArrowDownIcon aria-hidden="true" class="btn-icon" />
-                Abajo
-              </button>
-              <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'move', value: { x: -40 } })">
-                <ArrowLeftIcon aria-hidden="true" class="btn-icon" />
-                Izquierda
-              </button>
-              <button class="control-btn btn-with-icon" type="button" @click="emit('transform', monitorId, { type: 'move', value: { x: 40 } })">
-                <ArrowRightIcon aria-hidden="true" class="btn-icon" />
-                Derecha
-              </button>
-            </div>
-          </div>
-
-          <div class="surface-panel">
+          <section
+            v-else-if="activeContentEditorTab === 'transitions'"
+            :id="contentEditorTabPanelId('transitions')"
+            role="tabpanel"
+            :aria-labelledby="contentEditorTabButtonId('transitions')"
+            data-testid="monitor-content-panel-transitions"
+            class="surface-panel"
+          >
             <p class="section-kicker-muted mb-2 text-[11px]">Transicion de contenido</p>
             <div class="grid gap-3 md:grid-cols-2">
               <label class="form-field text-xs" for="monitor-transition-type">
@@ -758,15 +1058,149 @@ onBeforeUnmount(() => {
             <p class="mt-2 text-xs text-slate-300/85">
               Rango recomendado: {{ TRANSITION_DURATION_MIN_MS }}-{{ TRANSITION_DURATION_MAX_MS }} ms.
             </p>
-          </div>
+          </section>
 
-          <p class="text-xs text-slate-300/80">
-            Transform: scale {{ state.transform.scale.toFixed(2) }} | rotate {{ state.transform.rotate }}deg | x {{ state.transform.translateX }} | y {{ state.transform.translateY }}
-          </p>
+          <section
+            v-else
+            :id="contentEditorTabPanelId('filters')"
+            role="tabpanel"
+            :aria-labelledby="contentEditorTabButtonId('filters')"
+            data-testid="monitor-content-panel-filters"
+            class="surface-panel space-y-3"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="section-kicker-muted text-[11px]">Filtros en caliente</p>
+              <label class="inline-flex items-center gap-2 text-xs text-slate-200/90">
+                <input
+                  data-testid="monitor-filter-pipeline-toggle"
+                  type="checkbox"
+                  :checked="state.filterPipeline.enabled"
+                  @change="onFilterPipelineEnabledChange"
+                />
+                Activar filtros
+              </label>
+            </div>
+
+            <div class="space-y-3" data-testid="monitor-filter-panel">
+              <div
+                v-for="entry in filterStageUiModel"
+                :key="entry.id"
+                class="rounded-xl border border-slate-700/70 bg-slate-900/45 p-3"
+              >
+                <div class="mb-2 flex items-center justify-between gap-3">
+                  <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-100">
+                    <input
+                      :data-testid="`monitor-filter-stage-toggle-${entry.id}`"
+                      type="checkbox"
+                      :checked="entry.stage.enabled"
+                      @change="onFilterStageEnabledChange(entry.id, $event)"
+                    />
+                    {{ entry.config.label }}
+                  </label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-slate-300/90">
+                      {{ entry.stage.value.toFixed(2) }}
+                    </span>
+                    <button
+                      type="button"
+                      class="btn-with-icon btn-sm btn-slate-soft"
+                      :data-testid="`monitor-filter-stage-reset-${entry.id}`"
+                      @click="onResetFilterStage(entry.id)"
+                    >
+                      <ArrowPathIcon aria-hidden="true" class="btn-icon" />
+                      Reset
+                    </button>
+                  </div>
+                </div>
+                <input
+                  :data-testid="`monitor-filter-stage-value-${entry.id}`"
+                  type="range"
+                  class="w-full"
+                  :min="entry.config.min"
+                  :max="entry.config.max"
+                  :step="entry.config.step"
+                  :value="entry.stage.value"
+                  @input="onFilterStageValueInput(entry.id, $event)"
+                />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="btn-with-icon btn-sm btn-slate-soft"
+              data-testid="monitor-filter-reset-all"
+              @click="onResetAllFilters"
+            >
+              <ArrowPathIcon aria-hidden="true" class="btn-icon" />
+              Restablecer todos los filtros
+            </button>
+
+            <div class="space-y-2 rounded-xl border border-slate-700/70 bg-slate-900/45 p-3">
+              <p class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-300/90">
+                Presets de filtro
+              </p>
+              <div class="flex flex-wrap items-center gap-2">
+                <input
+                  v-model="filterPresetDraftName"
+                  data-testid="monitor-filter-preset-name-input"
+                  type="text"
+                  class="form-control min-w-[180px] flex-1"
+                  maxlength="60"
+                  placeholder="Ej: Escena calida"
+                />
+                <button
+                  type="button"
+                  data-testid="monitor-filter-preset-save"
+                  class="btn-with-icon btn-sm btn-indigo-soft"
+                  :disabled="filterPresetDraftName.trim().length === 0"
+                  @click="onSaveFilterPreset"
+                >
+                  Guardar preset
+                </button>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <select
+                  v-model="selectedFilterPresetId"
+                  data-testid="monitor-filter-preset-select"
+                  class="form-control min-w-[200px] flex-1"
+                  :disabled="!hasFilterPresets"
+                >
+                  <option value="">{{ hasFilterPresets ? 'Selecciona preset' : 'Sin presets guardados' }}</option>
+                  <option
+                    v-for="preset in state.filterPresets"
+                    :key="preset.id"
+                    :value="preset.id"
+                  >
+                    {{ preset.name }}
+                  </option>
+                </select>
+                <button
+                  type="button"
+                  data-testid="monitor-filter-preset-apply"
+                  class="btn-with-icon btn-sm btn-emerald-soft"
+                  :disabled="selectedFilterPresetId.length === 0"
+                  @click="onApplyFilterPreset"
+                >
+                  Aplicar
+                </button>
+                <button
+                  type="button"
+                  data-testid="monitor-filter-preset-delete"
+                  class="btn-with-icon btn-sm btn-rose-soft"
+                  :disabled="selectedFilterPresetId.length === 0"
+                  @click="onDeleteFilterPreset"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </section>
         </div>
 
         <footer class="app-modal-footer">
           <button
+            v-if="activeContentEditorTab === 'transform'"
             type="button"
             class="btn-with-icon btn-sm btn-slate-soft"
             data-testid="monitor-content-editor-reset"

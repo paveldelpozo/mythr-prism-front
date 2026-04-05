@@ -74,6 +74,53 @@ describe('MonitorControls', () => {
     expect(wrapper.find('[data-testid="monitor-content-editor-modal"]').exists()).toBe(false);
   });
 
+  it('divide el editor en tabs accesibles y muestra reset solo en Transformacion', async () => {
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state: createDefaultMonitorState(),
+        showMonitorUtilities: true
+      }
+    });
+
+    await wrapper.get('[data-testid="monitor-open-content-editor"]').trigger('click');
+
+    expect(wrapper.get('[data-testid="monitor-content-tab-transform"]').attributes('aria-selected')).toBe('true');
+    expect(wrapper.get('[data-testid="monitor-content-panel-transform"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="monitor-content-editor-reset"]').exists()).toBe(true);
+
+    await wrapper.get('[data-testid="monitor-content-tab-transitions"]').trigger('click');
+    expect(wrapper.get('[data-testid="monitor-content-tab-transitions"]').attributes('aria-selected')).toBe('true');
+    expect(wrapper.get('[data-testid="monitor-content-panel-transitions"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="monitor-content-editor-reset"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="monitor-content-tab-filters"]').trigger('click');
+    expect(wrapper.get('[data-testid="monitor-content-tab-filters"]').attributes('aria-selected')).toBe('true');
+    expect(wrapper.get('[data-testid="monitor-content-panel-filters"]').exists()).toBe(true);
+  });
+
+  it('emite acciones de transformacion para rotar 180, escala numerica y paso de posicion', async () => {
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state: createDefaultMonitorState(),
+        showMonitorUtilities: true
+      }
+    });
+
+    await wrapper.get('[data-testid="monitor-open-content-editor"]').trigger('click');
+    await wrapper.get('[data-testid="monitor-content-rotate-180"]').trigger('click');
+    await wrapper.get('[data-testid="monitor-content-scale-input"]').setValue('1.55');
+    await wrapper.get('[data-testid="monitor-content-position-step-input"]').setValue('24');
+    await wrapper.get('[data-testid="monitor-content-move-up"]').trigger('click');
+
+    expect(wrapper.emitted('transform')).toEqual([
+      ['monitor-1', { type: 'rotate', value: 180 }],
+      ['monitor-1', { type: 'scale', value: 0.55 }],
+      ['monitor-1', { type: 'move', value: { x: undefined, y: -24 } }]
+    ]);
+  });
+
   it('mantiene acciones compactas en toolbar y emite utilidades del monitor', async () => {
     const state = createDefaultMonitorState();
     state.isWindowOpen = true;
@@ -414,6 +461,7 @@ describe('MonitorControls', () => {
     });
 
     await wrapper.get('[data-testid="monitor-open-content-editor"]').trigger('click');
+    await wrapper.get('[data-testid="monitor-content-tab-transitions"]').trigger('click');
     await wrapper.get('[data-testid="monitor-transition-type"]').setValue('wipe');
     await wrapper.get('[data-testid="monitor-transition-duration"]').setValue('99999');
 
@@ -421,6 +469,116 @@ describe('MonitorControls', () => {
       ['monitor-1', { type: 'wipe', durationMs: 450 }],
       ['monitor-1', { type: 'cut', durationMs: 5000 }]
     ]);
+  });
+
+  it('permite ajuste rapido de filtros y emite pipeline en caliente', async () => {
+    const state = createDefaultMonitorState();
+    state.filterPipeline.enabled = true;
+
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state,
+        showMonitorUtilities: true
+      }
+    });
+
+    await wrapper.get('[data-testid="monitor-open-content-editor"]').trigger('click');
+    await wrapper.get('[data-testid="monitor-content-tab-filters"]').trigger('click');
+    await wrapper.get('[data-testid="monitor-filter-stage-value-brightness"]').setValue('1.45');
+    await wrapper.get('[data-testid="monitor-filter-stage-toggle-blur"]').setValue(false);
+
+    const events = wrapper.emitted('setFilterPipeline') ?? [];
+    expect(events.length).toBeGreaterThanOrEqual(2);
+
+    const firstPayload = events[0]?.[1] as { enabled: boolean; stages: Array<{ id: string; enabled: boolean; value: number }> };
+    const latestPayload = events.at(-1)?.[1] as { enabled: boolean; stages: Array<{ id: string; enabled: boolean; value: number }> };
+    expect(firstPayload.stages.find((stage) => stage.id === 'brightness')?.value).toBe(1.45);
+    expect(latestPayload.enabled).toBe(true);
+    expect(latestPayload.stages.find((stage) => stage.id === 'blur')?.enabled).toBe(false);
+  });
+
+  it('emite guardar/aplicar/eliminar preset de filtros', async () => {
+    const state = createDefaultMonitorState();
+    state.filterPresets = [
+      {
+        id: 'preset-1',
+        name: 'Escena base',
+        pipeline: state.filterPipeline,
+        createdAt: '2026-04-05T10:00:00.000Z',
+        updatedAt: '2026-04-05T10:00:00.000Z'
+      }
+    ];
+
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state,
+        showMonitorUtilities: true
+      }
+    });
+
+    await wrapper.get('[data-testid="monitor-open-content-editor"]').trigger('click');
+    await wrapper.get('[data-testid="monitor-content-tab-filters"]').trigger('click');
+
+    await wrapper.get('[data-testid="monitor-filter-preset-name-input"]').setValue('Look teatrico');
+    await wrapper.get('[data-testid="monitor-filter-preset-save"]').trigger('click');
+
+    await wrapper.get('[data-testid="monitor-filter-preset-select"]').setValue('preset-1');
+    await wrapper.get('[data-testid="monitor-filter-preset-apply"]').trigger('click');
+    await wrapper.get('[data-testid="monitor-filter-preset-delete"]').trigger('click');
+
+    expect(wrapper.emitted('saveFilterPreset')).toEqual([['monitor-1', 'Look teatrico']]);
+    expect(wrapper.emitted('applyFilterPreset')).toEqual([['monitor-1', 'preset-1']]);
+    expect(wrapper.emitted('deleteFilterPreset')).toEqual([['monitor-1', 'preset-1']]);
+  });
+
+  it('permite reset individual y global de filtros', async () => {
+    const state = createDefaultMonitorState();
+    state.filterPipeline.enabled = true;
+    state.filterPipeline.stages = state.filterPipeline.stages.map((stage) => {
+      if (stage.id === 'brightness') {
+        return { ...stage, value: 2.2 };
+      }
+      if (stage.id === 'contrast') {
+        return { ...stage, value: 2.4 };
+      }
+      if (stage.id === 'saturate') {
+        return { ...stage, value: 2.6 };
+      }
+      if (stage.id === 'grayscale') {
+        return { ...stage, value: 0.6 };
+      }
+
+      return { ...stage, value: 8 };
+    });
+
+    const wrapper = mount(MonitorControls, {
+      props: {
+        monitorId: 'monitor-1',
+        state,
+        showMonitorUtilities: true
+      }
+    });
+
+    await wrapper.get('[data-testid="monitor-open-content-editor"]').trigger('click');
+    await wrapper.get('[data-testid="monitor-content-tab-filters"]').trigger('click');
+
+    await wrapper.get('[data-testid="monitor-filter-stage-reset-brightness"]').trigger('click');
+    await wrapper.get('[data-testid="monitor-filter-reset-all"]').trigger('click');
+
+    const events = wrapper.emitted('setFilterPipeline') ?? [];
+    expect(events.length).toBe(2);
+
+    const firstPayload = events[0]?.[1] as { stages: Array<{ id: string; value: number }> };
+    expect(firstPayload.stages.find((stage) => stage.id === 'brightness')?.value).toBe(1);
+
+    const latestPayload = events.at(-1)?.[1] as { stages: Array<{ id: string; value: number }> };
+    expect(latestPayload.stages.find((stage) => stage.id === 'brightness')?.value).toBe(1);
+    expect(latestPayload.stages.find((stage) => stage.id === 'contrast')?.value).toBe(1);
+    expect(latestPayload.stages.find((stage) => stage.id === 'saturate')?.value).toBe(1);
+    expect(latestPayload.stages.find((stage) => stage.id === 'grayscale')?.value).toBe(0);
+    expect(latestPayload.stages.find((stage) => stage.id === 'blur')?.value).toBe(0);
   });
 
   it('emite asignacion y controles de URL externa', async () => {

@@ -13,6 +13,7 @@ import { computed } from 'vue';
 import MonitorCard from './MonitorCard.vue';
 import AppCheckbox from './ui/AppCheckbox.vue';
 import type { MonitorDescriptor, MonitorStateMap, MonitorThumbnailStateMap } from '../types/broadcaster';
+import type { MonitorFilterPipeline } from '../types/filters';
 import type { ContentTransition } from '../types/transitions';
 
 const emit = defineEmits<{
@@ -45,6 +46,10 @@ const emit = defineEmits<{
     action: { type: 'rotate'; value: number } | { type: 'scale'; value: number } | { type: 'move'; value: { x?: number; y?: number } } | { type: 'reset' }
   ];
   setContentTransition: [monitorId: string, transition: ContentTransition];
+  setFilterPipeline: [monitorId: string, pipeline: MonitorFilterPipeline];
+  saveFilterPreset: [monitorId: string, presetName: string];
+  applyFilterPreset: [monitorId: string, presetId: string];
+  deleteFilterPreset: [monitorId: string, presetId: string];
   openRemotePairing: [];
   disconnectRemote: [monitorId: string];
 }>();
@@ -207,6 +212,10 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
         @rename-monitor="(id, name) => emit('renameMonitor', id, name)"
         @transform="(id, action) => emit('transform', id, action)"
         @set-content-transition="(id, transition) => emit('setContentTransition', id, transition)"
+        @set-filter-pipeline="(id, pipeline) => emit('setFilterPipeline', id, pipeline)"
+        @save-filter-preset="(id, name) => emit('saveFilterPreset', id, name)"
+        @apply-filter-preset="(id, presetId) => emit('applyFilterPreset', id, presetId)"
+        @delete-filter-preset="(id, presetId) => emit('deleteFilterPreset', id, presetId)"
         @disconnect-remote="emit('disconnectRemote', $event)"
       />
     </div>

@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import type { MonitorDescriptor, MonitorStateMap, MonitorThumbnailStateMap } from '../types/broadcaster';
+import { createDefaultFilterPipeline } from '../types/filters';
 import MonitorList from './MonitorList.vue';
 
 const monitors: MonitorDescriptor[] = [
@@ -26,6 +27,8 @@ const states: MonitorStateMap = {
   'monitor-1': {
     transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
     contentTransition: { type: 'cut', durationMs: 450 },
+    filterPipeline: createDefaultFilterPipeline(),
+    filterPresets: [],
     imageDataUrl: null,
     activeMediaItem: null,
     isWindowOpen: true,

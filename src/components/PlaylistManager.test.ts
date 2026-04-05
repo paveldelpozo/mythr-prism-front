@@ -4,6 +4,7 @@ import PlaylistManager from './PlaylistManager.vue';
 import AppFileDropzone from './ui/AppFileDropzone.vue';
 import * as videoThumbnailService from '../services/videoThumbnail';
 import type { MonitorDescriptor, MonitorStateMap } from '../types/broadcaster';
+import { createDefaultFilterPipeline } from '../types/filters';
 import type { MultimediaItem, PlaylistPlaybackState } from '../types/playlist';
 import type { VideoSyncPlan } from '../types/videoSync';
 
@@ -70,6 +71,8 @@ const createMonitorStates = (): MonitorStateMap => ({
   m1: {
     transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
     contentTransition: { type: 'cut', durationMs: 450 },
+    filterPipeline: createDefaultFilterPipeline(),
+    filterPresets: [],
     imageDataUrl: null,
     activeMediaItem: null,
     isWindowOpen: true,
@@ -86,6 +89,8 @@ const createMonitorStates = (): MonitorStateMap => ({
   m2: {
     transform: { rotate: 0, scale: 1, translateX: 0, translateY: 0 },
     contentTransition: { type: 'cut', durationMs: 450 },
+    filterPipeline: createDefaultFilterPipeline(),
+    filterPresets: [],
     imageDataUrl: null,
     activeMediaItem: null,
     isWindowOpen: false,

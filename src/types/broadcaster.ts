@@ -3,6 +3,11 @@ import {
   DEFAULT_CONTENT_TRANSITION,
   type ContentTransition
 } from './transitions';
+import {
+  createDefaultFilterPipeline,
+  type MonitorFilterPipeline,
+  type MonitorFilterPreset
+} from './filters';
 
 export interface MonitorTransform {
   rotate: number;
@@ -30,6 +35,8 @@ export interface MonitorDescriptor {
 export interface MonitorRuntimeState {
   transform: MonitorTransform;
   contentTransition: ContentTransition;
+  filterPipeline: MonitorFilterPipeline;
+  filterPresets: MonitorFilterPreset[];
   imageDataUrl: string | null;
   activeMediaItem: MultimediaItem | null;
   isWindowOpen: boolean;
@@ -63,6 +70,8 @@ export const DEFAULT_TRANSFORM: MonitorTransform = {
 export const createDefaultMonitorState = (): MonitorRuntimeState => ({
   transform: { ...DEFAULT_TRANSFORM },
   contentTransition: { ...DEFAULT_CONTENT_TRANSITION },
+  filterPipeline: createDefaultFilterPipeline(),
+  filterPresets: [],
   imageDataUrl: null,
   activeMediaItem: null,
   isWindowOpen: false,

@@ -510,6 +510,84 @@ describe('composables/useMultiMonitorBroadcaster mirror mode', () => {
     });
   });
 
+  it('envia cambios de filtros en caliente sin resetear contenido actual', async () => {
+    const { popups, mirrorTargetId } = setupWindowManagementMocks();
+    const api = createHarness();
+
+    await api.loadMonitors();
+    api.openWindowForMonitor(mirrorTargetId);
+
+    api.setImageForMonitor(mirrorTargetId, 'data:image/png;base64,HOT_FILTER_BASE');
+
+    const popup = popups[0];
+    popup.postMessage.mockClear();
+
+    api.setFilterPipelineForMonitor(mirrorTargetId, {
+      enabled: true,
+      stages: [
+        { id: 'brightness', enabled: true, value: 1.2 },
+        { id: 'contrast', enabled: true, value: 1.1 },
+        { id: 'saturate', enabled: true, value: 0.8 },
+        { id: 'grayscale', enabled: true, value: 0.2 },
+        { id: 'blur', enabled: true, value: 3 }
+      ]
+    });
+
+    const sentMessages = popup.postMessage.mock.calls.map(([message]) => message);
+
+    expect(sentMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'SET_FILTER_PIPELINE',
+          monitorId: mirrorTargetId,
+          payload: expect.objectContaining({
+            pipeline: expect.objectContaining({ enabled: true })
+          })
+        })
+      ])
+    );
+    expect(sentMessages.find((message) => message.type === 'SET_IMAGE')).toBeUndefined();
+    expect(sentMessages.find((message) => message.type === 'SET_MEDIA')).toBeUndefined();
+  });
+
+  it('gestiona guardar/aplicar/eliminar presets de filtros por monitor', () => {
+    const api = createHarness();
+
+    api.setFilterPipelineForMonitor('m1', {
+      enabled: true,
+      stages: [
+        { id: 'brightness', enabled: true, value: 1.3 },
+        { id: 'contrast', enabled: true, value: 1.2 },
+        { id: 'saturate', enabled: true, value: 1 },
+        { id: 'grayscale', enabled: false, value: 0 },
+        { id: 'blur', enabled: false, value: 0 }
+      ]
+    });
+
+    const savedPreset = api.saveFilterPresetForMonitor('m1', 'Escena Calida');
+    expect(savedPreset).not.toBeNull();
+    expect(api.monitorStates.m1?.filterPresets).toHaveLength(1);
+
+    api.setFilterPipelineForMonitor('m1', {
+      enabled: true,
+      stages: [
+        { id: 'brightness', enabled: true, value: 0.7 },
+        { id: 'contrast', enabled: true, value: 0.8 },
+        { id: 'saturate', enabled: true, value: 1.5 },
+        { id: 'grayscale', enabled: false, value: 0 },
+        { id: 'blur', enabled: false, value: 0 }
+      ]
+    });
+
+    const applied = api.applyFilterPresetForMonitor('m1', savedPreset?.id ?? 'missing');
+    expect(applied).toBe(true);
+    expect(api.monitorStates.m1?.filterPipeline.stages.find((stage) => stage.id === 'brightness')?.value).toBe(1.3);
+
+    const deleted = api.deleteFilterPresetForMonitor('m1', savedPreset?.id ?? 'missing');
+    expect(deleted).toBe(true);
+    expect(api.monitorStates.m1?.filterPresets).toEqual([]);
+  });
+
   it('rechaza URL bloqueada y expone feedback operativo', () => {
     const api = createHarness();
 
