@@ -1,21 +1,16 @@
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { io, type Socket } from 'socket.io-client';
 import type { MasterToSlaveMessage } from '../types/messages';
+import { MESSAGE_CHANNEL } from '../types/messages';
+import { resolveRemoteBackendUrl, resolveRemotePublicUrl } from '../utils/remoteBackend';
+import { buildRemoteJoinUrl } from '../utils/remotePairing';
 import type {
   PairingRoomInfo,
   RemoteConnectionState,
   RemoteControlEnvelope,
+  RemoteHostChannelMessage,
   RemoteMonitorDescriptor
 } from '../types/remoteSync';
-
-const buildSocketUrl = (): string => {
-  const configured = import.meta.env.VITE_REMOTE_BACKEND_URL;
-  if (typeof configured === 'string' && configured.trim().length > 0) {
-    return configured;
-  }
-
-  return window.location.origin;
-};
 
 interface HostPeerEntry {
   peer: RTCPeerConnection;
@@ -26,6 +21,7 @@ interface HostPeerEntry {
 export const useRemoteHostSync = () => {
   const socket = ref<Socket | null>(null);
   const room = ref<PairingRoomInfo | null>(null);
+  const nowMs = ref(Date.now());
   const isConnecting = ref(false);
   const pairingError = ref<string | null>(null);
   const pendingApprovals = ref<Array<{ clientSocketId: string; requestedAtMs: number }>>([]);
@@ -33,13 +29,120 @@ export const useRemoteHostSync = () => {
 
   const peerByRemoteMonitorId = new Map<string, HostPeerEntry>();
   const remoteMonitorIdByClientSocketId = new Map<string, string>();
+  let roomCountdownIntervalId: ReturnType<typeof window.setInterval> | null = null;
+
+  const stopRoomCountdown = (): void => {
+    if (roomCountdownIntervalId === null) {
+      return;
+    }
+
+    window.clearInterval(roomCountdownIntervalId);
+    roomCountdownIntervalId = null;
+  };
+
+  const closeRoom = (): void => {
+    stopRoomCountdown();
+    room.value = null;
+    pendingApprovals.value = [];
+    remoteMonitors.value = [];
+
+    peerByRemoteMonitorId.forEach((entry) => {
+      entry.dataChannel?.close();
+      entry.peer.close();
+    });
+    peerByRemoteMonitorId.clear();
+    remoteMonitorIdByClientSocketId.clear();
+  };
+
+  const removeRemoteMonitor = (remoteMonitorId: string): void => {
+    const entry = peerByRemoteMonitorId.get(remoteMonitorId);
+    if (entry) {
+      entry.dataChannel?.close();
+      entry.peer.close();
+      peerByRemoteMonitorId.delete(remoteMonitorId);
+    }
+
+    remoteMonitors.value = remoteMonitors.value.filter((monitor) => monitor.id !== remoteMonitorId);
+
+    Array.from(remoteMonitorIdByClientSocketId.entries()).forEach(([clientSocketId, mappedRemoteMonitorId]) => {
+      if (mappedRemoteMonitorId === remoteMonitorId) {
+        remoteMonitorIdByClientSocketId.delete(clientSocketId);
+      }
+    });
+  };
+
+  const updateRemoteFullscreenCapability = (
+    remoteMonitorId: string,
+    payload: { supported: boolean; available: boolean }
+  ): void => {
+    remoteMonitors.value = remoteMonitors.value.map((monitor) =>
+      monitor.id === remoteMonitorId
+        ? {
+            ...monitor,
+            isFullscreenSupported: payload.supported,
+            isFullscreenAvailable: payload.supported && payload.available
+          }
+        : monitor
+    );
+  };
+
+  const isRemoteHostChannelMessage = (value: unknown): value is RemoteHostChannelMessage => {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const raw = value as Record<string, unknown>;
+    if (raw.type !== 'REMOTE_FULLSCREEN_CAPABILITY') {
+      return false;
+    }
+
+    if (!raw.payload || typeof raw.payload !== 'object') {
+      return false;
+    }
+
+    const payload = raw.payload as Record<string, unknown>;
+    return typeof payload.supported === 'boolean' && typeof payload.available === 'boolean';
+  };
+
+  const expireRoom = (): void => {
+    if (!room.value) {
+      return;
+    }
+
+    closeRoom();
+    pairingError.value = 'La sala remota expiro por inactividad (5 minutos).';
+  };
+
+  const tickRoomCountdown = (): void => {
+    nowMs.value = Date.now();
+    if (!room.value) {
+      stopRoomCountdown();
+      return;
+    }
+
+    if (nowMs.value >= room.value.expiresAtMs) {
+      expireRoom();
+    }
+  };
+
+  const startRoomCountdown = (): void => {
+    stopRoomCountdown();
+    tickRoomCountdown();
+    if (!room.value) {
+      return;
+    }
+
+    roomCountdownIntervalId = window.setInterval(() => {
+      tickRoomCountdown();
+    }, 1000);
+  };
 
   const ensureSocket = (): Socket => {
     if (socket.value) {
       return socket.value;
     }
 
-    const nextSocket = io(buildSocketUrl(), {
+    const nextSocket = io(resolveRemoteBackendUrl(), {
       transports: ['websocket', 'polling']
     });
 
@@ -48,6 +151,7 @@ export const useRemoteHostSync = () => {
     });
 
     nextSocket.on('pairing:approval-requested', (payload: { clientSocketId: string; requestedAtMs: number }) => {
+      stopRoomCountdown();
       pendingApprovals.value = [
         ...pendingApprovals.value.filter((entry) => entry.clientSocketId !== payload.clientSocketId),
         payload
@@ -55,6 +159,7 @@ export const useRemoteHostSync = () => {
     });
 
     nextSocket.on('pairing:client-paired', async (payload: { remoteMonitorId: string; clientSocketId: string }) => {
+      stopRoomCountdown();
       remoteMonitorIdByClientSocketId.set(payload.clientSocketId, payload.remoteMonitorId);
       pendingApprovals.value = pendingApprovals.value.filter(
         (entry) => entry.clientSocketId !== payload.clientSocketId
@@ -66,7 +171,9 @@ export const useRemoteHostSync = () => {
           id: payload.remoteMonitorId,
           label: `Remoto ${remoteMonitors.value.length + 1}`,
           state: 'connecting',
-          socketId: payload.clientSocketId
+          socketId: payload.clientSocketId,
+          isFullscreenSupported: false,
+          isFullscreenAvailable: false
         }
       ];
 
@@ -87,16 +194,11 @@ export const useRemoteHostSync = () => {
         return;
       }
 
-      remoteMonitors.value = remoteMonitors.value.map((monitor) =>
-        monitor.id === remoteMonitorId
-          ? { ...monitor, state: 'down' }
-          : monitor
-      );
+      removeRemoteMonitor(remoteMonitorId);
     });
 
     nextSocket.on('room:expired', () => {
-      room.value = null;
-      pairingError.value = 'La sala remota expiro por inactividad (5 minutos).';
+      expireRoom();
     });
 
     nextSocket.on('signal:answer', async (payload: { fromSocketId: string; payload: RTCSessionDescriptionInit }) => {
@@ -165,6 +267,26 @@ export const useRemoteHostSync = () => {
       );
     };
 
+    dataChannel.onmessage = (event) => {
+      let parsed: unknown = null;
+      try {
+        parsed = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+
+      if (!isRemoteHostChannelMessage(parsed)) {
+        return;
+      }
+
+      if (parsed.type === 'REMOTE_FULLSCREEN_CAPABILITY') {
+        updateRemoteFullscreenCapability(remoteMonitorId, {
+          supported: parsed.payload.supported,
+          available: parsed.payload.available
+        });
+      }
+    };
+
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
 
@@ -200,8 +322,13 @@ export const useRemoteHostSync = () => {
           roomId: result.roomId,
           pairCode: result.pairCode,
           expiresAtMs: result.expiresAtMs,
-          joinUrl: `${window.location.origin}/remote?roomId=${encodeURIComponent(result.roomId)}`
+          joinUrl: buildRemoteJoinUrl({
+            baseUrl: resolveRemotePublicUrl(),
+            roomId: result.roomId,
+            pairCode: result.pairCode
+          })
         };
+        startRoomCountdown();
         isConnecting.value = false;
         resolve();
       });
@@ -243,17 +370,27 @@ export const useRemoteHostSync = () => {
     });
   };
 
-  const closeRoom = (): void => {
-    room.value = null;
-    pendingApprovals.value = [];
-    remoteMonitors.value = [];
+  const disconnectRemoteMonitor = (remoteMonitorId: string): void => {
+    const entry = peerByRemoteMonitorId.get(remoteMonitorId);
+    if (!entry) {
+      removeRemoteMonitor(remoteMonitorId);
+      return;
+    }
 
-    peerByRemoteMonitorId.forEach((entry) => {
-      entry.dataChannel?.close();
-      entry.peer.close();
+    sendControlMessage({
+      remoteMonitorId,
+      message: {
+        channel: MESSAGE_CHANNEL,
+        type: 'REQUEST_CLOSE',
+        instanceToken: `${remoteMonitorId}-host-disconnect-${Date.now()}`,
+        monitorId: remoteMonitorId,
+        payload: {
+          reason: 'Host requested remote disconnect'
+        }
+      } as MasterToSlaveMessage
     });
-    peerByRemoteMonitorId.clear();
-    remoteMonitorIdByClientSocketId.clear();
+
+    removeRemoteMonitor(remoteMonitorId);
   };
 
   const roomExpiresInMs = computed(() => {
@@ -262,7 +399,7 @@ export const useRemoteHostSync = () => {
       return 0;
     }
 
-    return Math.max(0, activeRoom.expiresAtMs - Date.now());
+    return Math.max(0, activeRoom.expiresAtMs - nowMs.value);
   });
 
   onBeforeUnmount(() => {
@@ -280,6 +417,7 @@ export const useRemoteHostSync = () => {
     createPairingRoom,
     approveClient,
     sendControlMessage,
+    disconnectRemoteMonitor,
     closeRoom
   };
 };

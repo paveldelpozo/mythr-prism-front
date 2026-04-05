@@ -47,6 +47,7 @@ const {
   createPairingRoom,
   approveClient,
   sendControlMessage,
+  disconnectRemoteMonitor,
   closeRoom: closeRemotePairingRoom
 } = useRemoteHostSync();
 
@@ -392,6 +393,20 @@ const visibleMonitors = computed(() => {
 
 const knownMonitorIds = computed(() => new Set(monitors.value.map((monitor) => monitor.id)));
 const remoteMonitorIdSet = computed(() => new Set(remoteMonitors.value.map((monitor) => monitor.id)));
+const remoteMonitorMetaById = computed(() =>
+  remoteMonitors.value.reduce<Record<string, {
+    isConnected: boolean;
+    isFullscreenSupported: boolean;
+    isFullscreenAvailable: boolean;
+  }>>((next, monitor) => {
+    next[monitor.id] = {
+      isConnected: monitor.state !== 'down',
+      isFullscreenSupported: monitor.isFullscreenSupported,
+      isFullscreenAvailable: monitor.isFullscreenAvailable
+    };
+    return next;
+  }, {})
+);
 
 const selectedTargetMonitorIds = computed(() =>
   sanitizeTargetMonitorIds(playlistPlaybackState.value.targetMonitorIds)
@@ -500,6 +515,40 @@ const closeWindowOnMonitor = (monitorId: string) => {
   }
 
   closeWindow(monitorId);
+};
+
+const disconnectRemoteMonitorFromHost = (monitorId: string) => {
+  if (!remoteMonitorIdSet.value.has(monitorId)) {
+    return;
+  }
+
+  disconnectRemoteMonitor(monitorId);
+};
+
+const requestFullscreenOnMonitor = (monitorId: string) => {
+  const remoteMonitor = remoteMonitors.value.find((monitor) => monitor.id === monitorId) ?? null;
+  if (!remoteMonitor) {
+    requestFullscreen(monitorId);
+    return;
+  }
+
+  if (!remoteMonitor.isFullscreenSupported) {
+    if (monitorStates[monitorId]) {
+      monitorStates[monitorId].lastError = null;
+      monitorStates[monitorId].requiresFullscreenInteraction = false;
+    }
+    return;
+  }
+
+  if (!remoteMonitor.isFullscreenAvailable) {
+    if (monitorStates[monitorId]) {
+      monitorStates[monitorId].lastError = null;
+      monitorStates[monitorId].requiresFullscreenInteraction = false;
+    }
+    return;
+  }
+
+  requestFullscreen(monitorId);
 };
 
 const uploadImage = (
@@ -876,8 +925,12 @@ watch(remoteMonitors, (nextRemoteMonitors) => {
       return;
     }
 
-    monitorStates[remoteMonitor.id].isWindowOpen = true;
+    monitorStates[remoteMonitor.id].isWindowOpen = remoteMonitor.state !== 'down';
     monitorStates[remoteMonitor.id].isSlaveReady = remoteMonitor.state === 'paired';
+    if (!remoteMonitor.isFullscreenSupported || !remoteMonitor.isFullscreenAvailable) {
+      monitorStates[remoteMonitor.id].requiresFullscreenInteraction = false;
+      monitorStates[remoteMonitor.id].isFullscreen = false;
+    }
     monitorStates[remoteMonitor.id].lastError =
       remoteMonitor.state === 'down'
         ? 'El monitor remoto perdio conexion.'
@@ -1000,6 +1053,7 @@ onBeforeUnmount(() => {
           :mirror-active-target-count="mirrorStatus.activeTargetCount"
           :mirror-unavailable-target-ids="mirrorStatus.unavailableTargetIds"
           :mirror-last-error="mirrorStatus.lastError"
+          :remote-monitor-meta-by-id="remoteMonitorMetaById"
           :is-file-import-blocked="hasActiveFullscreenSlave"
           :file-import-blocked-message="FILE_IMPORT_BLOCK_MESSAGE"
           @update:show-only-projectable="showOnlyProjectable = $event"
@@ -1014,8 +1068,9 @@ onBeforeUnmount(() => {
           @close-all="closeAllWindows"
           @open-window="openWindowOnMonitor"
           @close-window="closeWindowOnMonitor"
+          @disconnect-remote="disconnectRemoteMonitorFromHost"
           @open-remote-pairing="openRemotePairingModal"
-          @request-fullscreen="requestFullscreen"
+          @request-fullscreen="requestFullscreenOnMonitor"
           @flash-monitor-id="flashMonitorId"
           @upload-image="uploadImage"
           @clear-image="(id) => setImageForMonitor(id, null)"

@@ -46,6 +46,7 @@ const emit = defineEmits<{
   ];
   setContentTransition: [monitorId: string, transition: ContentTransition];
   openRemotePairing: [];
+  disconnectRemote: [monitorId: string];
 }>();
 
 const props = defineProps<{
@@ -69,6 +70,11 @@ const props = defineProps<{
   mirrorActiveTargetCount: number;
   mirrorUnavailableTargetIds: string[];
   mirrorLastError: string | null;
+  remoteMonitorMetaById?: Record<string, {
+    isConnected: boolean;
+    isFullscreenSupported: boolean;
+    isFullscreenAvailable: boolean;
+  }>;
   isFileImportBlocked?: boolean;
   fileImportBlockedMessage?: string;
 }>();
@@ -180,6 +186,9 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
         :monitor="monitor"
         :state="props.states[monitor.id]"
         :thumbnail="props.thumbnails[monitor.id] ?? { imageDataUrl: null, capturedAtMs: null }"
+        :is-remote-connected="props.remoteMonitorMetaById?.[monitor.id]?.isConnected ?? false"
+        :is-remote-fullscreen-supported="props.remoteMonitorMetaById?.[monitor.id]?.isFullscreenSupported ?? false"
+        :is-remote-fullscreen-available="props.remoteMonitorMetaById?.[monitor.id]?.isFullscreenAvailable ?? false"
         :is-file-import-blocked="props.isFileImportBlocked"
         :file-import-blocked-message="props.fileImportBlockedMessage"
         @open-window="emit('openWindow', $event)"
@@ -198,6 +207,7 @@ const onMirrorTargetToggle = (monitorId: string, selected: boolean) => {
         @rename-monitor="(id, name) => emit('renameMonitor', id, name)"
         @transform="(id, action) => emit('transform', id, action)"
         @set-content-transition="(id, transition) => emit('setContentTransition', id, transition)"
+        @disconnect-remote="emit('disconnectRemote', $event)"
       />
     </div>
 

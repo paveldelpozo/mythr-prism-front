@@ -55,6 +55,40 @@
     @apply mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-2 text-sm text-slate-100;
   }
 
+  .remote-app-root {
+    touch-action: pan-x pan-y;
+  }
+
+  .remote-pair-code-input {
+    @apply text-base;
+  }
+
+  .remote-pairing-brand {
+    @apply flex items-center gap-3;
+  }
+
+  .remote-pairing-brand-logo {
+    @apply h-12 w-auto shrink-0 object-contain;
+  }
+
+  .remote-viewer-toolbar {
+    @apply absolute top-4 z-30 flex items-center gap-2 rounded-2xl bg-slate-900/70 px-3 py-2 text-xs;
+  }
+
+  .remote-viewer-toolbar--right {
+    @apply right-4;
+  }
+
+  .remote-toolbar-fade-enter-active,
+  .remote-toolbar-fade-leave-active {
+    @apply transition-opacity duration-200;
+  }
+
+  .remote-toolbar-fade-enter-from,
+  .remote-toolbar-fade-leave-to {
+    @apply opacity-0;
+  }
+
   .form-control:disabled {
     @apply cursor-not-allowed opacity-60;
   }
@@ -136,6 +170,21 @@
 
   .app-header-actions {
     @apply w-full md:w-auto;
+  }
+
+  .app-header-brand {
+    @apply flex min-w-0 items-stretch gap-3;
+  }
+
+  .app-header-brand-logo {
+    @apply h-full w-auto shrink-0 object-contain;
+    max-height: 4.0rem;
+  }
+
+  @media (max-width: 768px) {
+    .app-header-brand-logo {
+      max-height: 3.0rem;
+    }
   }
 
   .app-tab-btn {
@@ -434,6 +483,18 @@
 
   .app-modal-close-btn {
     @apply inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-600/70 text-slate-200 transition hover:bg-slate-800;
+  }
+
+  .remote-pairing-qr-shell {
+    @apply rounded-2xl bg-slate-900/70 p-2;
+  }
+
+  .remote-pairing-qr-frame {
+    @apply rounded-xl bg-white p-3;
+  }
+
+  .remote-pairing-qr-image {
+    @apply block h-auto w-full rounded-lg;
   }
 
   .form-row {

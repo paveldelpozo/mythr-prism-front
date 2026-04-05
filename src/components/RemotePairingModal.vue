@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { QrCodeIcon, XMarkIcon } from '@heroicons/vue/24/outline';
+import { ClipboardDocumentIcon, QrCodeIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 import type { PairingRoomInfo } from '../types/remoteSync';
 
 const props = defineProps<{
@@ -19,6 +19,76 @@ const emit = defineEmits<{
 }>();
 
 const closeButtonRef = ref<HTMLButtonElement | null>(null);
+const copyFeedback = ref<{ type: 'success' | 'error'; message: string } | null>(null);
+const copyFeedbackTimeoutId = ref<ReturnType<typeof window.setTimeout> | null>(null);
+
+const clearCopyFeedback = () => {
+  if (copyFeedbackTimeoutId.value !== null) {
+    window.clearTimeout(copyFeedbackTimeoutId.value);
+    copyFeedbackTimeoutId.value = null;
+  }
+  copyFeedback.value = null;
+};
+
+const setCopyFeedback = (type: 'success' | 'error', message: string) => {
+  clearCopyFeedback();
+  copyFeedback.value = { type, message };
+  copyFeedbackTimeoutId.value = window.setTimeout(() => {
+    copyFeedback.value = null;
+    copyFeedbackTimeoutId.value = null;
+  }, 2500);
+};
+
+const copyWithLegacyFallback = (text: string): boolean => {
+  const helper = document.createElement('textarea');
+  helper.value = text;
+  helper.setAttribute('readonly', 'true');
+  helper.style.position = 'fixed';
+  helper.style.left = '-9999px';
+  helper.style.opacity = '0';
+  document.body.appendChild(helper);
+
+  let copied = false;
+  try {
+    helper.focus();
+    helper.select();
+    copied = document.execCommand('copy');
+  } catch {
+    copied = false;
+  } finally {
+    helper.remove();
+  }
+
+  return copied;
+};
+
+const copyPairCode = async () => {
+  const pairCode = props.room?.pairCode?.trim();
+  if (!pairCode) {
+    setCopyFeedback('error', 'No se pudo copiar');
+    return;
+  }
+
+  let copied = false;
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(pairCode);
+      copied = true;
+    } catch {
+      copied = copyWithLegacyFallback(pairCode);
+    }
+  } else {
+    copied = copyWithLegacyFallback(pairCode);
+  }
+
+  if (copied) {
+    setCopyFeedback('success', 'Codigo copiado');
+    return;
+  }
+
+  setCopyFeedback('error', 'No se pudo copiar. Copialo manualmente.');
+};
+
 const expiresInLabel = computed(() => {
   const totalSeconds = Math.ceil(props.expiresInMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -56,10 +126,12 @@ watch(() => props.open, (nextOpen) => {
 watch(() => props.open, (nextOpen) => {
   if (!nextOpen) {
     document.body.style.overflow = '';
+    clearCopyFeedback();
     return;
   }
 
   document.body.style.overflow = 'hidden';
+  clearCopyFeedback();
 });
 
 window.addEventListener('keydown', onWindowKeydown);
@@ -67,6 +139,7 @@ window.addEventListener('keydown', onWindowKeydown);
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onWindowKeydown);
   document.body.style.overflow = '';
+  clearCopyFeedback();
 });
 </script>
 
@@ -112,8 +185,10 @@ onBeforeUnmount(() => {
             </p>
 
             <div class="grid gap-4 md:grid-cols-[280px_1fr]">
-              <div class="rounded-2xl bg-slate-900/70 p-2">
-                <img v-if="qrUrl" :src="qrUrl" alt="QR de acceso remoto" class="h-auto w-full rounded-xl">
+              <div class="remote-pairing-qr-shell">
+                <div class="remote-pairing-qr-frame">
+                  <img v-if="qrUrl" :src="qrUrl" alt="QR de acceso remoto" class="remote-pairing-qr-image">
+                </div>
               </div>
 
               <div class="space-y-3">
@@ -121,7 +196,30 @@ onBeforeUnmount(() => {
                 <input class="form-control" :value="room.joinUrl" readonly>
 
                 <p class="text-xs text-slate-300/85">Codigo para cliente</p>
-                <input class="form-control font-mono tracking-[0.2em]" :value="room.pairCode" readonly>
+                <div class="flex flex-wrap items-center gap-2">
+                  <input class="form-control flex-1 font-mono tracking-[0.2em]" :value="room.pairCode" readonly>
+                  <button
+                    type="button"
+                    class="btn-with-icon btn-sm btn-slate-soft"
+                    data-testid="remote-pairing-copy-code"
+                    aria-label="Copiar codigo de cliente"
+                    title="Copiar codigo de cliente"
+                    @click="copyPairCode"
+                  >
+                    <ClipboardDocumentIcon aria-hidden="true" class="btn-icon" />
+                    Copiar codigo
+                  </button>
+                </div>
+                <p
+                  v-if="copyFeedback"
+                  data-testid="remote-pairing-copy-feedback"
+                  role="status"
+                  aria-live="polite"
+                  class="text-xs"
+                  :class="copyFeedback.type === 'success' ? 'text-emerald-200' : 'text-amber-200'"
+                >
+                  {{ copyFeedback.message }}
+                </p>
               </div>
             </div>
 

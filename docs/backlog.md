@@ -1,13 +1,13 @@
 # Backlog y seguimiento del proyecto Mythr Prism
 
-Ultima actualizacion: 2026-04-03
+Ultima actualizacion: 2026-04-05
 
 ## Resumen
 
 Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para proyeccion/control de contenido multi-monitor.
 
 - Nota Mantenimiento (2026-03-31): se completo la reestructuracion a monorepo PNPM; el frontend se movio a `mythr-prism-front/`, se agrego scaffold `mythr-prism-back/` y la orquestacion global queda en la raiz (`README.md`, `package.json`, `pnpm-workspace.yaml`). Este backlog continua en `mythr-prism-front/docs/backlog.md`.
-- Nota Planificacion (2026-04-03): se define plan de implementacion por fases para `Monitor Virtual Remoto (Cloud Sync)` (front+back), con decisiones de arquitectura, estrategia TLS local/produccion, ramas incrementales y estado `aprobado pendiente de ejecucion` (sin implementar codigo funcional en esta iteracion).
+- Nota Entrega (2026-04-05): `Monitor Virtual Remoto (Cloud Sync)` implementado en front+back con pairing por QR/codigo, WebRTC para transporte remoto, estados de conexion y soporte operativo para multiples monitores remotos por sesion.
 - Nota Roadmap (2026-03-31): cierre formal de MVP completado al 100%; a partir de este punto el foco operativo pasa a V1.
 - Nota UX (2026-03-30): en Playlist se reforzo comportamiento operativo de modales con overlay fijo + bloqueo de scroll de fondo, y se aplico truncado visual de `source` largos (incluye data URI) manteniendo valor completo por `title`.
 - Nota Bugfix/UX (2026-03-30): se robustecio el manejo de fullscreen en ventanas esclavas frente a salidas forzadas por navegador/SO (ej. al abrir file picker en la ventana principal): ahora se detecta perdida externa via `fullscreenchange`, se conserva la intencion de fullscreen por monitor, se habilita CTA de reactivacion rapida en la esclava (`Reactivar Fullscreen`) y el master muestra feedback explicito con los monitores afectados.
@@ -355,9 +355,9 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
     - Complejidad de compatibilidad de fuentes existentes: mitigar con rollout por feature flag y matriz de pruebas por fuente.
     - Fullscreen/kiosko en navegadores moviles: mitigar con UX explicita de limitaciones y reintento guiado.
 
-### Plan de implementacion aprobado pendiente de ejecucion (V1 - Cloud Sync)
+### Plan de implementacion ejecutado (V1 - Cloud Sync)
 
-- Estado del plan: `aprobado pendiente de OK final del usuario`.
+- Estado del plan: `ejecutado en ramas feature y validado en development`.
 - Ramas propuestas (incremental):
   - `feature/remote-monitor-f0-contracts-ui`
   - `feature/remote-monitor-f1-pairing-flow`
@@ -367,7 +367,7 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
   - Cada fase mergea a `development` solo con DoD de fase cumplido.
   - `development` -> `main` unicamente tras cerrar F3 + checklist front/back de despliegue.
 - Gate de inicio:
-  - [ ] OK explicito del usuario para iniciar implementacion funcional.
+  - [x] OK explicito del usuario para iniciar implementacion funcional.
 
 - [ ] **Filtros en caliente**
   - Dependencias: pipeline grafico con parametros runtime.
@@ -451,3 +451,4 @@ Este documento es la lista viva de tareas del proyecto/feature Mythr Prism para 
 - 2026-03-31: Pizarra en vivo completado para MVP: cada tarjeta de monitor secundario permite abrir pizarra, la edicion en master usa referencia de miniatura y sincroniza overlay de trazos (set/undo/clear) en runtime esclavo sin romper fullscreen/thumbnail/handshake.
 - 2026-03-31: Mejora UX post-MVP de pizarra en vivo: toolbar visual con botones iconograficos accesibles (herramientas, color, grosor, undo, limpiar) y nuevas formas basicas (flecha/circulo/rectangulo/linea) con preview click+drag sincronizado al overlay slave.
 - 2026-04-03: V1 `Fuentes de monitor en modal con pestanas` completada e integrada en `development`; se actualizan checklist/subtareas/DoD y el avance V1 pasa a 71% (5/7).
+- 2026-04-05: V1 `Monitor virtual remoto (Cloud Sync)` completada con backend Socket.io + Redis, flujo de pairing por QR/codigo (`XXXX-XXXX-XXXX`), ruta `/remote`, desconexion remota desde host, countdown de expiracion de sala, bloqueo de zoom gestual en remoto y autocompletado de codigo desde QR; avance V1 actualizado a 86% (6/7).

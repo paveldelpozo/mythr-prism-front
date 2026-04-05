@@ -7,6 +7,16 @@ export interface RemoteMonitorDescriptor {
   label: string;
   state: RemoteConnectionState;
   socketId: string;
+  isFullscreenSupported: boolean;
+  isFullscreenAvailable: boolean;
+}
+
+export interface RemoteHostChannelMessage {
+  type: 'REMOTE_FULLSCREEN_CAPABILITY';
+  payload: {
+    supported: boolean;
+    available: boolean;
+  };
 }
 
 export interface PairingRoomInfo {
