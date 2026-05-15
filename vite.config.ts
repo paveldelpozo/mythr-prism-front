@@ -15,8 +15,18 @@ export default defineConfig(({ mode }) => {
         '.ngrok-free.app'
       ],
       proxy: {
+        '/api/v1': {
+          target: proxyTarget,
+          changeOrigin: true
+        },
+        '/realtime/v1': {
+          target: proxyTarget,
+          changeOrigin: true,
+          ws: true
+        },
         '/socket.io': {
-          target: 'http://localhost:3000',
+          target: proxyTarget,
+          changeOrigin: true,
           ws: true
         }
       }

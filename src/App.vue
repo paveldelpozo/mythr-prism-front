@@ -3,6 +3,7 @@ import {
   MagnifyingGlassIcon,
 } from '@heroicons/vue/24/outline';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import ApiFoundationDiagnosticPanel from './components/ApiFoundationDiagnosticPanel.vue';
 import AppHeader from './components/AppHeader.vue';
 import MonitorList from './components/MonitorList.vue';
 import PlaylistManager from './components/PlaylistManager.vue';
@@ -10,6 +11,7 @@ import RemotePairingModal from './components/RemotePairingModal.vue';
 import WhiteboardEditorModal from './components/WhiteboardEditorModal.vue';
 import { useMultiMonitorBroadcaster } from './composables/useMultiMonitorBroadcaster';
 import { usePlaylistPlayback } from './composables/usePlaylistPlayback';
+import { useFullControlFoundationDiagnostics } from './composables/useFullControlFoundationDiagnostics';
 import { useRemoteHostSync } from './composables/useRemoteHostSync';
 import {
   createDebouncedSessionSaver,
@@ -43,6 +45,14 @@ const FILE_IMPORT_BLOCK_MESSAGE = 'Para importar archivo, sal del fullscreen o u
 
 const persistedSession = loadPersistedSession();
 const isRemotePairingModalOpen = ref(false);
+const {
+  error: fullControlDiagnosticError,
+  isEnabled: isFullControlDiagnosticEnabled,
+  lastRealtimeEvent: fullControlLastRealtimeEvent,
+  monitorCount: fullControlMonitorCount,
+  realtimeConnected: isFullControlRealtimeConnected,
+  status: fullControlSystemStatus
+} = useFullControlFoundationDiagnostics();
 
 const {
   room: remotePairingRoom,
@@ -1072,60 +1082,70 @@ onBeforeUnmount(() => {
           </button>
         </section>
 
-        <MonitorList
-          v-else
-          :monitors="visibleMonitors"
-          :states="monitorStates"
-          :thumbnails="monitorThumbnails"
-          :show-only-projectable="showOnlyProjectable"
-          :total-monitors="monitors.length"
-          :can-close-all-windows="canCloseAllWindows"
-          :layouts="availableLayouts"
-          :layout-draft-name="layoutDraftName"
-          :selected-layout-id="selectedLayoutId"
-          :layout-feedback="layoutFeedback"
-          :mirror-enabled="mirrorConfig.enabled"
-          :mirror-source-monitor-id="mirrorConfig.sourceMonitorId"
-          :mirror-target-monitor-ids="mirrorConfig.targetMonitorIds"
-          :mirror-active-target-count="mirrorStatus.activeTargetCount"
-          :mirror-unavailable-target-ids="mirrorStatus.unavailableTargetIds"
-          :mirror-last-error="mirrorStatus.lastError"
-          :remote-monitor-meta-by-id="remoteMonitorMetaById"
-          :is-file-import-blocked="hasActiveFullscreenSlave"
-          :file-import-blocked-message="FILE_IMPORT_BLOCK_MESSAGE"
-          @update:show-only-projectable="showOnlyProjectable = $event"
-          @update:layout-draft-name="layoutDraftName = $event"
-          @update:selected-layout-id="onLayoutSelectionChange"
-          @update:mirror-enabled="onMirrorEnabledChange"
-          @update:mirror-source-monitor-id="onMirrorSourceMonitorChange"
-          @update:mirror-target-monitor-ids="onMirrorTargetMonitorIdsChange"
-          @save-layout="saveCurrentLayout"
-          @load-layout="loadSelectedLayout"
-          @delete-layout="deleteSelectedLayout"
-          @close-all="closeAllWindows"
-          @open-window="openWindowOnMonitor"
-          @close-window="closeWindowOnMonitor"
-          @disconnect-remote="disconnectRemoteMonitorFromHost"
-          @open-remote-pairing="openRemotePairingModal"
-          @request-fullscreen="requestFullscreenOnMonitor"
-          @flash-monitor-id="flashMonitorId"
-          @upload-image="uploadImage"
-          @clear-image="(id) => setImageForMonitor(id, null)"
-          @assign-external-url="assignExternalUrlToMonitor"
-          @reload-external-url="reloadExternalUrlOnMonitor"
-          @clear-external-url="clearExternalUrlOnMonitor"
-          @navigate-external-url="navigateExternalUrlOnMonitor"
-          @start-external-app-capture="startExternalAppCaptureOnMonitor"
-          @stop-external-app-capture="stopExternalAppCaptureOnMonitor"
-          @open-whiteboard="openWhiteboardEditor"
-          @rename-monitor="setMonitorCustomName"
-          @set-content-transition="onMonitorTransitionChange"
-          @set-filter-pipeline="onMonitorFilterPipelineChange"
-          @save-filter-preset="onMonitorFilterPresetSave"
-          @apply-filter-preset="onMonitorFilterPresetApply"
-          @delete-filter-preset="onMonitorFilterPresetDelete"
-          @transform="applyTransform"
-        />
+        <template v-else>
+          <ApiFoundationDiagnosticPanel
+            :enabled="isFullControlDiagnosticEnabled"
+            :status="fullControlSystemStatus"
+            :monitor-count="fullControlMonitorCount"
+            :realtime-connected="isFullControlRealtimeConnected"
+            :error="fullControlDiagnosticError"
+            :last-realtime-event="fullControlLastRealtimeEvent"
+          />
+
+          <MonitorList
+            :monitors="visibleMonitors"
+            :states="monitorStates"
+            :thumbnails="monitorThumbnails"
+            :show-only-projectable="showOnlyProjectable"
+            :total-monitors="monitors.length"
+            :can-close-all-windows="canCloseAllWindows"
+            :layouts="availableLayouts"
+            :layout-draft-name="layoutDraftName"
+            :selected-layout-id="selectedLayoutId"
+            :layout-feedback="layoutFeedback"
+            :mirror-enabled="mirrorConfig.enabled"
+            :mirror-source-monitor-id="mirrorConfig.sourceMonitorId"
+            :mirror-target-monitor-ids="mirrorConfig.targetMonitorIds"
+            :mirror-active-target-count="mirrorStatus.activeTargetCount"
+            :mirror-unavailable-target-ids="mirrorStatus.unavailableTargetIds"
+            :mirror-last-error="mirrorStatus.lastError"
+            :remote-monitor-meta-by-id="remoteMonitorMetaById"
+            :is-file-import-blocked="hasActiveFullscreenSlave"
+            :file-import-blocked-message="FILE_IMPORT_BLOCK_MESSAGE"
+            @update:show-only-projectable="showOnlyProjectable = $event"
+            @update:layout-draft-name="layoutDraftName = $event"
+            @update:selected-layout-id="onLayoutSelectionChange"
+            @update:mirror-enabled="onMirrorEnabledChange"
+            @update:mirror-source-monitor-id="onMirrorSourceMonitorChange"
+            @update:mirror-target-monitor-ids="onMirrorTargetMonitorIdsChange"
+            @save-layout="saveCurrentLayout"
+            @load-layout="loadSelectedLayout"
+            @delete-layout="deleteSelectedLayout"
+            @close-all="closeAllWindows"
+            @open-window="openWindowOnMonitor"
+            @close-window="closeWindowOnMonitor"
+            @disconnect-remote="disconnectRemoteMonitorFromHost"
+            @open-remote-pairing="openRemotePairingModal"
+            @request-fullscreen="requestFullscreenOnMonitor"
+            @flash-monitor-id="flashMonitorId"
+            @upload-image="uploadImage"
+            @clear-image="(id) => setImageForMonitor(id, null)"
+            @assign-external-url="assignExternalUrlToMonitor"
+            @reload-external-url="reloadExternalUrlOnMonitor"
+            @clear-external-url="clearExternalUrlOnMonitor"
+            @navigate-external-url="navigateExternalUrlOnMonitor"
+            @start-external-app-capture="startExternalAppCaptureOnMonitor"
+            @stop-external-app-capture="stopExternalAppCaptureOnMonitor"
+            @open-whiteboard="openWhiteboardEditor"
+            @rename-monitor="setMonitorCustomName"
+            @set-content-transition="onMonitorTransitionChange"
+            @set-filter-pipeline="onMonitorFilterPipelineChange"
+            @save-filter-preset="onMonitorFilterPresetSave"
+            @apply-filter-preset="onMonitorFilterPresetApply"
+            @delete-filter-preset="onMonitorFilterPresetDelete"
+            @transform="applyTransform"
+          />
+        </template>
       </section>
 
       <section

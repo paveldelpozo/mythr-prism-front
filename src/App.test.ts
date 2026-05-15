@@ -249,6 +249,17 @@ vi.mock('./composables/useRemoteHostSync', () => ({
   })
 }));
 
+vi.mock('./composables/useFullControlFoundationDiagnostics', () => ({
+  useFullControlFoundationDiagnostics: () => ({
+    error: ref<string | null>(null),
+    isEnabled: ref(false),
+    lastRealtimeEvent: ref(null),
+    monitorCount: ref<number | null>(null),
+    realtimeConnected: ref(false),
+    status: ref(null)
+  })
+}));
+
 import App from './App.vue';
 
 const PlaylistManagerStub = defineComponent({

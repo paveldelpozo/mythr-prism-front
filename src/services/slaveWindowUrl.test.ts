@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSlaveWindowUrl, SLAVE_WINDOW_PATH } from './slaveWindowUrl';
+import { buildSlaveWindowUrl, resolveSlaveWindowPath, SLAVE_WINDOW_PATH } from './slaveWindowUrl';
 
 describe('services/slaveWindowUrl', () => {
   it('construye URL same-origin con monitorId e instanceToken', () => {
@@ -12,5 +12,11 @@ describe('services/slaveWindowUrl', () => {
     expect(url).toContain('monitorId=monitor-1');
     expect(url).toContain('instanceToken=token-1');
     expect(url.startsWith('blob:')).toBe(false);
+  });
+
+  it('respeta BASE_URL para evitar abrir index principal en subpath', () => {
+    expect(resolveSlaveWindowPath('/mythr-prism/')).toBe('/mythr-prism/slave.html');
+    expect(resolveSlaveWindowPath('/mythr-prism')).toBe('/mythr-prism/slave.html');
+    expect(resolveSlaveWindowPath('mythr-prism/')).toBe('/mythr-prism/slave.html');
   });
 });

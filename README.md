@@ -40,12 +40,31 @@ pnpm install
 - `VITE_REMOTE_BACKEND_URL`: URL base del backend Socket.io/WebRTC para la feature de sincronizacion remota.
   - Local por defecto (si no se define): `http://localhost:3000`.
   - Produccion por defecto (si no se define): mismo origen del frontend (`window.location.origin`).
+- `VITE_FULL_CONTROL_API_URL`: URL base para la foundation API V2 (`/api/v1`, `/realtime/v1`).
+  - Local por defecto (si no se define): `http://localhost:3000`.
+  - Produccion por defecto (si no se define): mismo origen del frontend (`window.location.origin`).
+- `VITE_FULL_CONTROL_API_KEY`: API key para consumir endpoints foundation y handshake realtime de V2.
 
 Ejemplo rapido:
 
 ```bash
 cp .env.example .env
 ```
+
+Ejemplo de valores:
+
+```dotenv
+VITE_FULL_CONTROL_API_URL=http://localhost:3000
+VITE_FULL_CONTROL_API_KEY=mythr-prism-dev-full-control-key
+```
+
+## Foundation diagnostics (V2 kickoff)
+
+La app integra una capa minima de consumo API/realtime sin reemplazar los flujos actuales:
+
+- Cliente REST versionado para `/api/v1`.
+- Cliente realtime base para `/realtime/v1` con API key.
+- Panel diagnostico en la vista `Monitores` que consulta `system/status`, lista `monitors` foundation y escucha eventos realtime (`system:hello`, `system:status`).
 
 ## Uso básico
 
